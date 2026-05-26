@@ -74,6 +74,7 @@ const state = {
   search: "",
   flashId: null,
   removingId: null,
+  isDraggingNode: false,
   undoStack: [],
   redoStack: [],
   positions: new Map(),
@@ -82,6 +83,7 @@ const state = {
 };
 
 let removeTimer = null;
+let activeNodeDrag = null;
 
 const els = {
   viewport: document.getElementById("canvasViewport"),
@@ -115,8 +117,16 @@ function normalizeNode(node) {
     id: node.id || makeId(),
     text: String(node.text || "新しいノード"),
     memo: String(node.memo || ""),
+    offset: normalizeOffset(node.offset),
     collapsed: Boolean(node.collapsed),
     children: Array.isArray(node.children) ? node.children.map(normalizeNode) : [],
+  };
+}
+
+function normalizeOffset(offset) {
+  return {
+    x: Number(offset?.x) || 0,
+    y: Number(offset?.y) || 0,
   };
 }
 
@@ -313,7 +323,17 @@ function layoutTree() {
 function placeNode(node, x, y, depth, branchIndex, parent) {
   const color = depth === 0 ? "#1f2937" : BRANCH_COLORS[branchIndex % BRANCH_COLORS.length];
   const width = depth === 0 ? ROOT_WIDTH : NODE_WIDTH;
-  state.positions.set(node.id, { x, y, depth, color, branchIndex, width });
+  const offset = normalizeOffset(node.offset);
+  state.positions.set(node.id, {
+    x: x + offset.x,
+    y: y + offset.y,
+    baseX: x,
+    baseY: y,
+    depth,
+    color,
+    branchIndex,
+    width,
+  });
   state.visibleIds.add(node.id);
   if (parent) {
     state.edgeList.push({ from: parent.id, to: node.id, color });
@@ -426,6 +446,7 @@ function render() {
 }
 
 function applyNodeMotion(nodeEl, pos, previous) {
+  if (state.isDraggingNode) return;
   if (!previous) {
     nodeEl.classList.add("is-entering");
     return;
@@ -519,8 +540,10 @@ function bindRenderedEvents() {
     let editRecorded = false;
 
     nodeEl.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0 || event.target.closest(".node-action")) return;
       event.stopPropagation();
       selectNode(id);
+      startNodeDrag(event, id);
     });
 
     title.addEventListener("focus", () => {
@@ -569,6 +592,75 @@ function bindRenderedEvents() {
       deleteSelected();
     });
   });
+}
+
+function startNodeDrag(event, id) {
+  const found = findNode(id);
+  if (!found) return;
+  activeNodeDrag = {
+    id,
+    startX: event.clientX,
+    startY: event.clientY,
+    started: false,
+    snapshot: captureSnapshot(),
+    originalOffsets: collectSubtreeOffsets(found.node),
+  };
+  window.addEventListener("pointermove", handleNodeDragMove);
+  window.addEventListener("pointerup", finishNodeDrag, { once: true });
+}
+
+function handleNodeDragMove(event) {
+  if (!activeNodeDrag) return;
+  const screenDx = event.clientX - activeNodeDrag.startX;
+  const screenDy = event.clientY - activeNodeDrag.startY;
+  const distance = Math.hypot(screenDx, screenDy);
+  if (!activeNodeDrag.started && distance < 4) return;
+
+  event.preventDefault();
+  if (!activeNodeDrag.started) {
+    pushHistory(activeNodeDrag.snapshot);
+    activeNodeDrag.started = true;
+    state.isDraggingNode = true;
+    els.viewport.classList.add("is-node-dragging");
+  }
+
+  const dx = screenDx / state.zoom;
+  const dy = screenDy / state.zoom;
+  applySubtreeDragOffsets(activeNodeDrag.id, activeNodeDrag.originalOffsets, dx, dy);
+  render();
+}
+
+function finishNodeDrag() {
+  window.removeEventListener("pointermove", handleNodeDragMove);
+  if (activeNodeDrag?.started) {
+    saveTree();
+  }
+  activeNodeDrag = null;
+  state.isDraggingNode = false;
+  els.viewport.classList.remove("is-node-dragging");
+}
+
+function collectSubtreeOffsets(node, offsets = new Map()) {
+  offsets.set(node.id, normalizeOffset(node.offset));
+  node.children.forEach((child) => collectSubtreeOffsets(child, offsets));
+  return offsets;
+}
+
+function applySubtreeDragOffsets(id, originalOffsets, dx, dy) {
+  const found = findNode(id);
+  if (!found) return;
+  walkSubtree(found.node, (node) => {
+    const original = originalOffsets.get(node.id) || { x: 0, y: 0 };
+    node.offset = {
+      x: Math.round(original.x + dx),
+      y: Math.round(original.y + dy),
+    };
+  });
+}
+
+function walkSubtree(node, visitor) {
+  visitor(node);
+  node.children.forEach((child) => walkSubtree(child, visitor));
 }
 
 function selectNode(id) {
@@ -629,22 +721,17 @@ function optimizeLayout() {
   pushHistory();
   const rect = els.viewport.getBoundingClientRect();
   const stats = getLayoutStats(state.tree);
-  const usableWidth = Math.max(640, rect.width * 0.86);
   const usableHeight = Math.max(420, rect.height * 0.78);
-  const depthSteps = Math.max(1, stats.maxDepth);
   const leafSlots = Math.max(1, stats.leafCount - 1);
   const nodeHeight = 76;
 
-  const horizontal = clamp(Math.round(usableWidth / (depthSteps + 1.4)), 240, 420);
   const vertical = clamp(Math.round((usableHeight - stats.leafCount * nodeHeight) / leafSlots), 18, 72);
 
-  state.horizontalSpacing = horizontal;
   state.verticalSpacing = vertical;
-  els.horizontalSpacingSlider.value = horizontal;
   els.verticalSpacingSlider.value = vertical;
   render();
   requestAnimationFrame(fitToView);
-  els.statusText.textContent = `レイアウトを最適化しました。横 ${horizontal} / 縦 ${vertical}`;
+  els.statusText.textContent = `レイアウトを最適化しました。縦 ${vertical} / 横と表示の細かさは維持`;
 }
 
 function getLayoutStats(node, depth = 0) {
@@ -674,7 +761,7 @@ function addChild() {
   if (!found) return;
   pushHistory();
   found.node.collapsed = false;
-  const child = normalizeNode({ text: "新しいアイデア", children: [] });
+  const child = normalizeNode({ text: "新しいアイデア", offset: normalizeOffset(found.node.offset), children: [] });
   found.node.children.push(child);
   state.selectedId = child.id;
   state.flashId = child.id;
@@ -685,7 +772,7 @@ function addSibling() {
   const found = findNode(state.selectedId);
   if (!found || !found.parent) return;
   pushHistory();
-  const sibling = normalizeNode({ text: "新しいトピック", children: [] });
+  const sibling = normalizeNode({ text: "新しいトピック", offset: normalizeOffset(found.node.offset), children: [] });
   const index = found.parent.children.findIndex((child) => child.id === found.node.id);
   found.parent.children.splice(index + 1, 0, sibling);
   state.selectedId = sibling.id;
@@ -794,6 +881,7 @@ function collectNodeMetadata(node, path = []) {
     [key]: {
       collapsed: Boolean(node.collapsed),
       memo: node.memo || "",
+      offset: normalizeOffset(node.offset),
     },
   };
   node.children.forEach((child, index) => {
@@ -807,6 +895,7 @@ function applyNodeMetadata(node, metadata, path = []) {
   if (item) {
     node.collapsed = Boolean(item.collapsed);
     node.memo = String(item.memo || "");
+    node.offset = normalizeOffset(item.offset);
   }
   node.children.forEach((child, index) => applyNodeMetadata(child, metadata, [...path, index]));
 }

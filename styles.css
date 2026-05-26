@@ -325,6 +325,7 @@ h2 {
   box-shadow: var(--shadow);
   color: var(--ink);
   user-select: none;
+  cursor: grab;
   transform: translate(-50%, -50%);
   transition:
     opacity var(--motion-speed) var(--motion-ease),
@@ -333,6 +334,15 @@ h2 {
     box-shadow var(--motion-speed) var(--motion-ease),
     outline-color var(--motion-speed) var(--motion-ease),
     filter var(--motion-speed) var(--motion-ease);
+}
+
+.canvas-viewport.is-node-dragging,
+.canvas-viewport.is-node-dragging .mind-node {
+  cursor: grabbing;
+}
+
+.canvas-viewport.is-node-dragging .mind-node {
+  transition: none;
 }
 
 .mind-node.root {
@@ -374,6 +384,7 @@ h2 {
   min-width: 0;
   outline: none;
   color: inherit;
+  cursor: text;
   font-size: 14px;
   line-height: 1.35;
   overflow-wrap: anywhere;
