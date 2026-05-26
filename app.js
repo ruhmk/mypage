@@ -625,6 +625,50 @@ function fitToView() {
   updateTransform();
 }
 
+function optimizeLayout() {
+  pushHistory();
+  const rect = els.viewport.getBoundingClientRect();
+  const stats = getLayoutStats(state.tree);
+  const usableWidth = Math.max(640, rect.width * 0.86);
+  const usableHeight = Math.max(420, rect.height * 0.78);
+  const depthSteps = Math.max(1, stats.maxDepth);
+  const leafSlots = Math.max(1, stats.leafCount - 1);
+  const nodeHeight = 76;
+
+  const horizontal = clamp(Math.round(usableWidth / (depthSteps + 1.4)), 240, 420);
+  const vertical = clamp(Math.round((usableHeight - stats.leafCount * nodeHeight) / leafSlots), 18, 72);
+
+  state.horizontalSpacing = horizontal;
+  state.verticalSpacing = vertical;
+  els.horizontalSpacingSlider.value = horizontal;
+  els.verticalSpacingSlider.value = vertical;
+  render();
+  requestAnimationFrame(fitToView);
+  els.statusText.textContent = `レイアウトを最適化しました。横 ${horizontal} / 縦 ${vertical}`;
+}
+
+function getLayoutStats(node, depth = 0) {
+  const children = getVisibleChildren(node, depth);
+  if (!children.length) {
+    return { maxDepth: depth, leafCount: 1, visibleCount: 1 };
+  }
+  return children.reduce(
+    (stats, child) => {
+      const childStats = getLayoutStats(child, depth + 1);
+      return {
+        maxDepth: Math.max(stats.maxDepth, childStats.maxDepth),
+        leafCount: stats.leafCount + childStats.leafCount,
+        visibleCount: stats.visibleCount + childStats.visibleCount,
+      };
+    },
+    { maxDepth: depth, leafCount: 0, visibleCount: 1 },
+  );
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
 function addChild() {
   const found = findNode(state.selectedId);
   if (!found) return;
@@ -994,6 +1038,7 @@ function wireControls() {
     }
   });
 
+  document.getElementById("optimizeLayoutButton").addEventListener("click", optimizeLayout);
   document.getElementById("fitButton").addEventListener("click", fitToView);
   document.getElementById("resetButton").addEventListener("click", () => {
     pushHistory();
