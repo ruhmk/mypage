@@ -8,6 +8,7 @@ const DEFAULT_HORIZONTAL_GAP = 452;
 const LEGACY_DEFAULT_VERTICAL_GAP = 28;
 const LEGACY_DEFAULT_HORIZONTAL_GAP = 260;
 const ANIMATION_MS = 80;
+const COLLISION_GAP = 18;
 const BRANCH_COLORS = [
   "#2f80ed",
   "#e24a68",
@@ -318,11 +319,13 @@ function layoutTree() {
 
   const rootSpan = measureSubtree(state.tree);
   placeNode(state.tree, WORLD.cx, WORLD.cy - rootSpan / 2 + rootSpan / 2, 0, 0, null);
+  resolveLayoutCollisions();
 }
 
 function placeNode(node, x, y, depth, branchIndex, parent) {
   const color = depth === 0 ? "#1f2937" : BRANCH_COLORS[branchIndex % BRANCH_COLORS.length];
   const width = depth === 0 ? ROOT_WIDTH : NODE_WIDTH;
+  const height = estimateNodeHeight(node, width, depth);
   const offset = normalizeOffset(node.offset);
   state.positions.set(node.id, {
     x: x + offset.x,
@@ -333,6 +336,7 @@ function placeNode(node, x, y, depth, branchIndex, parent) {
     color,
     branchIndex,
     width,
+    height,
   });
   state.visibleIds.add(node.id);
   if (parent) {
@@ -352,6 +356,67 @@ function placeNode(node, x, y, depth, branchIndex, parent) {
     const nextBranch = depth === 0 ? index : branchIndex;
     placeNode(child, childX, childY, depth + 1, nextBranch, node);
     cursor += span + state.verticalSpacing;
+  });
+}
+
+function estimateNodeHeight(node, width, depth) {
+  const actionWidth = 104;
+  const textWidth = Math.max(64, width - actionWidth);
+  const lineCapacity = Math.max(7, Math.floor(textWidth / 8));
+  const lineCount = Math.max(1, Math.ceil([...node.text].length / lineCapacity));
+  const baseHeight = depth === 0 ? 84 : 68;
+  return Math.min(150, Math.max(baseHeight, 32 + lineCount * 18));
+}
+
+function resolveLayoutCollisions() {
+  if (state.positions.size < 2) return;
+
+  for (let pass = 0; pass < 8; pass++) {
+    let changed = false;
+    const items = [...state.positions.entries()]
+      .map(([id, pos]) => ({ id, pos }))
+      .sort((a, b) => a.pos.y - b.pos.y || a.pos.depth - b.pos.depth || a.pos.x - b.pos.x);
+
+    for (let i = 0; i < items.length; i++) {
+      for (let j = i + 1; j < items.length; j++) {
+        const upper = items[i];
+        const lower = items[j];
+        if (!hasHorizontalOverlap(upper.pos, lower.pos)) continue;
+
+        const minLowerY = upper.pos.y + (upper.pos.height + lower.pos.height) / 2 + COLLISION_GAP;
+        const overlap = minLowerY - lower.pos.y;
+        if (overlap <= 0) continue;
+
+        const shiftId = isAncestorId(lower.id, upper.id) ? upper.id : lower.id;
+        shiftVisibleSubtree(shiftId, overlap);
+        changed = true;
+      }
+    }
+
+    if (!changed) return;
+  }
+}
+
+function hasHorizontalOverlap(a, b) {
+  return Math.abs(a.x - b.x) < (a.width + b.width) / 2 + COLLISION_GAP;
+}
+
+function isAncestorId(ancestorId, nodeId) {
+  const found = findNode(ancestorId);
+  if (!found) return false;
+  let matched = false;
+  walkSubtree(found.node, (node) => {
+    if (node.id !== ancestorId && node.id === nodeId) matched = true;
+  });
+  return matched;
+}
+
+function shiftVisibleSubtree(id, dy) {
+  const found = findNode(id);
+  if (!found) return;
+  walkSubtree(found.node, (node) => {
+    const pos = state.positions.get(node.id);
+    if (pos) pos.y += dy;
   });
 }
 
