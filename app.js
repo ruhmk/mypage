@@ -1,811 +1,1539 @@
-const LOCAL_STORAGE_KEY = "family-calendar-local-events";
-const GOOGLE_SYNC_TIMEOUT_MS = 15000;
-const SOURCE_LABELS = {
-  family: "家族",
-  personal: "個人",
-  work: "仕事"
+const STORAGE_KEY = "knowledge-map-canvas-state-v1";
+const MAPS_KEY = "knowledge-map-canvas-maps-v1";
+const WORLD = { width: 3200, height: 2200, cx: 1600, cy: 1100 };
+const NODE_WIDTH = 238;
+const ROOT_WIDTH = 250;
+const DEFAULT_VERTICAL_GAP = 26;
+const DEFAULT_HORIZONTAL_GAP = 452;
+const LEGACY_DEFAULT_VERTICAL_GAP = 28;
+const LEGACY_DEFAULT_HORIZONTAL_GAP = 260;
+const ANIMATION_MS = 80;
+const COLLISION_GAP = 18;
+const BRANCH_COLORS = [
+  "#2f80ed",
+  "#e24a68",
+  "#0e9f6e",
+  "#b7791f",
+  "#7c3aed",
+  "#008a9a",
+  "#d14375",
+  "#3f7f2d",
+];
+
+const sampleTree = {
+  id: "root",
+  text: "Knowledge Map Canvas",
+  collapsed: false,
+  children: [
+    {
+      id: "capture",
+      text: "情報を取り込む",
+      collapsed: false,
+      children: [
+        { id: "capture-text", text: "文章やメモを貼り付ける", children: [] },
+        { id: "capture-outline", text: "アウトライン形式で整理", children: [] },
+        { id: "capture-json", text: "JSONとして保存できる", children: [] },
+      ],
+    },
+    {
+      id: "explore",
+      text: "動的に読む",
+      collapsed: false,
+      children: [
+        { id: "explore-collapse", text: "枝を開閉して粒度を変える", children: [] },
+        { id: "explore-search", text: "検索で関係ノードを強調", children: [] },
+        { id: "explore-zoom", text: "ズームとパンで全体を見る", children: [] },
+      ],
+    },
+    {
+      id: "edit",
+      text: "その場で編集",
+      collapsed: false,
+      children: [
+        { id: "edit-title", text: "ノード内の文字を直接変更", children: [] },
+        { id: "edit-add", text: "子ノードや隣ノードを追加", children: [] },
+        { id: "edit-color", text: "枝ごとに色を自動設定", children: [] },
+      ],
+    },
+  ],
 };
-const appConfig = window.FAMILY_CALENDAR_CONFIG || {};
+
+const initialLibrary = loadLibrary();
+const initialSettings = normalizeSettings(initialLibrary.active.settings);
 
 const state = {
-  viewDate: startOfMonth(new Date()),
-  selectedDate: stripTime(new Date()),
-  remoteEvents: [],
-  localEvents: [],
-  visibleSources: new Set(["family", "personal", "work"])
+  tree: clone(initialLibrary.active.tree),
+  mapId: initialLibrary.active.id,
+  mapName: initialLibrary.active.name,
+  maps: initialLibrary.maps,
+  selectedId: "root",
+  zoom: 0.86,
+  pan: { x: 0, y: 0 },
+  maxDepth: initialSettings.maxDepth,
+  horizontalSpacing: initialSettings.horizontalSpacing,
+  verticalSpacing: initialSettings.verticalSpacing,
+  search: "",
+  flashId: null,
+  removingId: null,
+  isDraggingNode: false,
+  undoStack: [],
+  redoStack: [],
+  positions: new Map(),
+  visibleIds: new Set(),
+  edgeList: [],
 };
 
-const calendarGrid = document.querySelector("#calendarGrid");
-const monthLabel = document.querySelector("#monthLabel");
-const yearLabel = document.querySelector("#yearLabel");
-const selectedDateLabel = document.querySelector("#selectedDateLabel");
-const selectedEventList = document.querySelector("#selectedEventList");
-const upcomingEventList = document.querySelector("#upcomingEventList");
-const eventDialog = document.querySelector("#eventDialog");
-const eventForm = document.querySelector("#eventForm");
-const eventTitle = document.querySelector("#eventTitle");
-const eventDate = document.querySelector("#eventDate");
-const eventStart = document.querySelector("#eventStart");
-const eventEnd = document.querySelector("#eventEnd");
-const eventSource = document.querySelector("#eventSource");
-const eventNote = document.querySelector("#eventNote");
-const refreshGoogleButton = document.querySelector("#refreshGoogleButton");
-const importNascaButton = document.querySelector("#importNascaButton");
-const nascaFileInput = document.querySelector("#nascaFileInput");
-const importStatus = document.querySelector("#importStatus");
+let removeTimer = null;
+let activeNodeDrag = null;
 
-document.querySelector("#prevMonth").addEventListener("click", () => {
-  state.viewDate = addMonths(state.viewDate, -1);
-  render();
-});
+const els = {
+  viewport: document.getElementById("canvasViewport"),
+  world: document.getElementById("canvasWorld"),
+  edgeLayer: document.getElementById("edgeLayer"),
+  nodeLayer: document.getElementById("nodeLayer"),
+  outlineInput: document.getElementById("outlineInput"),
+  exportOutput: document.getElementById("exportOutput"),
+  selectionLabel: document.getElementById("selectionLabel"),
+  statusText: document.getElementById("statusText"),
+  searchInput: document.getElementById("searchInput"),
+  depthSlider: document.getElementById("depthSlider"),
+  horizontalSpacingSlider: document.getElementById("horizontalSpacingSlider"),
+  verticalSpacingSlider: document.getElementById("verticalSpacingSlider"),
+  mapSelect: document.getElementById("mapSelect"),
+  markdownFileInput: document.getElementById("markdownFileInput"),
+  nodeDetailTitle: document.getElementById("nodeDetailTitle"),
+  nodeNoteInput: document.getElementById("nodeNoteInput"),
+  summaryOutput: document.getElementById("summaryOutput"),
+};
 
-document.querySelector("#nextMonth").addEventListener("click", () => {
-  state.viewDate = addMonths(state.viewDate, 1);
-  render();
-});
+function clone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
 
-document.querySelector("#todayButton").addEventListener("click", () => {
-  state.selectedDate = stripTime(new Date());
-  state.viewDate = startOfMonth(state.selectedDate);
-  render();
-});
+function makeId(prefix = "node") {
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+}
 
-document.querySelector("#openComposer").addEventListener("click", () => {
-  openComposer(state.selectedDate);
-});
+function normalizeNode(node) {
+  return {
+    id: node.id || makeId(),
+    text: String(node.text || "新しいノード"),
+    memo: String(node.memo || ""),
+    offset: normalizeOffset(node.offset),
+    collapsed: Boolean(node.collapsed),
+    children: Array.isArray(node.children) ? node.children.map(normalizeNode) : [],
+  };
+}
 
-refreshGoogleButton.addEventListener("click", () => {
-  refreshGoogleEvents({ sync: true });
-});
+function normalizeOffset(offset) {
+  return {
+    x: Number(offset?.x) || 0,
+    y: Number(offset?.y) || 0,
+  };
+}
 
-importNascaButton.addEventListener("click", () => {
-  nascaFileInput.value = "";
-  nascaFileInput.click();
-});
-
-nascaFileInput.addEventListener("change", async () => {
-  const file = nascaFileInput.files && nascaFileInput.files[0];
-  if (!file) {
-    return;
-  }
-
+function loadLibrary() {
   try {
-    const content = await file.text();
-    const imported = parseNascaSchedule(content, file.name);
-    if (imported.length === 0) {
-      window.alert("取り込める予定が見つかりませんでした。");
-      return;
+    const savedMaps = localStorage.getItem(MAPS_KEY);
+    if (savedMaps) {
+      const parsed = JSON.parse(savedMaps);
+      const maps = Array.isArray(parsed.maps) ? parsed.maps.map(normalizeMapItem) : [];
+      if (maps.length) {
+        const active = maps.find((map) => map.id === parsed.activeId) || maps[0];
+        return { active, maps };
+      }
     }
 
-    state.localEvents = state.localEvents.filter((item) => !isNascaEvent(item));
-    state.localEvents.push(...imported);
-    saveLocalEvents();
-    state.viewDate = startOfMonth(new Date(imported[0].start));
-    state.selectedDate = stripTime(new Date(imported[0].start));
-    render();
-    window.alert(`NASCA予定を${imported.length}件取り込みました。`);
+    const legacy = localStorage.getItem(STORAGE_KEY);
+    const tree = legacy ? normalizeNode(JSON.parse(legacy)) : clone(sampleTree);
+    const active = makeMapItem("最初のマップ", tree);
+    return { active, maps: [active] };
   } catch {
-    window.alert("NASCA予定を取り込めませんでした。");
+    const active = makeMapItem("最初のマップ", clone(sampleTree));
+    return { active, maps: [active] };
   }
-});
+}
 
-document.querySelector("#closeComposer").addEventListener("click", () => {
-  eventDialog.close();
-});
-
-document.querySelectorAll(".source-toggle input").forEach((input) => {
-  input.addEventListener("change", () => {
-    state.visibleSources = new Set(
-      Array.from(document.querySelectorAll(".source-toggle input:checked")).map((item) => item.value)
-    );
-    render();
-  });
-});
-
-document.querySelector("#googleDraftButton").addEventListener("click", () => {
-  if (!eventForm.reportValidity()) {
-    return;
-  }
-
-  const draft = readFormEvent();
-  window.open(buildGoogleCalendarUrl(draft), "_blank", "noopener,noreferrer");
-});
-
-eventForm.addEventListener("submit", (event) => {
-  event.preventDefault();
-
-  if (!eventForm.reportValidity()) {
-    return;
-  }
-
-  const draft = readFormEvent();
-  const localEvent = {
-    ...draft,
-    id: `local-${Date.now()}`
+function defaultSettings() {
+  return {
+    maxDepth: 8,
+    horizontalSpacing: DEFAULT_HORIZONTAL_GAP,
+    verticalSpacing: DEFAULT_VERTICAL_GAP,
   };
+}
 
-  state.localEvents.push(localEvent);
-  saveLocalEvents();
-  eventDialog.close();
-  render();
-});
+function normalizeSettings(settings = {}) {
+  settings = settings || {};
+  const horizontalSpacing = Number(settings.horizontalSpacing);
+  const verticalSpacing = Number(settings.verticalSpacing);
+  const shouldMigrateLegacySpacing =
+    horizontalSpacing === LEGACY_DEFAULT_HORIZONTAL_GAP && verticalSpacing === LEGACY_DEFAULT_VERTICAL_GAP;
+  return {
+    maxDepth: Number(settings.maxDepth) || 8,
+    horizontalSpacing:
+      shouldMigrateLegacySpacing || !Number.isFinite(horizontalSpacing) ? DEFAULT_HORIZONTAL_GAP : horizontalSpacing,
+    verticalSpacing:
+      shouldMigrateLegacySpacing || !Number.isFinite(verticalSpacing) ? DEFAULT_VERTICAL_GAP : verticalSpacing,
+  };
+}
 
-bootstrap();
+function currentSettings() {
+  return {
+    maxDepth: state.maxDepth,
+    horizontalSpacing: state.horizontalSpacing,
+    verticalSpacing: state.verticalSpacing,
+  };
+}
 
-function bootstrap() {
-  state.localEvents = loadLocalEvents();
-  state.remoteEvents = Array.isArray(window.FAMILY_CALENDAR_EVENTS)
-    ? window.FAMILY_CALENDAR_EVENTS
-    : fallbackEvents();
+function makeMapItem(name, tree = clone(sampleTree), settings = defaultSettings()) {
+  return {
+    id: makeId("map"),
+    name,
+    tree: normalizeNode(tree),
+    settings: normalizeSettings(settings),
+    updatedAt: new Date().toISOString(),
+  };
+}
 
-  refreshGoogleButton.title = appConfig.googleSyncUrl
-    ? "Googleカレンダーから家族用予定を更新します"
-    : "Apps ScriptのURLを設定すると使えます";
+function normalizeMapItem(item) {
+  return {
+    id: item.id || makeId("map"),
+    name: String(item.name || "無題のマップ"),
+    tree: normalizeNode(item.tree || clone(sampleTree)),
+    settings: normalizeSettings(item.settings),
+    updatedAt: item.updatedAt || new Date().toISOString(),
+  };
+}
 
-  render();
-
-  if (appConfig.googleSyncUrl && appConfig.autoLoadGoogleEvents) {
-    refreshGoogleEvents({ sync: false });
+function saveTree() {
+  let current = state.maps.find((map) => map.id === state.mapId);
+  if (!current) {
+    current = makeMapItem(state.mapName || state.tree.text || "無題のマップ", state.tree);
+    current.id = state.mapId || current.id;
+    state.mapId = current.id;
+    state.maps.push(current);
   }
+  current.name = state.mapName || state.tree.text || "無題のマップ";
+  current.tree = normalizeNode(state.tree);
+  current.settings = currentSettings();
+  current.updatedAt = new Date().toISOString();
+  localStorage.setItem(MAPS_KEY, JSON.stringify({ activeId: state.mapId, maps: state.maps }));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state.tree));
+  updateMapSelect();
+}
+
+function captureSnapshot() {
+  return {
+    mapId: state.mapId,
+    mapName: state.mapName,
+    tree: clone(state.tree),
+    selectedId: state.selectedId,
+    maxDepth: state.maxDepth,
+    horizontalSpacing: state.horizontalSpacing,
+    verticalSpacing: state.verticalSpacing,
+    search: state.search,
+  };
+}
+
+function pushHistory(snapshot = captureSnapshot()) {
+  const last = state.undoStack[state.undoStack.length - 1];
+  if (last && JSON.stringify(last) === JSON.stringify(snapshot)) return;
+  state.undoStack.push(snapshot);
+  if (state.undoStack.length > 80) state.undoStack.shift();
+  state.redoStack = [];
+}
+
+function restoreSnapshot(snapshot) {
+  window.clearTimeout(removeTimer);
+  state.mapId = snapshot.mapId;
+  state.mapName = snapshot.mapName;
+  state.tree = normalizeNode(snapshot.tree);
+  state.selectedId = snapshot.selectedId || state.tree.id;
+  state.maxDepth = snapshot.maxDepth || 8;
+  state.horizontalSpacing = snapshot.horizontalSpacing || DEFAULT_HORIZONTAL_GAP;
+  state.verticalSpacing = snapshot.verticalSpacing || DEFAULT_VERTICAL_GAP;
+  state.search = snapshot.search || "";
+  state.flashId = null;
+  state.removingId = null;
+  els.searchInput.value = state.search;
+  els.depthSlider.value = state.maxDepth;
+  els.horizontalSpacingSlider.value = state.horizontalSpacing;
+  els.verticalSpacingSlider.value = state.verticalSpacing;
+  els.outlineInput.value = toMarkdown(state.tree).join("\n");
+  els.exportOutput.value = toMarkdown(state.tree).join("\n");
+  render();
+}
+
+function undo() {
+  if (!state.undoStack.length) {
+    els.statusText.textContent = "戻せる操作はありません。";
+    return;
+  }
+  const current = captureSnapshot();
+  const previous = state.undoStack.pop();
+  state.redoStack.push(current);
+  restoreSnapshot(previous);
+  els.statusText.textContent = "Undoしました。";
+}
+
+function redo() {
+  if (!state.redoStack.length) {
+    els.statusText.textContent = "やり直せる操作はありません。";
+    return;
+  }
+  const current = captureSnapshot();
+  const next = state.redoStack.pop();
+  state.undoStack.push(current);
+  restoreSnapshot(next);
+  els.statusText.textContent = "Redoしました。";
+}
+
+function findNode(id, node = state.tree, parent = null) {
+  if (node.id === id) return { node, parent };
+  for (const child of node.children) {
+    const result = findNode(id, child, node);
+    if (result) return result;
+  }
+  return null;
+}
+
+function walk(node, visitor, depth = 0, parent = null, branchIndex = 0) {
+  visitor(node, depth, parent, branchIndex);
+  node.children.forEach((child, index) => walk(child, visitor, depth + 1, node, depth === 0 ? index : branchIndex));
+}
+
+function getVisibleChildren(node, depth) {
+  if (node.collapsed || depth >= state.maxDepth) return [];
+  return node.children;
+}
+
+function measureSubtree(node, depth = 0) {
+  const children = getVisibleChildren(node, depth);
+  if (!children.length) return 86;
+  return children.reduce((sum, child) => sum + measureSubtree(child, depth + 1), 0) + Math.max(0, children.length - 1) * state.verticalSpacing;
+}
+
+function layoutTree() {
+  state.positions.clear();
+  state.visibleIds.clear();
+  state.edgeList = [];
+
+  const rootSpan = measureSubtree(state.tree);
+  placeNode(state.tree, WORLD.cx, WORLD.cy - rootSpan / 2 + rootSpan / 2, 0, 0, null);
+  resolveLayoutCollisions();
+}
+
+function placeNode(node, x, y, depth, branchIndex, parent) {
+  const color = depth === 0 ? "#1f2937" : BRANCH_COLORS[branchIndex % BRANCH_COLORS.length];
+  const width = depth === 0 ? ROOT_WIDTH : NODE_WIDTH;
+  const height = estimateNodeHeight(node, width, depth);
+  const offset = normalizeOffset(node.offset);
+  state.positions.set(node.id, {
+    x: x + offset.x,
+    y: y + offset.y,
+    baseX: x,
+    baseY: y,
+    depth,
+    color,
+    branchIndex,
+    width,
+    height,
+  });
+  state.visibleIds.add(node.id);
+  if (parent) {
+    state.edgeList.push({ from: parent.id, to: node.id, color });
+  }
+
+  const children = getVisibleChildren(node, depth);
+  if (!children.length) return;
+
+  const total = children.reduce((sum, child) => sum + measureSubtree(child, depth + 1), 0) + (children.length - 1) * state.verticalSpacing;
+  let cursor = y - total / 2;
+  children.forEach((child, index) => {
+    const span = measureSubtree(child, depth + 1);
+    const childY = cursor + span / 2;
+    const direction = depth === 0 ? (index % 2 === 0 ? 1 : -1) : x >= WORLD.cx ? 1 : -1;
+    const childX = depth === 0 ? WORLD.cx + direction * state.horizontalSpacing : x + direction * state.horizontalSpacing;
+    const nextBranch = depth === 0 ? index : branchIndex;
+    placeNode(child, childX, childY, depth + 1, nextBranch, node);
+    cursor += span + state.verticalSpacing;
+  });
+}
+
+function estimateNodeHeight(node, width, depth) {
+  const actionWidth = 104;
+  const textWidth = Math.max(64, width - actionWidth);
+  const lineCapacity = Math.max(7, Math.floor(textWidth / 8));
+  const lineCount = Math.max(1, Math.ceil([...node.text].length / lineCapacity));
+  const baseHeight = depth === 0 ? 84 : 68;
+  return Math.min(150, Math.max(baseHeight, 32 + lineCount * 18));
+}
+
+function resolveLayoutCollisions() {
+  if (state.positions.size < 2) return;
+
+  for (let pass = 0; pass < 8; pass++) {
+    let changed = false;
+    const items = [...state.positions.entries()]
+      .map(([id, pos]) => ({ id, pos }))
+      .sort((a, b) => a.pos.y - b.pos.y || a.pos.depth - b.pos.depth || a.pos.x - b.pos.x);
+
+    for (let i = 0; i < items.length; i++) {
+      for (let j = i + 1; j < items.length; j++) {
+        const upper = items[i];
+        const lower = items[j];
+        if (!hasHorizontalOverlap(upper.pos, lower.pos)) continue;
+
+        const minLowerY = upper.pos.y + (upper.pos.height + lower.pos.height) / 2 + COLLISION_GAP;
+        const overlap = minLowerY - lower.pos.y;
+        if (overlap <= 0) continue;
+
+        const shiftId = isAncestorId(lower.id, upper.id) ? upper.id : lower.id;
+        shiftVisibleSubtree(shiftId, overlap);
+        changed = true;
+      }
+    }
+
+    if (!changed) return;
+  }
+}
+
+function hasHorizontalOverlap(a, b) {
+  return Math.abs(a.x - b.x) < (a.width + b.width) / 2 + COLLISION_GAP;
+}
+
+function isAncestorId(ancestorId, nodeId) {
+  const found = findNode(ancestorId);
+  if (!found) return false;
+  let matched = false;
+  walkSubtree(found.node, (node) => {
+    if (node.id !== ancestorId && node.id === nodeId) matched = true;
+  });
+  return matched;
+}
+
+function shiftVisibleSubtree(id, dy) {
+  const found = findNode(id);
+  if (!found) return;
+  walkSubtree(found.node, (node) => {
+    const pos = state.positions.get(node.id);
+    if (pos) pos.y += dy;
+  });
+}
+
+function pathForEdge(from, to) {
+  const fromSide = to.x >= from.x ? from.width / 2 : -from.width / 2;
+  const toSide = to.x >= from.x ? -to.width / 2 : to.width / 2;
+  const startX = from.x + fromSide;
+  const endX = to.x + toSide;
+  const curve = Math.max(82, Math.abs(endX - startX) * 0.42);
+  const c1x = startX + (to.x >= from.x ? curve : -curve);
+  const c2x = endX - (to.x >= from.x ? curve : -curve);
+  return `M ${startX} ${from.y} C ${c1x} ${from.y}, ${c2x} ${to.y}, ${endX} ${to.y}`;
+}
+
+function edgeKey(edge) {
+  return `${edge.from}->${edge.to}`;
 }
 
 function render() {
-  const monthText = new Intl.DateTimeFormat("ja-JP", { month: "long" }).format(state.viewDate);
-  const yearText = new Intl.DateTimeFormat("ja-JP", { year: "numeric" }).format(state.viewDate);
-  monthLabel.textContent = monthText;
-  yearLabel.textContent = yearText;
-  selectedDateLabel.textContent = formatDateHeading(state.selectedDate);
+  const previousPositions = new Map(state.positions);
+  const previousEdges = new Set(state.edgeList.map(edgeKey));
+  layoutTree();
+  els.nodeLayer.textContent = "";
+  els.edgeLayer.textContent = "";
+  els.edgeLayer.setAttribute("viewBox", `0 0 ${WORLD.width} ${WORLD.height}`);
 
-  renderCalendarGrid();
-  renderSelectedEvents();
-  renderUpcomingEvents();
-  renderImportStatus();
+  const fragment = document.createDocumentFragment();
+  const edgeFragment = document.createDocumentFragment();
+  const matches = getSearchMatches();
+  const hasSearch = state.search.trim().length > 0;
+
+  state.edgeList.forEach((edge) => {
+    const from = state.positions.get(edge.from);
+    const to = state.positions.get(edge.to);
+    if (!from || !to) return;
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", pathForEdge(from, to));
+    const className = edgeClass(edge, matches, hasSearch) + (previousEdges.has(edgeKey(edge)) ? "" : " is-entering");
+    path.setAttribute("class", className);
+    path.setAttribute("pathLength", "1");
+    path.style.setProperty("--branch", edge.color);
+    edgeFragment.appendChild(path);
+  });
+
+  walk(state.tree, (node) => {
+    const pos = state.positions.get(node.id);
+    if (!pos) return;
+    const nodeEl = document.createElement("article");
+    nodeEl.className = nodeClass(node, pos, matches, hasSearch);
+    nodeEl.dataset.id = node.id;
+    nodeEl.style.left = `${pos.x}px`;
+    nodeEl.style.top = `${pos.y}px`;
+    nodeEl.style.setProperty("--branch", pos.color);
+    nodeEl.style.setProperty("--node-width", `${pos.depth === 0 ? ROOT_WIDTH : NODE_WIDTH}px`);
+    applyNodeMotion(nodeEl, pos, previousPositions.get(node.id));
+
+    const title = document.createElement("div");
+    title.className = "node-title";
+    title.contentEditable = "true";
+    title.spellcheck = false;
+    title.textContent = node.text;
+    title.setAttribute("role", "textbox");
+    title.setAttribute("aria-label", "Node text");
+
+    const actions = document.createElement("div");
+    actions.className = "node-actions";
+
+    const addChildButton = makeNodeButton("node-add-child", "+", "子ノードを追加");
+    const deleteButton = makeNodeButton("node-delete", "×", "このノードを削除");
+    const toggle = makeNodeButton(
+      `node-toggle${node.children.length ? "" : " is-empty"}`,
+      node.collapsed ? "▸" : "▾",
+      node.collapsed ? "展開" : "折りたたみ",
+    );
+
+    if (node.id === state.tree.id) {
+      deleteButton.disabled = true;
+    }
+
+    actions.append(addChildButton, deleteButton, toggle);
+    nodeEl.append(title, actions);
+    fragment.appendChild(nodeEl);
+  });
+
+  els.edgeLayer.appendChild(edgeFragment);
+  els.nodeLayer.appendChild(fragment);
+  bindRenderedEvents();
+  updateTransform();
+  updateLabels();
+  saveTree();
+  clearFlashAfterAnimation();
 }
 
-function renderCalendarGrid() {
-  calendarGrid.replaceChildren();
+function applyNodeMotion(nodeEl, pos, previous) {
+  if (state.isDraggingNode) return;
+  if (!previous) {
+    nodeEl.classList.add("is-entering");
+    return;
+  }
 
-  const first = startOfMonth(state.viewDate);
-  const start = addDays(first, -first.getDay());
-  const days = Array.from({ length: 42 }, (_, index) => addDays(start, index));
+  const dx = previous.x - pos.x;
+  const dy = previous.y - pos.y;
+  const distance = Math.hypot(dx, dy);
+  if (distance < 3 || nodeEl.classList.contains("is-new") || nodeEl.classList.contains("is-removing")) return;
 
-  days.forEach((date) => {
-    const cell = document.createElement("div");
-    const isOutside = date.getMonth() !== state.viewDate.getMonth();
-    cell.className = [
-      "day-cell",
-      isOutside ? "outside" : "",
-      isSameDay(date, new Date()) ? "today" : "",
-      isSameDay(date, state.selectedDate) ? "selected" : ""
-    ].filter(Boolean).join(" ");
+  const rotation = Math.max(-5, Math.min(5, dx / 70));
+  const stretch = Math.min(1.06, 1 + distance / 5000);
+  nodeEl.classList.add("is-moving");
+  nodeEl.style.setProperty("--move-x", `${dx}px`);
+  nodeEl.style.setProperty("--move-y", `${dy}px`);
+  nodeEl.style.setProperty("--move-rotate", `${rotation}deg`);
+  nodeEl.style.setProperty("--move-scale", stretch.toFixed(3));
+}
 
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "day-button";
-    button.setAttribute("aria-label", formatDateHeading(date));
-    button.addEventListener("click", () => {
-      state.selectedDate = stripTime(date);
-      if (isOutside) {
-        state.viewDate = startOfMonth(date);
+function makeNodeButton(className, label, title) {
+  const button = document.createElement("button");
+  button.className = `node-action ${className}`;
+  button.type = "button";
+  button.title = title;
+  button.setAttribute("aria-label", title);
+  button.textContent = label;
+  return button;
+}
+
+function nodeClass(node, pos, matches, hasSearch) {
+  const classes = ["mind-node"];
+  if (pos.depth === 0) classes.push("root");
+  if (node.id === state.selectedId) classes.push("is-selected");
+  if (node.id === state.flashId) classes.push("is-new");
+  if (node.id === state.removingId) classes.push("is-removing");
+  if (matches.has(node.id)) classes.push("is-match");
+  if (hasSearch && !matches.has(node.id) && !isAncestorOfMatch(node, matches)) classes.push("is-muted");
+  return classes.join(" ");
+}
+
+function clearFlashAfterAnimation() {
+  if (!state.flashId) return;
+  const id = state.flashId;
+  window.setTimeout(() => {
+    if (state.flashId !== id) return;
+    state.flashId = null;
+    const nodeEl = document.querySelector(`.mind-node[data-id="${CSS.escape(id)}"]`);
+    nodeEl?.classList.remove("is-new");
+  }, ANIMATION_MS);
+}
+
+function edgeClass(edge, matches, hasSearch) {
+  const classes = ["edge-path"];
+  if (edge.from === state.selectedId || edge.to === state.selectedId) classes.push("is-selected");
+  if (hasSearch) {
+    const from = findNode(edge.from)?.node;
+    const to = findNode(edge.to)?.node;
+    const relatedToMatch =
+      matches.has(edge.from) ||
+      matches.has(edge.to) ||
+      (from && isAncestorOfMatch(from, matches)) ||
+      (to && isAncestorOfMatch(to, matches));
+    if (!relatedToMatch) classes.push("is-muted");
+  }
+  return classes.join(" ");
+}
+
+function getSearchMatches() {
+  const matches = new Set();
+  const query = state.search.trim().toLowerCase();
+  if (!query) return matches;
+  walk(state.tree, (node) => {
+    if (node.text.toLowerCase().includes(query)) matches.add(node.id);
+  });
+  return matches;
+}
+
+function isAncestorOfMatch(node, matches) {
+  if (matches.has(node.id)) return true;
+  return node.children.some((child) => isAncestorOfMatch(child, matches));
+}
+
+function bindRenderedEvents() {
+  document.querySelectorAll(".mind-node").forEach((nodeEl) => {
+    const id = nodeEl.dataset.id;
+    const title = nodeEl.querySelector(".node-title");
+    const toggle = nodeEl.querySelector(".node-toggle");
+    const addChildButton = nodeEl.querySelector(".node-add-child");
+    const deleteButton = nodeEl.querySelector(".node-delete");
+    let editSnapshot = null;
+    let editRecorded = false;
+
+    nodeEl.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0 || event.target.closest(".node-action")) return;
+      event.stopPropagation();
+      selectNode(id);
+      startNodeDrag(event, id);
+    });
+
+    title.addEventListener("focus", () => {
+      editSnapshot = captureSnapshot();
+      editRecorded = false;
+    });
+
+    title.addEventListener("input", () => {
+      const found = findNode(id);
+      if (!found) return;
+      if (!editRecorded) {
+        pushHistory(editSnapshot || captureSnapshot());
+        editRecorded = true;
       }
+      found.node.text = title.textContent.trim() || "無題";
+      updateLabels();
+      saveTree();
+    });
+
+    title.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        title.blur();
+      }
+    });
+
+    toggle.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const found = findNode(id);
+      if (!found || !found.node.children.length) return;
+      pushHistory();
+      found.node.collapsed = !found.node.collapsed;
       render();
     });
 
-    const number = document.createElement("span");
-    number.className = "day-number";
-    number.textContent = date.getDate();
-    button.append(number);
-
-    const eventsWrapper = document.createElement("div");
-    eventsWrapper.className = "day-events";
-
-    const events = getEventsForDay(date);
-    events.slice(0, 3).forEach((item) => {
-      const chip = document.createElement("div");
-      chip.className = `day-chip ${item.source}`;
-      const text = document.createElement("span");
-      text.textContent = `${formatEventStart(item)} ${item.title}`;
-      chip.append(text);
-      eventsWrapper.append(chip);
+    addChildButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      state.selectedId = id;
+      addChild();
     });
 
-    if (events.length > 3) {
-      const more = document.createElement("div");
-      more.className = "more-chip";
-      more.textContent = `+${events.length - 3}`;
-      eventsWrapper.append(more);
-    }
-
-    cell.append(button, eventsWrapper);
-    calendarGrid.append(cell);
+    deleteButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (deleteButton.disabled) return;
+      state.selectedId = id;
+      deleteSelected();
+    });
   });
 }
 
-function renderSelectedEvents() {
-  const events = getEventsForDay(state.selectedDate);
-  renderEventList(selectedEventList, events, "予定なし");
+function startNodeDrag(event, id) {
+  const found = findNode(id);
+  if (!found) return;
+  activeNodeDrag = {
+    id,
+    startX: event.clientX,
+    startY: event.clientY,
+    started: false,
+    snapshot: captureSnapshot(),
+    originalOffsets: collectSubtreeOffsets(found.node),
+  };
+  window.addEventListener("pointermove", handleNodeDragMove);
+  window.addEventListener("pointerup", finishNodeDrag, { once: true });
 }
 
-function renderUpcomingEvents() {
-  const today = stripTime(new Date());
-  const events = getVisibleEvents()
-    .filter((item) => new Date(item.end) >= today)
-    .sort(sortByStart)
-    .slice(0, 8);
+function handleNodeDragMove(event) {
+  if (!activeNodeDrag) return;
+  const screenDx = event.clientX - activeNodeDrag.startX;
+  const screenDy = event.clientY - activeNodeDrag.startY;
+  const distance = Math.hypot(screenDx, screenDy);
+  if (!activeNodeDrag.started && distance < 4) return;
 
-  renderEventList(upcomingEventList, events, "予定なし");
-}
-
-function renderEventList(target, events, emptyText) {
-  target.replaceChildren();
-
-  if (events.length === 0) {
-    const empty = document.createElement("div");
-    empty.className = "empty-state";
-    empty.textContent = emptyText;
-    target.append(empty);
-    return;
+  event.preventDefault();
+  if (!activeNodeDrag.started) {
+    pushHistory(activeNodeDrag.snapshot);
+    activeNodeDrag.started = true;
+    state.isDraggingNode = true;
+    els.viewport.classList.add("is-node-dragging");
   }
 
-  events.forEach((item) => {
-    const card = document.createElement("article");
-    card.className = `event-card ${item.source}`;
-
-    const time = document.createElement("div");
-    time.className = "event-time";
-
-    const range = document.createElement("span");
-    range.textContent = formatEventRange(item);
-
-    const source = document.createElement("span");
-    source.className = "source-pill";
-    source.textContent = SOURCE_LABELS[item.source] || item.source;
-
-    const title = document.createElement("p");
-    title.className = "event-title";
-    title.textContent = item.title;
-
-    time.append(range, source);
-    card.append(time, title);
-
-    if (item.id && (item.id.startsWith("local-") || isNascaEvent(item))) {
-      const deleteButton = document.createElement("button");
-      deleteButton.className = "event-delete";
-      deleteButton.type = "button";
-      deleteButton.setAttribute("aria-label", `${item.title}を削除`);
-      deleteButton.title = "削除";
-      deleteButton.textContent = "x";
-      deleteButton.addEventListener("click", () => {
-        removeLocalEvent(item.id);
-      });
-      card.append(deleteButton);
-    }
-
-    if (item.note) {
-      const note = document.createElement("p");
-      note.className = "event-note";
-      note.textContent = item.note;
-      card.append(note);
-    }
-
-    target.append(card);
-  });
-}
-
-function openComposer(date) {
-  eventForm.reset();
-  eventTitle.value = "";
-  eventDate.value = toDateInputValue(date);
-  eventStart.value = "09:00";
-  eventEnd.value = "10:00";
-  eventSource.value = "family";
-  eventDialog.showModal();
-  eventTitle.focus();
-}
-
-function readFormEvent() {
-  const start = new Date(`${eventDate.value}T${eventStart.value}:00`);
-  const end = new Date(`${eventDate.value}T${eventEnd.value}:00`);
-  const normalizedEnd = end > start ? end : addDays(end, 1);
-  const source = eventSource.value;
-
-  return {
-    title: source === "work" ? "仕事" : eventTitle.value.trim(),
-    start: start.toISOString(),
-    end: normalizedEnd.toISOString(),
-    source,
-    note: source === "work" ? "" : eventNote.value.trim()
-  };
-}
-
-function getVisibleEvents() {
-  return [...state.remoteEvents, ...state.localEvents]
-    .filter((item) => state.visibleSources.has(item.source))
-    .sort(sortByStart);
-}
-
-function getEventsForDay(date) {
-  const dayStart = stripTime(date);
-  const dayEnd = addDays(dayStart, 1);
-  return getVisibleEvents().filter((item) => {
-    const start = new Date(item.start);
-    const end = new Date(item.end);
-    return start < dayEnd && end > dayStart;
-  });
-}
-
-function saveLocalEvents() {
-  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state.localEvents));
-}
-
-function removeLocalEvent(id) {
-  state.localEvents = state.localEvents.filter((item) => item.id !== id);
-  saveLocalEvents();
+  const dx = screenDx / state.zoom;
+  const dy = screenDy / state.zoom;
+  applySubtreeDragOffsets(activeNodeDrag.id, activeNodeDrag.originalOffsets, dx, dy);
   render();
 }
 
-function renderImportStatus() {
-  const count = state.localEvents.filter((item) => isNascaEvent(item)).length;
-  const googleCount = appConfig.googleSyncUrl ? state.remoteEvents.length : 0;
-  if (googleCount > 0 && count > 0) {
-    importStatus.textContent = `Google予定 ${googleCount}件 / NASCA取込 ${count}件を表示中`;
-    return;
+function finishNodeDrag() {
+  window.removeEventListener("pointermove", handleNodeDragMove);
+  if (activeNodeDrag?.started) {
+    saveTree();
   }
-  if (googleCount > 0) {
-    importStatus.textContent = `Google予定 ${googleCount}件を表示中`;
-    return;
-  }
-  importStatus.textContent = count > 0
-    ? `NASCA取込 ${count}件を表示中 / Google同期は未設定`
-    : "Google同期は未設定";
+  activeNodeDrag = null;
+  state.isDraggingNode = false;
+  els.viewport.classList.remove("is-node-dragging");
 }
 
-function parseNascaSchedule(content, fileName) {
-  const text = content.replace(/^\uFEFF/, "");
-  const lowerName = fileName.toLowerCase();
-  const parsed = lowerName.endsWith(".ics") || /BEGIN:VEVENT/i.test(text)
-    ? parseIcsEvents(text)
-    : parseCsvEvents(text);
-  return dedupeEvents(parsed).map((item, index) => ({
-    id: `nasca-${hashString(`${item.start}|${item.end}`)}-${index}`,
-    title: "仕事",
-    start: item.start,
-    end: item.end,
-    source: "work",
-    note: ""
-  }));
+function collectSubtreeOffsets(node, offsets = new Map()) {
+  offsets.set(node.id, normalizeOffset(node.offset));
+  node.children.forEach((child) => collectSubtreeOffsets(child, offsets));
+  return offsets;
 }
 
-function parseIcsEvents(content) {
-  const lines = content
-    .replace(/\r\n[ \t]/g, "")
-    .replace(/\n[ \t]/g, "")
-    .split(/\r?\n/);
-  const events = [];
-  let current = null;
-
-  lines.forEach((line) => {
-    const trimmed = line.trim();
-    if (trimmed === "BEGIN:VEVENT") {
-      current = {};
-      return;
-    }
-    if (trimmed === "END:VEVENT") {
-      const event = normalizeImportedEvent(current);
-      if (event) {
-        events.push(event);
-      }
-      current = null;
-      return;
-    }
-    if (!current) {
-      return;
-    }
-
-    const separatorIndex = trimmed.indexOf(":");
-    if (separatorIndex === -1) {
-      return;
-    }
-
-    const key = trimmed.slice(0, separatorIndex).toUpperCase();
-    const value = trimmed.slice(separatorIndex + 1).trim();
-    if (key.startsWith("DTSTART")) {
-      current.start = parseIcsDate(value, key.includes("VALUE=DATE"));
-    }
-    if (key.startsWith("DTEND")) {
-      current.end = parseIcsDate(value, key.includes("VALUE=DATE"));
-    }
-  });
-
-  return events;
-}
-
-function parseCsvEvents(content) {
-  const rows = parseCsvRows(content);
-  if (rows.length === 0) {
-    return [];
-  }
-
-  const firstRow = rows[0].map((item) => normalizeHeader(item));
-  const startIndex = findColumn(firstRow, ["start", "starts at", "start date", "start datetime", "start time", "開始", "開始日時", "開始日", "開始時刻", "開始時間"]);
-  const endIndex = findColumn(firstRow, ["end", "ends at", "end date", "end datetime", "end time", "終了", "終了日時", "終了日", "終了時刻", "終了時間"]);
-  const dateIndex = findColumn(firstRow, ["date", "day", "日付", "予定日", "年月日"]);
-  const hasHeader = startIndex !== -1 && endIndex !== -1;
-  const dataRows = hasHeader ? rows.slice(1) : rows;
-
-  return dataRows.map((row) => {
-    const startValue = hasHeader ? row[startIndex] : row[0];
-    const endValue = hasHeader ? row[endIndex] : row[1];
-    const dateValue = hasHeader && dateIndex !== -1 ? row[dateIndex] : "";
-    const start = dateValue && looksLikeTime(startValue)
-      ? combineDateAndTime(dateValue, startValue)
-      : parseFlexibleDate(startValue);
-    const end = dateValue && looksLikeTime(endValue)
-      ? combineDateAndTime(dateValue, endValue)
-      : parseFlexibleDate(endValue);
-
-    return normalizeImportedEvent({ start, end });
-  }).filter(Boolean);
-}
-
-function parseCsvRows(content) {
-  const delimiter = detectDelimiter(content);
-  const rows = [];
-  let row = [];
-  let field = "";
-  let inQuotes = false;
-
-  for (let index = 0; index < content.length; index += 1) {
-    const char = content[index];
-    const next = content[index + 1];
-
-    if (char === "\"" && inQuotes && next === "\"") {
-      field += "\"";
-      index += 1;
-      continue;
-    }
-    if (char === "\"") {
-      inQuotes = !inQuotes;
-      continue;
-    }
-    if (char === delimiter && !inQuotes) {
-      row.push(field.trim());
-      field = "";
-      continue;
-    }
-    if ((char === "\n" || char === "\r") && !inQuotes) {
-      if (char === "\r" && next === "\n") {
-        index += 1;
-      }
-      row.push(field.trim());
-      if (row.some(Boolean)) {
-        rows.push(row);
-      }
-      row = [];
-      field = "";
-      continue;
-    }
-    field += char;
-  }
-
-  row.push(field.trim());
-  if (row.some(Boolean)) {
-    rows.push(row);
-  }
-  return rows;
-}
-
-function parseIcsDate(value, isAllDay) {
-  if (isAllDay || /^\d{8}$/.test(value)) {
-    return new Date(Number(value.slice(0, 4)), Number(value.slice(4, 6)) - 1, Number(value.slice(6, 8)));
-  }
-
-  const match = value.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})?(Z)?$/);
-  if (!match) {
-    return null;
-  }
-
-  const [, year, month, day, hour, minute, second = "00", zulu] = match;
-  if (zulu) {
-    return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second)));
-  }
-
-  return new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second));
-}
-
-function parseFlexibleDate(value) {
-  const text = String(value || "").trim();
-  if (!text) {
-    return null;
-  }
-
-  const japaneseDate = text.match(/^(\d{4})年(\d{1,2})月(\d{1,2})日(?:\s*(\d{1,2}):(\d{2}))?/);
-  if (japaneseDate) {
-    return new Date(
-      Number(japaneseDate[1]),
-      Number(japaneseDate[2]) - 1,
-      Number(japaneseDate[3]),
-      Number(japaneseDate[4] || 0),
-      Number(japaneseDate[5] || 0)
-    );
-  }
-
-  const compactDateTime = text.match(/^(\d{4})(\d{2})(\d{2})[ T]?(\d{2})(\d{2})(\d{2})?$/);
-  if (compactDateTime) {
-    return new Date(
-      Number(compactDateTime[1]),
-      Number(compactDateTime[2]) - 1,
-      Number(compactDateTime[3]),
-      Number(compactDateTime[4]),
-      Number(compactDateTime[5]),
-      Number(compactDateTime[6] || 0)
-    );
-  }
-
-  const normalized = text.replace(/\//g, "-").replace(/\s+/, "T");
-  const parsed = new Date(normalized);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
-
-function combineDateAndTime(dateValue, timeValue) {
-  const date = parseFlexibleDate(dateValue);
-  const time = String(timeValue || "").trim().match(/^(\d{1,2}):(\d{2})/);
-  if (!date || !time) {
-    return null;
-  }
-
-  date.setHours(Number(time[1]), Number(time[2]), 0, 0);
-  return date;
-}
-
-function normalizeImportedEvent(event) {
-  if (!event || !event.start) {
-    return null;
-  }
-
-  const start = event.start instanceof Date ? event.start : new Date(event.start);
-  let end = event.end instanceof Date ? event.end : new Date(event.end);
-  if (Number.isNaN(start.getTime())) {
-    return null;
-  }
-  if (Number.isNaN(end.getTime())) {
-    end = new Date(start);
-    end.setHours(end.getHours() + 1);
-  }
-  if (end <= start) {
-    end = addDays(end, 1);
-  }
-
-  return {
-    start: start.toISOString(),
-    end: end.toISOString()
-  };
-}
-
-function normalizeHeader(value) {
-  return String(value || "").trim().replace(/[_-]+/g, " ").replace(/\s+/g, " ").toLowerCase();
-}
-
-function findColumn(headers, candidates) {
-  return headers.findIndex((header) => candidates.includes(header));
-}
-
-function looksLikeTime(value) {
-  return /^\d{1,2}:\d{2}/.test(String(value || "").trim());
-}
-
-function dedupeEvents(events) {
-  const seen = new Set();
-  return events.filter((event) => {
-    const key = `${event.start}|${event.end}`;
-    if (seen.has(key)) {
-      return false;
-    }
-    seen.add(key);
-    return true;
-  });
-}
-
-function isNascaEvent(event) {
-  return Boolean(event.id && event.id.startsWith("nasca-"));
-}
-
-function hashString(value) {
-  let hash = 0;
-  for (let index = 0; index < value.length; index += 1) {
-    hash = ((hash << 5) - hash + value.charCodeAt(index)) | 0;
-  }
-  return Math.abs(hash).toString(36);
-}
-
-function detectDelimiter(content) {
-  const firstLine = content.split(/\r?\n/).find((line) => line.trim()) || "";
-  const candidates = [",", "\t", ";"];
-  return candidates
-    .map((delimiter) => ({
-      delimiter,
-      count: firstLine.split(delimiter).length
-    }))
-    .sort((left, right) => right.count - left.count)[0].delimiter;
-}
-
-function loadLocalEvents() {
-  try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function buildGoogleCalendarUrl(event) {
-  const params = new URLSearchParams({
-    action: "TEMPLATE",
-    text: event.title,
-    dates: `${toGoogleDate(event.start)}/${toGoogleDate(event.end)}`,
-    details: event.note || "",
-    trp: "true"
-  });
-
-  return `https://calendar.google.com/calendar/render?${params.toString()}`;
-}
-
-function refreshGoogleEvents({ sync }) {
-  if (!appConfig.googleSyncUrl) {
-    window.alert("Google同期の準備がまだできていません。data/config.js に Apps Script のURLを入れてください。");
-    return;
-  }
-
-  const callbackName = `receiveFamilyCalendarEvents${Date.now()}`;
-  const script = document.createElement("script");
-  const url = new URL(appConfig.googleSyncUrl);
-  url.searchParams.set("callback", callbackName);
-  url.searchParams.set("t", String(Date.now()));
-  if (sync) {
-    url.searchParams.set("action", "sync");
-  }
-
-  refreshGoogleButton.disabled = true;
-  importStatus.textContent = "Google予定を更新中...";
-
-  const timeout = window.setTimeout(() => {
-    cleanupGoogleSync(callbackName, script);
-    refreshGoogleButton.disabled = false;
-    importStatus.textContent = "Google予定の更新に失敗しました";
-    window.alert("Google予定を更新できませんでした。");
-  }, GOOGLE_SYNC_TIMEOUT_MS);
-
-  window[callbackName] = (payload) => {
-    window.clearTimeout(timeout);
-    cleanupGoogleSync(callbackName, script);
-
-    if (payload && payload.error) {
-      refreshGoogleButton.disabled = false;
-      importStatus.textContent = "Google予定の更新に失敗しました";
-      window.alert(payload.error);
-      return;
-    }
-
-    const events = Array.isArray(payload && payload.events) ? payload.events : [];
-    state.remoteEvents = events;
-    if (events.length > 0) {
-      state.viewDate = startOfMonth(new Date(events[0].start));
-      state.selectedDate = stripTime(new Date(events[0].start));
-    }
-    refreshGoogleButton.disabled = false;
-    render();
-    window.alert(`Google予定を${events.length}件読み込みました。`);
-  };
-
-  script.src = url.toString();
-  script.onerror = () => {
-    window.clearTimeout(timeout);
-    cleanupGoogleSync(callbackName, script);
-    refreshGoogleButton.disabled = false;
-    importStatus.textContent = "Google予定の更新に失敗しました";
-    window.alert("Google予定を更新できませんでした。");
-  };
-  document.body.append(script);
-}
-
-function cleanupGoogleSync(callbackName, script) {
-  delete window[callbackName];
-  if (script.parentNode) {
-    script.parentNode.removeChild(script);
-  }
-}
-
-function formatEventStart(event) {
-  return event.allDay ? "終日" : formatTime(event.start);
-}
-
-function formatEventRange(event) {
-  if (event.allDay) {
-    return `${formatShortDate(event.start)} 終日`;
-  }
-  return `${formatShortDate(event.start)} ${formatTime(event.start)}-${formatTime(event.end)}`;
-}
-
-function toGoogleDate(value) {
-  return new Date(value).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
-}
-
-function formatDateHeading(date) {
-  return new Intl.DateTimeFormat("ja-JP", {
-    month: "long",
-    day: "numeric",
-    weekday: "short"
-  }).format(date);
-}
-
-function formatShortDate(value) {
-  const date = new Date(value);
-  return new Intl.DateTimeFormat("ja-JP", { month: "numeric", day: "numeric" }).format(date);
-}
-
-function formatTime(value) {
-  return new Intl.DateTimeFormat("ja-JP", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false
-  }).format(new Date(value));
-}
-
-function toDateInputValue(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function startOfMonth(date) {
-  return new Date(date.getFullYear(), date.getMonth(), 1);
-}
-
-function stripTime(date) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
-}
-
-function addDays(date, amount) {
-  const next = new Date(date);
-  next.setDate(next.getDate() + amount);
-  return next;
-}
-
-function addMonths(date, amount) {
-  return new Date(date.getFullYear(), date.getMonth() + amount, 1);
-}
-
-function isSameDay(left, right) {
-  return stripTime(left).getTime() === stripTime(right).getTime();
-}
-
-function sortByStart(left, right) {
-  return new Date(left.start) - new Date(right.start);
-}
-
-function fallbackEvents() {
-  const today = stripTime(new Date());
-  const makeEvent = (offset, startHour, endHour, title, source, note = "") => {
-    const start = addDays(today, offset);
-    start.setHours(startHour, 0, 0, 0);
-    const end = addDays(today, offset);
-    end.setHours(endHour, 0, 0, 0);
-    return {
-      id: `sample-${offset}-${startHour}`,
-      title,
-      start: start.toISOString(),
-      end: end.toISOString(),
-      source,
-      note
+function applySubtreeDragOffsets(id, originalOffsets, dx, dy) {
+  const found = findNode(id);
+  if (!found) return;
+  walkSubtree(found.node, (node) => {
+    const original = originalOffsets.get(node.id) || { x: 0, y: 0 };
+    node.offset = {
+      x: Math.round(original.x + dx),
+      y: Math.round(original.y + dy),
     };
-  };
+  });
+}
+
+function walkSubtree(node, visitor) {
+  visitor(node);
+  node.children.forEach((child) => walkSubtree(child, visitor));
+}
+
+function selectNode(id) {
+  state.selectedId = id;
+  updateLabels();
+  paintSelection();
+}
+
+function paintSelection() {
+  document.querySelectorAll(".mind-node").forEach((nodeEl) => {
+    nodeEl.classList.toggle("is-selected", nodeEl.dataset.id === state.selectedId);
+  });
+  document.querySelectorAll(".edge-path").forEach((path, index) => {
+    const edge = state.edgeList[index];
+    path.classList.toggle("is-selected", edge && (edge.from === state.selectedId || edge.to === state.selectedId));
+  });
+}
+
+function updateLabels() {
+  const found = findNode(state.selectedId);
+  const selectedText = found ? found.node.text : "未選択";
+  els.selectionLabel.textContent = selectedText;
+  els.statusText.textContent = `${state.mapName} / ${state.visibleIds.size}件を表示中。編集内容は自動保存されます。`;
+  updateNodeDetailPanel(found?.node);
+}
+
+function updateNodeDetailPanel(node) {
+  if (!els.nodeDetailTitle || !els.nodeNoteInput) return;
+  els.nodeDetailTitle.textContent = node ? node.text : "未選択";
+  els.nodeNoteInput.disabled = !node;
+  if (document.activeElement !== els.nodeNoteInput) {
+    els.nodeNoteInput.value = node?.memo || "";
+  }
+}
+
+function updateTransform() {
+  els.world.style.transform = `translate(${state.pan.x}px, ${state.pan.y}px) scale(${state.zoom})`;
+  document.getElementById("zoomResetButton").textContent = `${Math.round(state.zoom * 100)}%`;
+}
+
+function fitToView() {
+  const rect = els.viewport.getBoundingClientRect();
+  const positions = [...state.positions.values()];
+  if (!positions.length) return;
+  const minX = Math.min(...positions.map((p) => p.x)) - 180;
+  const maxX = Math.max(...positions.map((p) => p.x)) + 180;
+  const minY = Math.min(...positions.map((p) => p.y)) - 120;
+  const maxY = Math.max(...positions.map((p) => p.y)) + 120;
+  const mapWidth = maxX - minX;
+  const mapHeight = maxY - minY;
+  state.zoom = Math.min(1.1, Math.max(0.35, Math.min(rect.width / mapWidth, rect.height / mapHeight) * 0.92));
+  state.pan.x = (rect.width - mapWidth * state.zoom) / 2 - minX * state.zoom;
+  state.pan.y = (rect.height - mapHeight * state.zoom) / 2 - minY * state.zoom;
+  updateTransform();
+}
+
+function optimizeLayout() {
+  pushHistory();
+  const rect = els.viewport.getBoundingClientRect();
+  const stats = getLayoutStats(state.tree);
+  const usableHeight = Math.max(420, rect.height * 0.78);
+  const leafSlots = Math.max(1, stats.leafCount - 1);
+  const nodeHeight = 76;
+
+  const vertical = clamp(Math.round((usableHeight - stats.leafCount * nodeHeight) / leafSlots), 18, 72);
+
+  state.verticalSpacing = vertical;
+  els.verticalSpacingSlider.value = vertical;
+  render();
+  requestAnimationFrame(fitToView);
+  els.statusText.textContent = `レイアウトを最適化しました。縦 ${vertical} / 横と表示の細かさは維持`;
+}
+
+function getLayoutStats(node, depth = 0) {
+  const children = getVisibleChildren(node, depth);
+  if (!children.length) {
+    return { maxDepth: depth, leafCount: 1, visibleCount: 1 };
+  }
+  return children.reduce(
+    (stats, child) => {
+      const childStats = getLayoutStats(child, depth + 1);
+      return {
+        maxDepth: Math.max(stats.maxDepth, childStats.maxDepth),
+        leafCount: stats.leafCount + childStats.leafCount,
+        visibleCount: stats.visibleCount + childStats.visibleCount,
+      };
+    },
+    { maxDepth: depth, leafCount: 0, visibleCount: 1 },
+  );
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function addChild() {
+  const found = findNode(state.selectedId);
+  if (!found) return;
+  pushHistory();
+  found.node.collapsed = false;
+  const child = normalizeNode({ text: "新しいアイデア", offset: normalizeOffset(found.node.offset), children: [] });
+  found.node.children.push(child);
+  state.selectedId = child.id;
+  state.flashId = child.id;
+  render();
+}
+
+function addSibling() {
+  const found = findNode(state.selectedId);
+  if (!found || !found.parent) return;
+  pushHistory();
+  const sibling = normalizeNode({ text: "新しいトピック", offset: normalizeOffset(found.node.offset), children: [] });
+  const index = found.parent.children.findIndex((child) => child.id === found.node.id);
+  found.parent.children.splice(index + 1, 0, sibling);
+  state.selectedId = sibling.id;
+  state.flashId = sibling.id;
+  render();
+}
+
+function deleteSelected() {
+  const found = findNode(state.selectedId);
+  if (!found || !found.parent) return;
+  pushHistory();
+  const targetId = state.selectedId;
+  state.removingId = targetId;
+  document.querySelector(`.mind-node[data-id="${CSS.escape(targetId)}"]`)?.classList.add("is-removing");
+  window.clearTimeout(removeTimer);
+  removeTimer = window.setTimeout(() => {
+    const current = findNode(targetId);
+    if (!current || !current.parent) {
+      state.removingId = null;
+      render();
+      return;
+    }
+    current.parent.children = current.parent.children.filter((child) => child.id !== targetId);
+    state.selectedId = current.parent.id;
+    state.removingId = null;
+    render();
+  }, ANIMATION_MS);
+}
+
+function toggleSelected() {
+  const found = findNode(state.selectedId);
+  if (!found || !found.node.children.length) return;
+  pushHistory();
+  found.node.collapsed = !found.node.collapsed;
+  render();
+}
+
+function parseOutline(text) {
+  return parseMapDocument(text).tree;
+}
+
+function parseMapDocument(text) {
+  const extracted = extractMarkdownState(text);
+  const trimmed = extracted.text.trim();
+  if (!trimmed) return { tree: clone(sampleTree), settings: extracted.settings };
+  if (trimmed.startsWith("{")) {
+    const parsed = JSON.parse(trimmed);
+    if (parsed.tree) {
+      return {
+        tree: normalizeNode(parsed.tree),
+        settings: parsed.settings ? normalizeSettings(parsed.settings) : extracted.settings,
+      };
+    }
+    return { tree: normalizeNode(parsed), settings: extracted.settings };
+  }
+
+  const lines = trimmed
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\t/g, "  "))
+    .filter((line) => line.trim().length && !line.trim().startsWith("<!--"));
+
+  const root = normalizeNode({ text: lines[0].replace(/^[-*#\s]+/, ""), children: [] });
+  const stack = [{ indent: -1, node: root }];
+
+  lines.slice(1).forEach((line) => {
+    const indent = line.match(/^\s*/)[0].length;
+    const textValue = line.trim().replace(/^[-*]\s*/, "").replace(/^\d+\.\s*/, "");
+    const node = normalizeNode({ text: textValue, children: [] });
+    while (stack.length > 1 && indent <= stack[stack.length - 1].indent) stack.pop();
+    stack[stack.length - 1].node.children.push(node);
+    stack.push({ indent, node });
+  });
+
+  if (extracted.metadata?.nodes) applyNodeMetadata(root, extracted.metadata.nodes);
+  return { tree: root, settings: extracted.metadata?.settings ? normalizeSettings(extracted.metadata.settings) : null };
+}
+
+function toMarkdown(node, options = {}) {
+  const lines = toMarkdownLines(node);
+  if (!options.includeMeta) return lines;
+  return [makeStateComment(), "", ...lines];
+}
+
+function toMarkdownLines(node, depth = 0) {
+  const prefix = depth === 0 ? "# " : `${"  ".repeat(depth - 1)}- `;
+  return [prefix + node.text, ...node.children.flatMap((child) => toMarkdownLines(child, depth + 1))];
+}
+
+function prettyOutline(node, depth = 0) {
+  const prefix = depth === 0 ? "" : `${"  ".repeat(depth - 1)}- `;
+  return [prefix + node.text, ...node.children.flatMap((child) => prettyOutline(child, depth + 1))];
+}
+
+function summarizeTree(root) {
+  const summary = analyzeTree(root);
+  const background = makeSummaryBackground(summary);
+  const actions = makeSummaryActions(summary);
 
   return [
-    makeEvent(0, 9, 18, "仕事", "work"),
-    makeEvent(1, 17, 18, "買い物", "family", "帰りに寄る"),
-    makeEvent(2, 19, 21, "夕食", "family"),
-    makeEvent(4, 10, 11, "歯医者", "personal")
-  ];
+    "今の課題：",
+    makeSummaryIssue(summary),
+    "",
+    "背景：",
+    ...background,
+    "",
+    "まずやること：",
+    ...actions.map((action, index) => `${index + 1}. ${action}`),
+  ].join("\n");
 }
+
+function analyzeTree(root) {
+  const children = root.children || [];
+  const goalBranch = findSummaryBranch(children, ["ゴール", "目的", "目標"]);
+  const handoverBranch = findSummaryBranch(children, ["引継ぎ", "引き継ぎ", "引継", "やること", "対応"]);
+  const exclusionBranch = findSummaryBranch(children, ["やらない", "対象外", "しない", "除外"]);
+  const goals = branchChildren(goalBranch);
+  const handovers = branchChildren(handoverBranch);
+  const exclusions = branchChildren(exclusionBranch);
+  const allTexts = collectSummaryTexts(root);
+
+  return {
+    rootText: cleanSummaryText(root.text),
+    assignee: extractAssignee(root.text),
+    theme: extractTheme(root.text),
+    goals,
+    handovers,
+    exclusions,
+    topItems: children.map((child) => cleanSummaryText(child.text)).filter(Boolean),
+    allTexts,
+  };
+}
+
+function findSummaryBranch(children, keywords) {
+  return children.find((child) => keywords.some((keyword) => cleanSummaryKey(child.text).includes(keyword)));
+}
+
+function branchChildren(node) {
+  if (!node) return [];
+  return (node.children || []).map((child) => cleanSummaryText(child.text)).filter(Boolean);
+}
+
+function collectSummaryTexts(node) {
+  const texts = [];
+  walkSummaryTree(node, (item) => {
+    const text = cleanSummaryText(item.text);
+    if (text) texts.push(text);
+  });
+  return texts;
+}
+
+function walkSummaryTree(node, visitor) {
+  visitor(node);
+  (node.children || []).forEach((child) => walkSummaryTree(child, visitor));
+}
+
+function makeSummaryIssue(summary) {
+  const lead = makeSummaryLead(summary);
+  if (summary.exclusions.length) {
+    return `${lead}、任せる範囲と最終判断が必要な範囲を切り分ける。`;
+  }
+  if (summary.handovers.length) {
+    return `${lead}、引継ぎ項目と次に進める順番を整理する。`;
+  }
+  return `${summary.rootText || "このマインドマップ"}について、課題と次にやることを整理する。`;
+}
+
+function makeSummaryLead(summary) {
+  const goal = pickGoal(summary.goals);
+  if (summary.assignee && goal) {
+    return `${summary.assignee}が${goalToLead(goal)}`;
+  }
+  if (goal) return goalToLead(goal);
+  if (summary.assignee && summary.theme) return `${summary.assignee}が${summary.theme}を進められるように`;
+  return summary.rootText || "このマインドマップ";
+}
+
+function pickGoal(goals) {
+  return (
+    goals.find((goal) => /自走|担う|管理|把握|確認/.test(goal)) ||
+    goals.find((goal) => goal.length <= 34) ||
+    goals[0] ||
+    ""
+  );
+}
+
+function goalToLead(goal) {
+  const cleanGoal = cleanSummaryText(goal).replace(/[。.]$/, "");
+  if (/できる$|担う$|握れている$|進められる$|回せる$/.test(cleanGoal)) return `${cleanGoal}ように`;
+  return `${cleanGoal}を進められるように`;
+}
+
+function makeSummaryBackground(summary) {
+  const lines = [];
+  const scopes = summarizeScopeItems(summary);
+  if (scopes.length) {
+    lines.push(`引継ぎ対象は、${joinJapaneseList(scopes)}など${summary.handovers.length > 4 ? "広い" : "が中心"}。`);
+  } else if (summary.topItems.length) {
+    lines.push(`論点は、${joinJapaneseList(summary.topItems.slice(0, 5))}が中心。`);
+  } else {
+    lines.push("論点がまだ分散しているため、全体像を短く整理する。");
+  }
+
+  if (summary.exclusions.length) {
+    lines.push(`一方で、${joinJapaneseList(summarizeExclusions(summary.exclusions))}の判断は担当外にする。`);
+  } else if (summary.goals.length) {
+    lines.push(`目指す状態は、${joinJapaneseList(summary.goals.slice(0, 3))}。`);
+  }
+
+  return lines.slice(0, 2);
+}
+
+function makeSummaryActions(summary) {
+  const actions = [];
+  if (summary.handovers.length) {
+    actions.push("引継ぎ項目を「日次運用」「定例」「判断が必要なもの」に分ける");
+  } else {
+    actions.push("ノードを「課題」「背景」「次にやること」に分ける");
+  }
+
+  if (summary.exclusions.length || summary.goals.length) {
+    const subject = summary.assignee ? `${summary.assignee}が` : "";
+    actions.push(`${subject}判断してよい範囲と、相談すべき範囲を明文化する`);
+  } else {
+    actions.push("優先度が高いものを1つ選ぶ");
+  }
+
+  const operatingTools = summarizeOperatingTools(summary.handovers);
+  if (operatingTools.length) {
+    const subject = summary.assignee ? `${summary.assignee}が` : "";
+    actions.push(`${joinJapaneseList(operatingTools)}を、${subject}回せる形に整える`);
+  } else {
+    actions.push("次に試す小さなアクションを1つ決める");
+  }
+
+  return actions.slice(0, 3);
+}
+
+function summarizeScopeItems(summary) {
+  const texts = [...summary.handovers, ...summary.goals];
+  const items = [];
+  addSummaryItem(items, texts, /スケジュール|ガント|進捗/, "スケジュール管理");
+  addSummaryItem(items, texts, /課題/, "課題整理");
+  addSummaryItem(items, texts, /スプシ|spreadsheet/i, "スプシ運用");
+  addSummaryItem(items, texts, /定例/, "各定例");
+  addSummaryItem(items, texts, /2D|3D/i, "2D・3D確認");
+  addSummaryItem(items, texts, /ID/, "ID整理");
+  summary.handovers.forEach((item) => {
+    if (items.length < 5 && !items.some((existing) => item.includes(existing))) items.push(item);
+  });
+  return items.slice(0, 5);
+}
+
+function summarizeExclusions(exclusions) {
+  const items = [];
+  addSummaryItem(items, exclusions, /品質|クオリティ/, "品質");
+  addSummaryItem(items, exclusions, /表現/, "表現");
+  addSummaryItem(items, exclusions, /工数/, "工数増");
+  addSummaryItem(items, exclusions, /レギュレーション/, "レギュレーション更新");
+  exclusions.forEach((item) => {
+    if (items.length < 4 && !items.includes(item)) items.push(item.replace(/判断|最終決定/g, ""));
+  });
+  return items.slice(0, 4);
+}
+
+function summarizeOperatingTools(handovers) {
+  const tools = [];
+  addSummaryItem(tools, handovers, /ガント/, "ガント");
+  addSummaryItem(tools, handovers, /スプシ|spreadsheet/i, "スプシ");
+  addSummaryItem(tools, handovers, /課題/, "課題一覧");
+  addSummaryItem(tools, handovers, /定例/, "定例");
+  return tools.slice(0, 3);
+}
+
+function addSummaryItem(items, texts, pattern, label) {
+  if (texts.some((text) => pattern.test(text)) && !items.includes(label)) items.push(label);
+}
+
+function joinJapaneseList(items) {
+  return items.filter(Boolean).join("、");
+}
+
+function extractAssignee(text) {
+  const match = cleanSummaryText(text).match(/([^\s　#-]+さん)/);
+  return match ? match[1] : "";
+}
+
+function extractTheme(text) {
+  return cleanSummaryText(text)
+    .replace(/^#+\s*/, "")
+    .replace(/([^\s　#-]+さん)/, "")
+    .replace(/オンボーディング|オンボ|onboarding/gi, "")
+    .trim();
+}
+
+function cleanSummaryText(text) {
+  return String(text || "").replace(/^[-*#\s　]+/, "").trim();
+}
+
+function cleanSummaryKey(text) {
+  return cleanSummaryText(text).replace(/\s|　/g, "");
+}
+
+function makeStateComment() {
+  const metadata = {
+    version: 1,
+    settings: currentSettings(),
+    nodes: collectNodeMetadata(state.tree),
+  };
+  return `<!-- kmc:${encodeBase64Unicode(JSON.stringify(metadata))} -->`;
+}
+
+function collectNodeMetadata(node, path = []) {
+  const key = path.join(".");
+  const nodes = {
+    [key]: {
+      collapsed: Boolean(node.collapsed),
+      memo: node.memo || "",
+      offset: normalizeOffset(node.offset),
+    },
+  };
+  node.children.forEach((child, index) => {
+    Object.assign(nodes, collectNodeMetadata(child, [...path, index]));
+  });
+  return nodes;
+}
+
+function applyNodeMetadata(node, metadata, path = []) {
+  const item = metadata[path.join(".")];
+  if (item) {
+    node.collapsed = Boolean(item.collapsed);
+    node.memo = String(item.memo || "");
+    node.offset = normalizeOffset(item.offset);
+  }
+  node.children.forEach((child, index) => applyNodeMetadata(child, metadata, [...path, index]));
+}
+
+function extractMarkdownState(text) {
+  const match = text.match(/<!--\s*kmc:([A-Za-z0-9+/=_-]+)\s*-->/);
+  if (!match) return { text, metadata: null, settings: null };
+  try {
+    const metadata = JSON.parse(decodeBase64Unicode(match[1]));
+    return {
+      text: text.replace(match[0], "").trim(),
+      metadata,
+      settings: normalizeSettings(metadata.settings),
+    };
+  } catch {
+    return { text: text.replace(match[0], "").trim(), metadata: null, settings: null };
+  }
+}
+
+function encodeBase64Unicode(text) {
+  const bytes = new TextEncoder().encode(text);
+  let binary = "";
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+  return btoa(binary);
+}
+
+function decodeBase64Unicode(text) {
+  const binary = atob(text);
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
+function updateMapSelect() {
+  if (!els.mapSelect) return;
+  els.mapSelect.textContent = "";
+  state.maps.forEach((map) => {
+    const option = document.createElement("option");
+    option.value = map.id;
+    option.textContent = map.name;
+    els.mapSelect.appendChild(option);
+  });
+  els.mapSelect.value = state.mapId;
+}
+
+function setActiveMap(map, shouldFit = true, resetHistory = true) {
+  state.mapId = map.id;
+  state.mapName = map.name;
+  state.tree = normalizeNode(map.tree);
+  const settings = normalizeSettings(map.settings);
+  state.maxDepth = settings.maxDepth;
+  state.horizontalSpacing = settings.horizontalSpacing;
+  state.verticalSpacing = settings.verticalSpacing;
+  state.selectedId = state.tree.id;
+  state.flashId = null;
+  state.removingId = null;
+  state.search = "";
+  if (resetHistory) {
+    state.undoStack = [];
+    state.redoStack = [];
+  }
+  els.searchInput.value = "";
+  els.depthSlider.value = state.maxDepth;
+  els.horizontalSpacingSlider.value = state.horizontalSpacing;
+  els.verticalSpacingSlider.value = state.verticalSpacing;
+  els.outlineInput.value = toMarkdown(state.tree).join("\n");
+  render();
+  if (shouldFit) requestAnimationFrame(fitToView);
+}
+
+function createBlankTree(name) {
+  return normalizeNode({
+    id: makeId("root"),
+    text: name || "新しいマップ",
+    collapsed: false,
+    children: [],
+  });
+}
+
+function fileBaseName(fileName) {
+  return fileName.replace(/\.[^.]+$/, "") || "読み込みマップ";
+}
+
+function safeFileName(name) {
+  return String(name || "mind-map")
+    .trim()
+    .replace(/[\\/:*?"<>|]+/g, "-")
+    .replace(/\s+/g, "-")
+    .slice(0, 80);
+}
+
+async function openMarkdownFile(file) {
+  if (!file) return;
+  const text = await file.text();
+  const parsed = parseMapDocument(text);
+  const map = makeMapItem(fileBaseName(file.name), parsed.tree, parsed.settings || defaultSettings());
+  state.maps.push(map);
+  setActiveMap(map);
+  els.exportOutput.value = toMarkdown(state.tree).join("\n");
+}
+
+async function saveMarkdownFile() {
+  const markdown = toMarkdown(state.tree, { includeMeta: true }).join("\n");
+  const fileName = `${safeFileName(state.mapName || state.tree.text)}.md`;
+  if ("showSaveFilePicker" in window) {
+    const handle = await window.showSaveFilePicker({
+      suggestedName: fileName,
+      types: [{ description: "Markdown", accept: { "text/markdown": [".md"] } }],
+    });
+    const writable = await handle.createWritable();
+    await writable.write(markdown);
+    await writable.close();
+    els.statusText.textContent = `${fileName} を保存しました。`;
+    return;
+  }
+
+  const url = URL.createObjectURL(new Blob([markdown], { type: "text/markdown;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  link.click();
+  URL.revokeObjectURL(url);
+  els.statusText.textContent = `${fileName} を保存しました。`;
+}
+
+function wireControls() {
+  document.getElementById("sampleButton").addEventListener("click", () => {
+    els.outlineInput.value = toMarkdown(sampleTree).join("\n");
+  });
+
+  document.getElementById("importButton").addEventListener("click", () => {
+    try {
+      const parsed = parseMapDocument(els.outlineInput.value);
+      pushHistory();
+      state.tree = parsed.tree;
+      const settings = parsed.settings ? normalizeSettings(parsed.settings) : currentSettings();
+      state.maxDepth = settings.maxDepth;
+      state.horizontalSpacing = settings.horizontalSpacing;
+      state.verticalSpacing = settings.verticalSpacing;
+      els.depthSlider.value = state.maxDepth;
+      els.horizontalSpacingSlider.value = state.horizontalSpacing;
+      els.verticalSpacingSlider.value = state.verticalSpacing;
+      state.selectedId = state.tree.id;
+      state.mapName = state.mapName || state.tree.text;
+      render();
+      fitToView();
+    } catch (error) {
+      els.statusText.textContent = `反映に失敗しました: ${error.message}`;
+    }
+  });
+
+  let noteSnapshot = null;
+  let noteRecorded = false;
+  els.nodeNoteInput.addEventListener("focus", () => {
+    noteSnapshot = captureSnapshot();
+    noteRecorded = false;
+  });
+
+  els.nodeNoteInput.addEventListener("input", () => {
+    const found = findNode(state.selectedId);
+    if (!found) return;
+    if (!noteRecorded) {
+      pushHistory(noteSnapshot || captureSnapshot());
+      noteRecorded = true;
+    }
+    found.node.memo = els.nodeNoteInput.value;
+    saveTree();
+  });
+
+  els.mapSelect.addEventListener("change", () => {
+    const selectedMapId = els.mapSelect.value;
+    saveTree();
+    const next = state.maps.find((map) => map.id === selectedMapId);
+    if (next) setActiveMap(next);
+  });
+
+  document.getElementById("newMapButton").addEventListener("click", () => {
+    saveTree();
+    const name = window.prompt("新しいマップ名", "新しいマップ");
+    if (name === null) return;
+    const map = makeMapItem(name.trim() || "新しいマップ", createBlankTree(name.trim() || "新しいマップ"));
+    state.maps.push(map);
+    setActiveMap(map);
+  });
+
+  document.getElementById("saveMapButton").addEventListener("click", () => {
+    const name = window.prompt("マップ名", state.mapName || state.tree.text || "無題のマップ");
+    if (name === null) return;
+    state.mapName = name.trim() || state.tree.text || "無題のマップ";
+    saveTree();
+    els.statusText.textContent = `${state.mapName} を保存しました。`;
+  });
+
+  document.getElementById("openMarkdownButton").addEventListener("click", () => {
+    els.markdownFileInput.click();
+  });
+
+  els.markdownFileInput.addEventListener("change", async () => {
+    try {
+      await openMarkdownFile(els.markdownFileInput.files[0]);
+      els.markdownFileInput.value = "";
+    } catch (error) {
+      els.statusText.textContent = `Markdownを開けませんでした: ${error.message}`;
+    }
+  });
+
+  document.getElementById("saveMarkdownButton").addEventListener("click", async () => {
+    try {
+      await saveMarkdownFile();
+    } catch (error) {
+      els.statusText.textContent = `Markdown保存を中止しました。`;
+    }
+  });
+
+  document.getElementById("optimizeLayoutButton").addEventListener("click", optimizeLayout);
+  document.getElementById("fitButton").addEventListener("click", fitToView);
+  document.getElementById("resetButton").addEventListener("click", () => {
+    pushHistory();
+    state.tree = clone(sampleTree);
+    state.mapName = "サンプル";
+    state.selectedId = state.tree.id;
+    els.outlineInput.value = toMarkdown(state.tree).join("\n");
+    render();
+    fitToView();
+  });
+
+  document.getElementById("exportJsonButton").addEventListener("click", () => {
+    els.exportOutput.value = JSON.stringify({ tree: state.tree, settings: currentSettings() }, null, 2);
+  });
+
+  document.getElementById("exportMarkdownButton").addEventListener("click", () => {
+    els.exportOutput.value = toMarkdown(state.tree, { includeMeta: true }).join("\n");
+  });
+
+  document.getElementById("summaryButton").addEventListener("click", () => {
+    els.summaryOutput.value = summarizeTree(state.tree);
+    els.statusText.textContent = "要約を作成しました。";
+  });
+
+  els.searchInput.addEventListener("input", () => {
+    state.search = els.searchInput.value;
+    render();
+  });
+
+  els.depthSlider.addEventListener("input", () => {
+    state.maxDepth = Number(els.depthSlider.value);
+    render();
+  });
+
+  els.horizontalSpacingSlider.addEventListener("input", () => {
+    state.horizontalSpacing = Number(els.horizontalSpacingSlider.value);
+    render();
+  });
+
+  els.verticalSpacingSlider.addEventListener("input", () => {
+    state.verticalSpacing = Number(els.verticalSpacingSlider.value);
+    render();
+  });
+
+  document.getElementById("zoomOutButton").addEventListener("click", () => setZoom(state.zoom * 0.86));
+  document.getElementById("zoomInButton").addEventListener("click", () => setZoom(state.zoom * 1.16));
+  document.getElementById("zoomResetButton").addEventListener("click", () => {
+    state.zoom = 1;
+    centerRoot();
+  });
+
+  document.getElementById("themeToggle").addEventListener("click", () => {
+    const root = document.documentElement;
+    root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
+  });
+}
+
+function wireKeyboardShortcuts() {
+  document.addEventListener("keydown", (event) => {
+    const target = event.target;
+    const tagName = target?.tagName;
+    const isTextControl =
+      tagName === "TEXTAREA" ||
+      tagName === "SELECT" ||
+      (tagName === "INPUT" && target.type !== "range");
+    if (isTextControl && !target.isContentEditable) return;
+
+    const isUndoKey = (event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "z";
+    if (!isUndoKey) return;
+
+    event.preventDefault();
+    if (event.shiftKey) {
+      redo();
+    } else {
+      undo();
+    }
+  });
+}
+
+function setZoom(nextZoom) {
+  state.zoom = Math.min(1.8, Math.max(0.28, nextZoom));
+  updateTransform();
+}
+
+function centerRoot() {
+  const rect = els.viewport.getBoundingClientRect();
+  state.pan.x = rect.width / 2 - WORLD.cx * state.zoom;
+  state.pan.y = rect.height / 2 - WORLD.cy * state.zoom;
+  updateTransform();
+}
+
+function wirePanZoom() {
+  let panning = false;
+  let last = { x: 0, y: 0 };
+
+  els.viewport.addEventListener("pointerdown", (event) => {
+    if (event.target.closest(".mind-node")) return;
+    panning = true;
+    last = { x: event.clientX, y: event.clientY };
+    els.viewport.classList.add("is-panning");
+    els.viewport.setPointerCapture(event.pointerId);
+  });
+
+  els.viewport.addEventListener("pointermove", (event) => {
+    if (!panning) return;
+    state.pan.x += event.clientX - last.x;
+    state.pan.y += event.clientY - last.y;
+    last = { x: event.clientX, y: event.clientY };
+    updateTransform();
+  });
+
+  els.viewport.addEventListener("pointerup", () => {
+    panning = false;
+    els.viewport.classList.remove("is-panning");
+  });
+
+  els.viewport.addEventListener(
+    "wheel",
+    (event) => {
+      event.preventDefault();
+      const rect = els.viewport.getBoundingClientRect();
+      const before = {
+        x: (event.clientX - rect.left - state.pan.x) / state.zoom,
+        y: (event.clientY - rect.top - state.pan.y) / state.zoom,
+      };
+      const factor = event.deltaY > 0 ? 0.9 : 1.1;
+      setZoom(state.zoom * factor);
+      state.pan.x = event.clientX - rect.left - before.x * state.zoom;
+      state.pan.y = event.clientY - rect.top - before.y * state.zoom;
+      updateTransform();
+    },
+    { passive: false },
+  );
+}
+
+function init() {
+  els.outlineInput.value = toMarkdown(state.tree).join("\n");
+  els.exportOutput.value = toMarkdown(state.tree).join("\n");
+  els.depthSlider.value = state.maxDepth;
+  els.horizontalSpacingSlider.value = state.horizontalSpacing;
+  els.verticalSpacingSlider.value = state.verticalSpacing;
+  updateMapSelect();
+  wireControls();
+  wireKeyboardShortcuts();
+  wirePanZoom();
+  render();
+  requestAnimationFrame(fitToView);
+}
+
+init();
