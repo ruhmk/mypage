@@ -554,26 +554,112 @@ h2 {
 
 @media (max-width: 720px) {
   .app-shell {
-    padding: 14px;
+    padding: 0 10px 14px;
   }
 
-  .topbar,
-  .month-strip {
-    align-items: stretch;
-    flex-direction: column;
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    margin: 0 -10px;
+    padding: max(8px, env(safe-area-inset-top)) 10px 6px;
+    background: rgba(246, 243, 236, 0.96);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+    gap: 8px;
+  }
+
+  .topbar > div:first-child {
+    min-width: 0;
+  }
+
+  .eyebrow {
+    display: none;
+  }
+
+  h1 {
+    font-size: 1.05rem;
+    white-space: nowrap;
+  }
+
+  .top-actions {
+    justify-content: flex-end;
+    gap: 6px;
+    flex-wrap: nowrap;
+  }
+
+  .icon-button,
+  .text-button {
+    min-height: 34px;
+  }
+
+  .icon-button {
+    width: 34px;
+  }
+
+  .text-button {
+    padding: 0 10px;
+  }
+
+  .calendar-layout {
+    gap: 12px;
+    padding-top: 10px;
   }
 
   .calendar-main {
-    overflow-x: auto;
+    position: sticky;
+    top: calc(max(8px, env(safe-area-inset-top)) + 47px);
+    z-index: 20;
+    max-height: calc(100vh - max(8px, env(safe-area-inset-top)) - 56px);
+    overflow: auto;
+  }
+
+  .month-strip {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    align-items: center;
+    flex-direction: row;
+    gap: 8px;
+    padding: 8px 10px;
+    background: rgba(255, 253, 248, 0.98);
+  }
+
+  .month-kicker {
+    display: none;
+  }
+
+  #monthLabel {
+    min-width: 4.2em;
+    font-size: 1rem;
+    white-space: nowrap;
+  }
+
+  .source-toggles {
+    justify-content: flex-end;
+    gap: 6px;
+    flex-wrap: nowrap;
+  }
+
+  .source-toggle {
+    min-height: 30px;
+    padding: 0 8px;
+    font-size: 0.78rem;
+  }
+
+  .import-status {
+    display: none;
+  }
+
+  .weekday-row {
+    position: sticky;
+    top: 47px;
+    z-index: 4;
   }
 
   .weekday-row,
   .calendar-grid {
     min-width: 760px;
-  }
-
-  .top-actions {
-    justify-content: space-between;
   }
 
   .calendar-grid {
@@ -602,6 +688,33 @@ h2 {
 }
 
 @media (max-width: 520px) {
+  h1 {
+    font-size: 0.98rem;
+  }
+
+  .top-actions {
+    gap: 4px;
+  }
+
+  .icon-button,
+  .text-button {
+    min-height: 32px;
+  }
+
+  .icon-button {
+    width: 32px;
+  }
+
+  .text-button {
+    padding: 0 8px;
+    font-size: 0.86rem;
+  }
+
+  .calendar-main {
+    top: calc(max(8px, env(safe-area-inset-top)) + 44px);
+    max-height: calc(100vh - max(8px, env(safe-area-inset-top)) - 53px);
+  }
+
   .weekday-row span {
     padding: 8px 2px;
   }
