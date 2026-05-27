@@ -554,7 +554,7 @@ h2 {
 
 @media (max-width: 720px) {
   .app-shell {
-    padding: 0 10px 14px;
+    padding: 0 10px calc(220px + env(safe-area-inset-bottom));
   }
 
   .topbar {
@@ -610,7 +610,7 @@ h2 {
     position: sticky;
     top: calc(max(8px, env(safe-area-inset-top)) + 47px);
     z-index: 20;
-    max-height: calc(100vh - max(8px, env(safe-area-inset-top)) - 56px);
+    max-height: calc(100vh - max(8px, env(safe-area-inset-top)) - 276px);
     overflow: auto;
   }
 
@@ -679,11 +679,47 @@ h2 {
   }
 
   .side-panel {
+    position: fixed;
+    left: 10px;
+    right: 10px;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    z-index: 40;
     grid-template-columns: 1fr;
   }
 
-  .field-grid {
-    grid-template-columns: 1fr;
+  .day-panel {
+    max-height: 200px;
+    overflow: auto;
+    padding: 12px;
+  }
+
+  .panel-heading {
+    margin-bottom: 10px;
+  }
+
+  .panel-kicker {
+    font-size: 0.68rem;
+  }
+
+  #selectedDateLabel {
+    font-size: 1rem;
+  }
+
+  .event-list {
+    gap: 7px;
+  }
+
+  .event-card {
+    padding: 8px 10px;
+  }
+
+  .event-time {
+    margin-bottom: 2px;
+    font-size: 0.7rem;
+  }
+
+  .event-title {
+    font-size: 0.9rem;
   }
 }
 
@@ -712,7 +748,7 @@ h2 {
 
   .calendar-main {
     top: calc(max(8px, env(safe-area-inset-top)) + 44px);
-    max-height: calc(100vh - max(8px, env(safe-area-inset-top)) - 53px);
+    max-height: calc(100vh - max(8px, env(safe-area-inset-top)) - 273px);
   }
 
   .weekday-row span {
