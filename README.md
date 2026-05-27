@@ -1,42 +1,78 @@
-# Knowledge Map Canvas
+# 家族カレンダー
 
-ローカルで動く、編集可能なマインドマップツールです。
+GitHub Pagesにそのまま置ける静的カレンダーです。今は `data/events.js` を読み込み、画面から追加した予定はブラウザ内に保存します。
 
-## 使い方
+## ローカル表示
 
-1. `MindmapIndex.html` をブラウザで開きます。
-2. ノードをクリックして選択します。
-3. ノード内の文字をそのまま編集できます。
-4. ノードをドラッグして手動で位置調整できます。親ノードを動かすと子ノードも追従します。
-5. ノード右側の `+`、`×`、`▾/▸` で子ノード追加、削除、開閉できます。
-6. 左側の `ノード詳細` に選択ノードごとのメモを書けます。
-7. 左側の `反映` で入力欄のMarkdown/アウトラインをマップへ反映します。
-8. `Markdown化` で現在のマップをMarkdownとして入力欄と出力欄へ表示します。
-9. `MDを開く` と `MD保存` でMarkdownファイルを読み書きできます。
-10. 保存済みマップはプルダウンで切り替えられます。
-11. `横の距離` と `縦の距離` でノード同士の間隔を調整できます。
-12. 開閉や表示の細かさ変更でノードが重なる場合は、自動で近い位置へ逃がします。
-13. `最適化` は表示の細かさと横の距離を維持したまま、縦の距離と全体表示を整えます。
-14. `Ctrl + Z` でUndo、`Ctrl + Shift + Z` でRedoできます。
-15. 枝の色は上位トピックごとに自動で割り当たります。
+`index.html` をダブルクリックして開きます。
 
-## 入力形式
+## 予定データ
 
-左の入力欄には、Markdownまたはインデント付きアウトラインを貼り付けられます。
+`data/events.js` の形に合わせて、あとからGoogleカレンダーやNASCA同期処理の出力を差し替えます。
 
-```text
-テーマ
-- トピックA
-  - 詳細A1
-  - 詳細A2
-- トピックB
-  - 詳細B1
+```js
+window.FAMILY_CALENDAR_EVENTS = [
+  {
+    id: "unique-id",
+    title: "仕事",
+    start: "2026-05-27T00:00:00.000Z",
+    end: "2026-05-27T09:00:00.000Z",
+    source: "work",
+    note: ""
+  }
+];
 ```
 
-JSONでの取り込みと出力にも対応しています。
+`source` は `family`, `personal`, `work` のいずれかです。NASCA由来の予定は `title` を `仕事`、`note` を空にします。
 
-## 状態つきMarkdown
+## NASCA予定の手動取り込み
 
-`MD保存` と `Markdown化` は、Markdown先頭にツール用メタデータをコメントとして埋め込みます。
-このコメントにノードのメモ、開閉状態、手動位置、表示の細かさ、ノード間隔が保存されます。
-通常のMarkdownとして読むこともでき、このツールで開くと状態を復元できます。
+画面右上の「NASCAファイル取込」から、NASCAで出力した予定ファイルを選びます。
+
+対応している形式:
+
+- `.ics`
+- `.csv`
+- `.txt`
+
+取り込み時は開始時刻と終了時刻だけを使い、タイトルはすべて `仕事` になります。前回取り込んだNASCA予定は、新しい取り込み時に入れ替わります。
+
+## Googleカレンダー連携の方針
+
+- 家族はGitHub Pagesを見るだけにする
+- 表示用データは、Googleカレンダーから公開してよい形に整えたJSONにする
+- ページ上の「Googleで作成」はGoogleカレンダーの予定作成画面を開く
+- 完全自動でGoogleカレンダーへ書き込む場合は、GitHub PagesではなくApps Scriptや小さなバックエンド側で処理する
+
+GitHub Pagesは公開される前提なので、秘密情報や更新トークンは置かないでください。
+
+## 今回のGoogle同期構成
+
+次の形を想定しています。
+
+```text
+NASCA
+  -> 仕事用Googleカレンダー
+  -> Apps Scriptが「仕事」だけに変換
+
+respectinspire0805@gmail.com の個人Googleカレンダー
+  -> Apps Scriptがタイトルだけ、または「予定あり」に変換
+
+GitHub Pages
+  -> Apps Scriptの表示用データだけ読む
+```
+
+同期処理は [apps-script/Code.gs](<C:/Users/S18344/Documents/Codex/2026-05-27/nasca-google/apps-script/Code.gs>) にあります。セットアップ手順は [apps-script/README.md](<C:/Users/S18344/Documents/Codex/2026-05-27/nasca-google/apps-script/README.md>) を見てください。
+
+Apps Scriptをデプロイしたら、発行されたURLを [data/config.js](<C:/Users/S18344/Documents/Codex/2026-05-27/nasca-google/data/config.js>) に入れます。
+
+```js
+window.FAMILY_CALENDAR_CONFIG = {
+  googleSyncUrl: "https://script.google.com/macros/s/XXXXXXXX/exec",
+  autoLoadGoogleEvents: false
+};
+```
+
+これで画面右上の「Google予定を更新」ボタンが使えるようになります。
+
+この方式では、家族用Googleカレンダーは不要です。
