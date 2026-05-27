@@ -138,10 +138,9 @@ function bootstrap() {
     ? window.FAMILY_CALENDAR_EVENTS
     : fallbackEvents();
 
-  if (!appConfig.googleSyncUrl) {
-    refreshGoogleButton.disabled = true;
-    refreshGoogleButton.title = "Google同期URLを設定すると使えます";
-  }
+  refreshGoogleButton.title = appConfig.googleSyncUrl
+    ? "Googleカレンダーから家族用予定を更新します"
+    : "Apps ScriptのURLを設定すると使えます";
 
   render();
 
@@ -356,7 +355,9 @@ function renderImportStatus() {
     importStatus.textContent = `Google予定 ${googleCount}件を表示中`;
     return;
   }
-  importStatus.textContent = count > 0 ? `NASCA取込 ${count}件を表示中` : "Google同期は未設定";
+  importStatus.textContent = count > 0
+    ? `NASCA取込 ${count}件を表示中 / Google同期は未設定`
+    : "Google同期は未設定";
 }
 
 function parseNascaSchedule(content, fileName) {
@@ -652,7 +653,7 @@ function buildGoogleCalendarUrl(event) {
 
 function refreshGoogleEvents({ sync }) {
   if (!appConfig.googleSyncUrl) {
-    window.alert("Google同期の準備がまだできていません。");
+    window.alert("Google同期の準備がまだできていません。data/config.js に Apps Script のURLを入れてください。");
     return;
   }
 
