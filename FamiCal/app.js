@@ -320,6 +320,7 @@ function readFormEvent() {
 
 function getVisibleEvents() {
   return [...state.remoteEvents, ...state.localEvents]
+    .filter((item) => !isExcludedWorkEvent(item))
     .filter((item) => state.visibleSources.has(item.source))
     .sort(sortByStart);
 }
