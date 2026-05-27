@@ -554,7 +554,7 @@ h2 {
 
 @media (max-width: 720px) {
   .app-shell {
-    padding: 0 10px calc(220px + env(safe-area-inset-bottom));
+    padding: 0 10px 14px;
   }
 
   .topbar {
@@ -610,7 +610,7 @@ h2 {
     position: sticky;
     top: calc(max(8px, env(safe-area-inset-top)) + 47px);
     z-index: 20;
-    max-height: calc(100vh - max(8px, env(safe-area-inset-top)) - 276px);
+    max-height: none;
     overflow: auto;
   }
 
@@ -679,16 +679,11 @@ h2 {
   }
 
   .side-panel {
-    position: fixed;
-    left: 10px;
-    right: 10px;
-    bottom: max(10px, env(safe-area-inset-bottom));
-    z-index: 40;
     grid-template-columns: 1fr;
   }
 
   .day-panel {
-    max-height: 200px;
+    max-height: none;
     overflow: auto;
     padding: 12px;
   }
@@ -748,7 +743,6 @@ h2 {
 
   .calendar-main {
     top: calc(max(8px, env(safe-area-inset-top)) + 44px);
-    max-height: calc(100vh - max(8px, env(safe-area-inset-top)) - 273px);
   }
 
   .weekday-row span {
@@ -776,5 +770,27 @@ h2 {
 
   .day-panel {
     padding: 14px;
+  }
+}
+
+@media (max-width: 720px) and (orientation: landscape) {
+  .app-shell {
+    padding-bottom: calc(190px + env(safe-area-inset-bottom));
+  }
+
+  .calendar-main {
+    max-height: calc(100vh - max(8px, env(safe-area-inset-top)) - 246px);
+  }
+
+  .side-panel {
+    position: fixed;
+    left: 10px;
+    right: 10px;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    z-index: 40;
+  }
+
+  .day-panel {
+    max-height: 170px;
   }
 }
