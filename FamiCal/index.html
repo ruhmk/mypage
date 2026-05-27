@@ -15,7 +15,6 @@
         </div>
         <div class="top-actions" aria-label="表示操作">
           <button class="secondary-button" id="refreshGoogleButton" type="button">Google予定を更新</button>
-          <button class="secondary-button" id="importNascaButton" type="button">NASCAファイル取込</button>
           <button class="icon-button" id="prevMonth" type="button" aria-label="前の月" title="前の月">
             <span aria-hidden="true">&lt;</span>
           </button>
@@ -34,11 +33,6 @@
               <h2 id="monthLabel"></h2>
             </div>
             <div class="source-toggles" aria-label="表示する予定">
-              <label class="source-toggle">
-                <input type="checkbox" value="family" checked>
-                <span class="source-dot family"></span>
-                <span>家族</span>
-              </label>
               <label class="source-toggle">
                 <input type="checkbox" value="personal" checked>
                 <span class="source-dot personal"></span>
@@ -145,9 +139,8 @@
       </form>
     </dialog>
 
-    <input class="file-input" id="nascaFileInput" type="file" accept=".ics,.csv,.txt,text/calendar,text/csv">
-    <script src="./data/config.js?v=20260527-2"></script>
-    <script src="./data/events.js?v=20260527-2"></script>
-    <script src="./app.js?v=20260527-2" defer></script>
+    <script src="./data/config.js?v=20260527-3"></script>
+    <script src="./data/events.js?v=20260527-3"></script>
+    <script src="./app.js?v=20260527-3" defer></script>
   </body>
 </html>

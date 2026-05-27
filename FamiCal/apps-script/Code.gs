@@ -2,9 +2,10 @@ const CONFIG = {
   TIME_ZONE: "Asia/Tokyo",
   DAYS_BACK: 7,
   DAYS_FORWARD: 120,
+  EXCLUDE_WORK_ALL_DAY: true,
 
   // NASCAを同期したGoogleカレンダーです。
-  // NASCAがサブカレンダーに入っている場合は、そのカレンダーIDに変更してください。
+  // カレンダーIDだけでも、Googleカレンダーの埋め込みURLでも使えます。
   WORK_SOURCE_CALENDAR_ID: "kitagawa_manabu@qua-vision.com",
 
   // 個人予定の同期元です。
@@ -14,64 +15,90 @@ const CONFIG = {
   PERSONAL_MODE: "title"
 };
 
+const SCRIPT_VERSION = "direct-display-2026-05-27-11";
+
 function doGet(event) {
+  event = event || { parameter: {} };
   const callback = sanitizeCallback_(event.parameter.callback);
   let payload;
 
   try {
-    payload = {
-      ok: true,
-      updatedAt: new Date().toISOString(),
-      events: listDisplayEvents_()
-    };
+    if (event.parameter.action === "calendars") {
+      payload = {
+        ok: true,
+        scriptVersion: SCRIPT_VERSION,
+        calendars: listVisibleCalendars_()
+      };
+    } else {
+      const events = listDisplayEvents_();
+      payload = {
+        ok: true,
+        scriptVersion: SCRIPT_VERSION,
+        updatedAt: new Date().toISOString(),
+        diagnostics: {
+          workCount: events.filter((item) => item.source === "work").length,
+          personalCount: events.filter((item) => item.source === "personal").length
+        },
+        events
+      };
+    }
   } catch (error) {
     console.error(error);
     payload = {
       ok: false,
+      scriptVersion: SCRIPT_VERSION,
       error: `Google予定を取得できませんでした。${getErrorMessage_(error)}`,
       events: []
     };
   }
 
+  if (callback) {
+    return ContentService
+      .createTextOutput(`${callback}(${JSON.stringify(payload)});`)
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
+
   return ContentService
-    .createTextOutput(`${callback}(${JSON.stringify(payload)});`)
-    .setMimeType(ContentService.MimeType.JAVASCRIPT);
+    .createTextOutput(JSON.stringify(payload, null, 2))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 function listDisplayEvents_() {
   const syncWindow = getSyncWindow_();
   return [
-    ...readWorkBusyEvents_(syncWindow.start, syncWindow.end),
+    ...readWorkEvents_(syncWindow.start, syncWindow.end),
     ...readPersonalEvents_(syncWindow.start, syncWindow.end)
   ].sort((left, right) => new Date(left.start) - new Date(right.start));
 }
 
-function readWorkBusyEvents_(timeMin, timeMax) {
-  const response = Calendar.Freebusy.query({
-    timeMin: timeMin.toISOString(),
-    timeMax: timeMax.toISOString(),
-    timeZone: CONFIG.TIME_ZONE,
-    items: [{ id: CONFIG.WORK_SOURCE_CALENDAR_ID }]
-  });
-  const calendar = response.calendars && response.calendars[CONFIG.WORK_SOURCE_CALENDAR_ID];
-  if (calendar && calendar.errors && calendar.errors.length > 0) {
-    throw new Error(`仕事用カレンダーを読めません: ${JSON.stringify(calendar.errors)}`);
-  }
-  const busy = calendar && calendar.busy ? calendar.busy : [];
+function readWorkEvents_(timeMin, timeMax) {
+  const calendarId = normalizeCalendarId_(CONFIG.WORK_SOURCE_CALENDAR_ID);
 
-  return busy.map((item) => ({
-    id: `work-${hash_(`${CONFIG.WORK_SOURCE_CALENDAR_ID}|${item.start}|${item.end}`)}`,
-    title: "仕事",
-    start: new Date(item.start).toISOString(),
-    end: new Date(item.end).toISOString(),
-    source: "work",
-    note: "",
-    allDay: false
-  }));
+  return listCalendarEvents_(calendarId, timeMin, timeMax, "仕事用カレンダー", "items(id,status,transparency,start,end),nextPageToken")
+    .filter((event) => event.status !== "cancelled")
+    .filter((event) => event.transparency !== "transparent")
+    .map((event) => {
+      const range = getEventRange_(event);
+      if (!range || (CONFIG.EXCLUDE_WORK_ALL_DAY && range.allDay)) {
+        return null;
+      }
+
+      return {
+        id: `work-${hash_(`${calendarId}|${event.id}|${range.start.toISOString()}|${range.end.toISOString()}`)}`,
+        title: "仕事",
+        start: range.start.toISOString(),
+        end: range.end.toISOString(),
+        source: "work",
+        note: "",
+        allDay: false
+      };
+    })
+    .filter(Boolean);
 }
 
 function readPersonalEvents_(timeMin, timeMax) {
-  return listCalendarEvents_(CONFIG.PERSONAL_SOURCE_CALENDAR_ID, timeMin, timeMax)
+  const calendarId = normalizeCalendarId_(CONFIG.PERSONAL_SOURCE_CALENDAR_ID);
+  return listCalendarEvents_(calendarId, timeMin, timeMax, "個人カレンダー")
     .filter((event) => event.status !== "cancelled")
     .filter((event) => event.transparency !== "transparent")
     .map((event) => {
@@ -82,7 +109,7 @@ function readPersonalEvents_(timeMin, timeMax) {
 
       const hideTitle = CONFIG.PERSONAL_MODE === "busy" || event.visibility === "private";
       return {
-        id: `personal-${hash_(`${CONFIG.PERSONAL_SOURCE_CALENDAR_ID}|${event.id}`)}`,
+        id: `personal-${hash_(`${calendarId}|${event.id}`)}`,
         title: hideTitle ? "予定あり" : (event.summary || "予定あり"),
         start: range.start.toISOString(),
         end: range.end.toISOString(),
@@ -94,19 +121,28 @@ function readPersonalEvents_(timeMin, timeMax) {
     .filter(Boolean);
 }
 
-function listCalendarEvents_(calendarId, timeMin, timeMax) {
+function listCalendarEvents_(calendarId, timeMin, timeMax, label, fields) {
   let pageToken;
   const items = [];
 
   do {
-    const response = Calendar.Events.list(calendarId, {
-      timeMin: timeMin.toISOString(),
-      timeMax: timeMax.toISOString(),
-      singleEvents: true,
-      orderBy: "startTime",
-      maxResults: 2500,
-      pageToken
-    });
+    let response;
+    try {
+      const params = {
+        timeMin: timeMin.toISOString(),
+        timeMax: timeMax.toISOString(),
+        singleEvents: true,
+        orderBy: "startTime",
+        maxResults: 2500,
+        pageToken
+      };
+      if (fields) {
+        params.fields = fields;
+      }
+      response = Calendar.Events.list(calendarId, params);
+    } catch (error) {
+      throw new Error(`${label || "カレンダー"}を読めません。calendarId=${calendarId} / ${getErrorMessage_(error)}`);
+    }
     items.push(...(response.items || []));
     pageToken = response.nextPageToken;
   } while (pageToken);
@@ -156,13 +192,21 @@ function getSyncWindow_() {
 }
 
 function sanitizeCallback_(callback) {
-  const fallback = "receiveFamilyCalendarEvents";
-  return /^[A-Za-z_$][0-9A-Za-z_$]*$/.test(callback || "") ? callback : fallback;
+  return /^[A-Za-z_$][0-9A-Za-z_$]*$/.test(callback || "") ? callback : "";
 }
 
 function hash_(value) {
   const bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, value);
   return Utilities.base64EncodeWebSafe(bytes).replace(/=+$/, "").slice(0, 18);
+}
+
+function normalizeCalendarId_(value) {
+  const text = String(value || "").trim();
+  const srcMatch = text.match(/[?&]src=([^&]+)/);
+  if (srcMatch) {
+    return decodeURIComponent(srcMatch[1]);
+  }
+  return text;
 }
 
 function getErrorMessage_(error) {
@@ -173,10 +217,36 @@ function getErrorMessage_(error) {
 function testCalendarAccess() {
   const syncWindow = getSyncWindow_();
   const result = {
-    workCalendarId: CONFIG.WORK_SOURCE_CALENDAR_ID,
-    personalCalendarId: CONFIG.PERSONAL_SOURCE_CALENDAR_ID,
-    workBusyCount: readWorkBusyEvents_(syncWindow.start, syncWindow.end).length,
+    workCalendarId: normalizeCalendarId_(CONFIG.WORK_SOURCE_CALENDAR_ID),
+    personalCalendarId: normalizeCalendarId_(CONFIG.PERSONAL_SOURCE_CALENDAR_ID),
+    workEventCount: readWorkEvents_(syncWindow.start, syncWindow.end).length,
     personalEventCount: readPersonalEvents_(syncWindow.start, syncWindow.end).length
   };
   console.log(JSON.stringify(result, null, 2));
+}
+
+function listVisibleCalendars_() {
+  const calendars = [];
+  let pageToken;
+
+  do {
+    const response = Calendar.CalendarList.list({
+      minAccessRole: "reader",
+      pageToken
+    });
+    calendars.push(...(response.items || []).map((item) => ({
+      id: item.id,
+      summary: item.summary,
+      primary: Boolean(item.primary),
+      accessRole: item.accessRole,
+      selected: Boolean(item.selected)
+    })));
+    pageToken = response.nextPageToken;
+  } while (pageToken);
+
+  return calendars.sort((left, right) => String(left.summary).localeCompare(String(right.summary), "ja"));
+}
+
+function testVisibleCalendars() {
+  console.log(JSON.stringify(listVisibleCalendars_(), null, 2));
 }

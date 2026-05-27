@@ -186,14 +186,6 @@ h2 {
   text-align: right;
 }
 
-.file-input {
-  position: fixed;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  pointer-events: none;
-}
-
 .source-toggle input {
   position: absolute;
   inline-size: 1px;

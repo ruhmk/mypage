@@ -30,8 +30,6 @@ const eventEnd = document.querySelector("#eventEnd");
 const eventSource = document.querySelector("#eventSource");
 const eventNote = document.querySelector("#eventNote");
 const refreshGoogleButton = document.querySelector("#refreshGoogleButton");
-const importNascaButton = document.querySelector("#importNascaButton");
-const nascaFileInput = document.querySelector("#nascaFileInput");
 const importStatus = document.querySelector("#importStatus");
 
 document.querySelector("#prevMonth").addEventListener("click", () => {
@@ -58,37 +56,6 @@ refreshGoogleButton.addEventListener("click", () => {
   refreshGoogleEvents({ sync: true });
 });
 
-importNascaButton.addEventListener("click", () => {
-  nascaFileInput.value = "";
-  nascaFileInput.click();
-});
-
-nascaFileInput.addEventListener("change", async () => {
-  const file = nascaFileInput.files && nascaFileInput.files[0];
-  if (!file) {
-    return;
-  }
-
-  try {
-    const content = await file.text();
-    const imported = parseNascaSchedule(content, file.name);
-    if (imported.length === 0) {
-      window.alert("取り込める予定が見つかりませんでした。");
-      return;
-    }
-
-    state.localEvents = state.localEvents.filter((item) => !isNascaEvent(item));
-    state.localEvents.push(...imported);
-    saveLocalEvents();
-    state.viewDate = startOfMonth(new Date(imported[0].start));
-    state.selectedDate = stripTime(new Date(imported[0].start));
-    render();
-    window.alert(`NASCA予定を${imported.length}件取り込みました。`);
-  } catch {
-    window.alert("NASCA予定を取り込めませんでした。");
-  }
-});
-
 document.querySelector("#closeComposer").addEventListener("click", () => {
   eventDialog.close();
 });
@@ -96,7 +63,7 @@ document.querySelector("#closeComposer").addEventListener("click", () => {
 document.querySelectorAll(".source-toggle input").forEach((input) => {
   input.addEventListener("change", () => {
     state.visibleSources = new Set(
-      Array.from(document.querySelectorAll(".source-toggle input:checked")).map((item) => item.value)
+      ["family", ...Array.from(document.querySelectorAll(".source-toggle input:checked")).map((item) => item.value)]
     );
     render();
   });
@@ -133,7 +100,8 @@ eventForm.addEventListener("submit", (event) => {
 bootstrap();
 
 function bootstrap() {
-  state.localEvents = loadLocalEvents();
+  state.localEvents = loadLocalEvents().filter((item) => !isNascaEvent(item));
+  saveLocalEvents();
   state.remoteEvents = Array.isArray(window.FAMILY_CALENDAR_EVENTS)
     ? window.FAMILY_CALENDAR_EVENTS
     : fallbackEvents();
@@ -346,288 +314,16 @@ function removeLocalEvent(id) {
 }
 
 function renderImportStatus() {
-  const count = state.localEvents.filter((item) => isNascaEvent(item)).length;
   const googleCount = appConfig.googleSyncUrl ? state.remoteEvents.length : 0;
-  if (googleCount > 0 && count > 0) {
-    importStatus.textContent = `Google予定 ${googleCount}件 / NASCA取込 ${count}件を表示中`;
-    return;
-  }
   if (googleCount > 0) {
     importStatus.textContent = `Google予定 ${googleCount}件を表示中`;
     return;
   }
-  importStatus.textContent = count > 0
-    ? `NASCA取込 ${count}件を表示中 / Google同期は未設定`
-    : "Google同期は未設定";
-}
-
-function parseNascaSchedule(content, fileName) {
-  const text = content.replace(/^\uFEFF/, "");
-  const lowerName = fileName.toLowerCase();
-  const parsed = lowerName.endsWith(".ics") || /BEGIN:VEVENT/i.test(text)
-    ? parseIcsEvents(text)
-    : parseCsvEvents(text);
-  return dedupeEvents(parsed).map((item, index) => ({
-    id: `nasca-${hashString(`${item.start}|${item.end}`)}-${index}`,
-    title: "仕事",
-    start: item.start,
-    end: item.end,
-    source: "work",
-    note: ""
-  }));
-}
-
-function parseIcsEvents(content) {
-  const lines = content
-    .replace(/\r\n[ \t]/g, "")
-    .replace(/\n[ \t]/g, "")
-    .split(/\r?\n/);
-  const events = [];
-  let current = null;
-
-  lines.forEach((line) => {
-    const trimmed = line.trim();
-    if (trimmed === "BEGIN:VEVENT") {
-      current = {};
-      return;
-    }
-    if (trimmed === "END:VEVENT") {
-      const event = normalizeImportedEvent(current);
-      if (event) {
-        events.push(event);
-      }
-      current = null;
-      return;
-    }
-    if (!current) {
-      return;
-    }
-
-    const separatorIndex = trimmed.indexOf(":");
-    if (separatorIndex === -1) {
-      return;
-    }
-
-    const key = trimmed.slice(0, separatorIndex).toUpperCase();
-    const value = trimmed.slice(separatorIndex + 1).trim();
-    if (key.startsWith("DTSTART")) {
-      current.start = parseIcsDate(value, key.includes("VALUE=DATE"));
-    }
-    if (key.startsWith("DTEND")) {
-      current.end = parseIcsDate(value, key.includes("VALUE=DATE"));
-    }
-  });
-
-  return events;
-}
-
-function parseCsvEvents(content) {
-  const rows = parseCsvRows(content);
-  if (rows.length === 0) {
-    return [];
-  }
-
-  const firstRow = rows[0].map((item) => normalizeHeader(item));
-  const startIndex = findColumn(firstRow, ["start", "starts at", "start date", "start datetime", "start time", "開始", "開始日時", "開始日", "開始時刻", "開始時間"]);
-  const endIndex = findColumn(firstRow, ["end", "ends at", "end date", "end datetime", "end time", "終了", "終了日時", "終了日", "終了時刻", "終了時間"]);
-  const dateIndex = findColumn(firstRow, ["date", "day", "日付", "予定日", "年月日"]);
-  const hasHeader = startIndex !== -1 && endIndex !== -1;
-  const dataRows = hasHeader ? rows.slice(1) : rows;
-
-  return dataRows.map((row) => {
-    const startValue = hasHeader ? row[startIndex] : row[0];
-    const endValue = hasHeader ? row[endIndex] : row[1];
-    const dateValue = hasHeader && dateIndex !== -1 ? row[dateIndex] : "";
-    const start = dateValue && looksLikeTime(startValue)
-      ? combineDateAndTime(dateValue, startValue)
-      : parseFlexibleDate(startValue);
-    const end = dateValue && looksLikeTime(endValue)
-      ? combineDateAndTime(dateValue, endValue)
-      : parseFlexibleDate(endValue);
-
-    return normalizeImportedEvent({ start, end });
-  }).filter(Boolean);
-}
-
-function parseCsvRows(content) {
-  const delimiter = detectDelimiter(content);
-  const rows = [];
-  let row = [];
-  let field = "";
-  let inQuotes = false;
-
-  for (let index = 0; index < content.length; index += 1) {
-    const char = content[index];
-    const next = content[index + 1];
-
-    if (char === "\"" && inQuotes && next === "\"") {
-      field += "\"";
-      index += 1;
-      continue;
-    }
-    if (char === "\"") {
-      inQuotes = !inQuotes;
-      continue;
-    }
-    if (char === delimiter && !inQuotes) {
-      row.push(field.trim());
-      field = "";
-      continue;
-    }
-    if ((char === "\n" || char === "\r") && !inQuotes) {
-      if (char === "\r" && next === "\n") {
-        index += 1;
-      }
-      row.push(field.trim());
-      if (row.some(Boolean)) {
-        rows.push(row);
-      }
-      row = [];
-      field = "";
-      continue;
-    }
-    field += char;
-  }
-
-  row.push(field.trim());
-  if (row.some(Boolean)) {
-    rows.push(row);
-  }
-  return rows;
-}
-
-function parseIcsDate(value, isAllDay) {
-  if (isAllDay || /^\d{8}$/.test(value)) {
-    return new Date(Number(value.slice(0, 4)), Number(value.slice(4, 6)) - 1, Number(value.slice(6, 8)));
-  }
-
-  const match = value.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})?(Z)?$/);
-  if (!match) {
-    return null;
-  }
-
-  const [, year, month, day, hour, minute, second = "00", zulu] = match;
-  if (zulu) {
-    return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second)));
-  }
-
-  return new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second));
-}
-
-function parseFlexibleDate(value) {
-  const text = String(value || "").trim();
-  if (!text) {
-    return null;
-  }
-
-  const japaneseDate = text.match(/^(\d{4})年(\d{1,2})月(\d{1,2})日(?:\s*(\d{1,2}):(\d{2}))?/);
-  if (japaneseDate) {
-    return new Date(
-      Number(japaneseDate[1]),
-      Number(japaneseDate[2]) - 1,
-      Number(japaneseDate[3]),
-      Number(japaneseDate[4] || 0),
-      Number(japaneseDate[5] || 0)
-    );
-  }
-
-  const compactDateTime = text.match(/^(\d{4})(\d{2})(\d{2})[ T]?(\d{2})(\d{2})(\d{2})?$/);
-  if (compactDateTime) {
-    return new Date(
-      Number(compactDateTime[1]),
-      Number(compactDateTime[2]) - 1,
-      Number(compactDateTime[3]),
-      Number(compactDateTime[4]),
-      Number(compactDateTime[5]),
-      Number(compactDateTime[6] || 0)
-    );
-  }
-
-  const normalized = text.replace(/\//g, "-").replace(/\s+/, "T");
-  const parsed = new Date(normalized);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
-
-function combineDateAndTime(dateValue, timeValue) {
-  const date = parseFlexibleDate(dateValue);
-  const time = String(timeValue || "").trim().match(/^(\d{1,2}):(\d{2})/);
-  if (!date || !time) {
-    return null;
-  }
-
-  date.setHours(Number(time[1]), Number(time[2]), 0, 0);
-  return date;
-}
-
-function normalizeImportedEvent(event) {
-  if (!event || !event.start) {
-    return null;
-  }
-
-  const start = event.start instanceof Date ? event.start : new Date(event.start);
-  let end = event.end instanceof Date ? event.end : new Date(event.end);
-  if (Number.isNaN(start.getTime())) {
-    return null;
-  }
-  if (Number.isNaN(end.getTime())) {
-    end = new Date(start);
-    end.setHours(end.getHours() + 1);
-  }
-  if (end <= start) {
-    end = addDays(end, 1);
-  }
-
-  return {
-    start: start.toISOString(),
-    end: end.toISOString()
-  };
-}
-
-function normalizeHeader(value) {
-  return String(value || "").trim().replace(/[_-]+/g, " ").replace(/\s+/g, " ").toLowerCase();
-}
-
-function findColumn(headers, candidates) {
-  return headers.findIndex((header) => candidates.includes(header));
-}
-
-function looksLikeTime(value) {
-  return /^\d{1,2}:\d{2}/.test(String(value || "").trim());
-}
-
-function dedupeEvents(events) {
-  const seen = new Set();
-  return events.filter((event) => {
-    const key = `${event.start}|${event.end}`;
-    if (seen.has(key)) {
-      return false;
-    }
-    seen.add(key);
-    return true;
-  });
+  importStatus.textContent = "Google同期は未設定";
 }
 
 function isNascaEvent(event) {
   return Boolean(event.id && event.id.startsWith("nasca-"));
-}
-
-function hashString(value) {
-  let hash = 0;
-  for (let index = 0; index < value.length; index += 1) {
-    hash = ((hash << 5) - hash + value.charCodeAt(index)) | 0;
-  }
-  return Math.abs(hash).toString(36);
-}
-
-function detectDelimiter(content) {
-  const firstLine = content.split(/\r?\n/).find((line) => line.trim()) || "";
-  const candidates = [",", "\t", ";"];
-  return candidates
-    .map((delimiter) => ({
-      delimiter,
-      count: firstLine.split(delimiter).length
-    }))
-    .sort((left, right) => right.count - left.count)[0].delimiter;
 }
 
 function loadLocalEvents() {
@@ -736,18 +432,7 @@ function formatEventRange(event) {
 }
 
 function isExcludedWorkEvent(event) {
-  if (!event || event.source !== "work") {
-    return false;
-  }
-
-  const start = new Date(event.start);
-  const end = new Date(event.end);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-    return false;
-  }
-
-  const durationHours = (end.getTime() - start.getTime()) / (60 * 60 * 1000);
-  return event.allDay || formatTime(event.start) === "00:00" || durationHours >= 23.5;
+  return Boolean(event && event.source === "work" && event.allDay);
 }
 
 function toGoogleDate(value) {
