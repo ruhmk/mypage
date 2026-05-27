@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>家族カレンダー更新</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <div class="app-shell admin-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Calendar Admin</p>
+          <h1>家族カレンダー更新</h1>
+        </div>
+        <div class="top-actions">
+          <a class="secondary-link" href="./index.html">カレンダーを見る</a>
+        </div>
+      </header>
+
+      <main class="admin-layout">
+        <section class="admin-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="panel-kicker">Update</p>
+              <h2>Google予定を取得</h2>
+            </div>
+            <button class="primary-button" id="fetchGoogleButton" type="button">取得する</button>
+          </div>
+          <p class="admin-copy" id="adminStatus">取得すると、公開用の data/events.js を保存できます。</p>
+          <div class="dialog-actions">
+            <button class="secondary-button" id="downloadEventsButton" type="button" disabled>events.jsを保存</button>
+          </div>
+        </section>
+
+        <section class="admin-panel">
+          <div class="panel-heading compact">
+            <div>
+              <p class="panel-kicker">Preview</p>
+              <h2>取得結果</h2>
+            </div>
+          </div>
+          <div class="event-list" id="adminPreview"></div>
+        </section>
+      </main>
+    </div>
+
+    <script src="./data/config.js?v=20260527-3"></script>
+    <script src="./admin.js?v=20260527-1" defer></script>
+  </body>
+</html>

@@ -134,6 +134,23 @@ h2 {
   background: var(--accent-strong);
 }
 
+.secondary-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 42px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-strong);
+  color: var(--ink);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.secondary-link:hover {
+  border-color: #9f9484;
+}
+
 .calendar-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
@@ -504,6 +521,30 @@ h2 {
 .dialog-actions {
   justify-content: end;
   padding-top: 2px;
+}
+
+.admin-shell {
+  max-width: 920px;
+}
+
+.admin-layout {
+  display: grid;
+  gap: 20px;
+}
+
+.admin-panel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 253, 248, 0.92);
+  box-shadow: var(--shadow);
+  padding: 18px;
+}
+
+.admin-copy {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-weight: 700;
+  line-height: 1.6;
 }
 
 @media (max-width: 980px) {

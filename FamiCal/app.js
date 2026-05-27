@@ -1,17 +1,13 @@
-const LOCAL_STORAGE_KEY = "family-calendar-local-events";
-const GOOGLE_SYNC_TIMEOUT_MS = 15000;
 const SOURCE_LABELS = {
   family: "家族",
   personal: "個人",
   work: "仕事"
 };
-const appConfig = window.FAMILY_CALENDAR_CONFIG || {};
 
 const state = {
   viewDate: startOfMonth(new Date()),
   selectedDate: stripTime(new Date()),
   remoteEvents: [],
-  localEvents: [],
   visibleSources: new Set(["family", "personal", "work"])
 };
 
@@ -21,15 +17,6 @@ const yearLabel = document.querySelector("#yearLabel");
 const selectedDateLabel = document.querySelector("#selectedDateLabel");
 const selectedEventList = document.querySelector("#selectedEventList");
 const upcomingEventList = document.querySelector("#upcomingEventList");
-const eventDialog = document.querySelector("#eventDialog");
-const eventForm = document.querySelector("#eventForm");
-const eventTitle = document.querySelector("#eventTitle");
-const eventDate = document.querySelector("#eventDate");
-const eventStart = document.querySelector("#eventStart");
-const eventEnd = document.querySelector("#eventEnd");
-const eventSource = document.querySelector("#eventSource");
-const eventNote = document.querySelector("#eventNote");
-const refreshGoogleButton = document.querySelector("#refreshGoogleButton");
 const importStatus = document.querySelector("#importStatus");
 
 document.querySelector("#prevMonth").addEventListener("click", () => {
@@ -48,18 +35,6 @@ document.querySelector("#todayButton").addEventListener("click", () => {
   render();
 });
 
-document.querySelector("#openComposer").addEventListener("click", () => {
-  openComposer(state.selectedDate);
-});
-
-refreshGoogleButton.addEventListener("click", () => {
-  refreshGoogleEvents({ sync: true });
-});
-
-document.querySelector("#closeComposer").addEventListener("click", () => {
-  eventDialog.close();
-});
-
 document.querySelectorAll(".source-toggle input").forEach((input) => {
   input.addEventListener("change", () => {
     state.visibleSources = new Set(
@@ -69,52 +44,14 @@ document.querySelectorAll(".source-toggle input").forEach((input) => {
   });
 });
 
-document.querySelector("#googleDraftButton").addEventListener("click", () => {
-  if (!eventForm.reportValidity()) {
-    return;
-  }
-
-  const draft = readFormEvent();
-  window.open(buildGoogleCalendarUrl(draft), "_blank", "noopener,noreferrer");
-});
-
-eventForm.addEventListener("submit", (event) => {
-  event.preventDefault();
-
-  if (!eventForm.reportValidity()) {
-    return;
-  }
-
-  const draft = readFormEvent();
-  const localEvent = {
-    ...draft,
-    id: `local-${Date.now()}`
-  };
-
-  state.localEvents.push(localEvent);
-  saveLocalEvents();
-  eventDialog.close();
-  render();
-});
-
 bootstrap();
 
 function bootstrap() {
-  state.localEvents = loadLocalEvents().filter((item) => !isNascaEvent(item));
-  saveLocalEvents();
   state.remoteEvents = Array.isArray(window.FAMILY_CALENDAR_EVENTS)
     ? window.FAMILY_CALENDAR_EVENTS
     : fallbackEvents();
 
-  refreshGoogleButton.title = appConfig.googleSyncUrl
-    ? "Googleカレンダーから家族用予定を更新します"
-    : "Apps ScriptのURLを設定すると使えます";
-
   render();
-
-  if (appConfig.googleSyncUrl && appConfig.autoLoadGoogleEvents) {
-    refreshGoogleEvents({ sync: false });
-  }
 }
 
 function render() {
@@ -236,19 +173,6 @@ function renderEventList(target, events, emptyText) {
     time.append(range, source);
     card.append(time, title);
 
-    if (item.id && (item.id.startsWith("local-") || isNascaEvent(item))) {
-      const deleteButton = document.createElement("button");
-      deleteButton.className = "event-delete";
-      deleteButton.type = "button";
-      deleteButton.setAttribute("aria-label", `${item.title}を削除`);
-      deleteButton.title = "削除";
-      deleteButton.textContent = "x";
-      deleteButton.addEventListener("click", () => {
-        removeLocalEvent(item.id);
-      });
-      card.append(deleteButton);
-    }
-
     if (item.note) {
       const note = document.createElement("p");
       note.className = "event-note";
@@ -260,34 +184,8 @@ function renderEventList(target, events, emptyText) {
   });
 }
 
-function openComposer(date) {
-  eventForm.reset();
-  eventTitle.value = "";
-  eventDate.value = toDateInputValue(date);
-  eventStart.value = "09:00";
-  eventEnd.value = "10:00";
-  eventSource.value = "family";
-  eventDialog.showModal();
-  eventTitle.focus();
-}
-
-function readFormEvent() {
-  const start = new Date(`${eventDate.value}T${eventStart.value}:00`);
-  const end = new Date(`${eventDate.value}T${eventEnd.value}:00`);
-  const normalizedEnd = end > start ? end : addDays(end, 1);
-  const source = eventSource.value;
-
-  return {
-    title: source === "work" ? "仕事" : eventTitle.value.trim(),
-    start: start.toISOString(),
-    end: normalizedEnd.toISOString(),
-    source,
-    note: source === "work" ? "" : eventNote.value.trim()
-  };
-}
-
 function getVisibleEvents() {
-  return [...state.remoteEvents, ...state.localEvents]
+  return state.remoteEvents
     .filter((item) => !isExcludedWorkEvent(item))
     .filter((item) => state.visibleSources.has(item.source))
     .sort(sortByStart);
@@ -303,121 +201,13 @@ function getEventsForDay(date) {
   });
 }
 
-function saveLocalEvents() {
-  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state.localEvents));
-}
-
-function removeLocalEvent(id) {
-  state.localEvents = state.localEvents.filter((item) => item.id !== id);
-  saveLocalEvents();
-  render();
-}
-
 function renderImportStatus() {
-  const googleCount = appConfig.googleSyncUrl ? state.remoteEvents.length : 0;
+  const googleCount = state.remoteEvents.length;
   if (googleCount > 0) {
-    importStatus.textContent = `Google予定 ${googleCount}件を表示中`;
+    importStatus.textContent = `公開予定 ${googleCount}件を表示中`;
     return;
   }
-  importStatus.textContent = "Google同期は未設定";
-}
-
-function isNascaEvent(event) {
-  return Boolean(event.id && event.id.startsWith("nasca-"));
-}
-
-function loadLocalEvents() {
-  try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function buildGoogleCalendarUrl(event) {
-  const params = new URLSearchParams({
-    action: "TEMPLATE",
-    text: event.title,
-    dates: `${toGoogleDate(event.start)}/${toGoogleDate(event.end)}`,
-    details: event.note || "",
-    trp: "true"
-  });
-
-  return `https://calendar.google.com/calendar/render?${params.toString()}`;
-}
-
-function refreshGoogleEvents({ sync }) {
-  if (!appConfig.googleSyncUrl) {
-    window.alert("Google同期の準備がまだできていません。data/config.js に Apps Script のURLを入れてください。");
-    return;
-  }
-
-  const callbackName = `receiveFamilyCalendarEvents${Date.now()}`;
-  const script = document.createElement("script");
-  const url = new URL(appConfig.googleSyncUrl);
-  url.searchParams.set("callback", callbackName);
-  url.searchParams.set("t", String(Date.now()));
-  if (sync) {
-    url.searchParams.set("action", "sync");
-  }
-
-  refreshGoogleButton.disabled = true;
-  importStatus.textContent = "Google予定を更新中...";
-
-  const timeout = window.setTimeout(() => {
-    cleanupGoogleSync(callbackName, script);
-    refreshGoogleButton.disabled = false;
-    importStatus.textContent = "Google予定の更新に失敗しました";
-    window.alert("Google予定を更新できませんでした。");
-  }, GOOGLE_SYNC_TIMEOUT_MS);
-
-  window[callbackName] = (payload) => {
-    window.clearTimeout(timeout);
-    cleanupGoogleSync(callbackName, script);
-
-    if (payload && payload.error) {
-      refreshGoogleButton.disabled = false;
-      importStatus.textContent = "Google予定の更新に失敗しました";
-      const versionText = payload.scriptVersion ? `\n\nApps Script: ${payload.scriptVersion}` : "";
-      window.alert(`${payload.error}${versionText}`);
-      return;
-    }
-
-    const events = Array.isArray(payload && payload.events)
-      ? payload.events.filter((item) => !isExcludedWorkEvent(item))
-      : [];
-    state.remoteEvents = events;
-    if (events.length > 0) {
-      state.viewDate = startOfMonth(new Date(events[0].start));
-      state.selectedDate = stripTime(new Date(events[0].start));
-    }
-    refreshGoogleButton.disabled = false;
-    render();
-    const versionText = payload && payload.scriptVersion ? `\nApps Script: ${payload.scriptVersion}` : "";
-    const diagnostics = payload && payload.diagnostics
-      ? `\n仕事: ${payload.diagnostics.workCount}件 / 個人: ${payload.diagnostics.personalCount}件`
-      : "";
-    window.alert(`Google予定を${events.length}件読み込みました。${diagnostics}${versionText}`);
-  };
-
-  script.src = url.toString();
-  script.onerror = () => {
-    window.clearTimeout(timeout);
-    cleanupGoogleSync(callbackName, script);
-    refreshGoogleButton.disabled = false;
-    importStatus.textContent = "Google予定の更新に失敗しました";
-    window.alert("Google予定を更新できませんでした。");
-  };
-  document.body.append(script);
-}
-
-function cleanupGoogleSync(callbackName, script) {
-  delete window[callbackName];
-  if (script.parentNode) {
-    script.parentNode.removeChild(script);
-  }
+  importStatus.textContent = "公開予定は未設定";
 }
 
 function formatEventStart(event) {
@@ -433,10 +223,6 @@ function formatEventRange(event) {
 
 function isExcludedWorkEvent(event) {
   return Boolean(event && event.source === "work" && event.allDay);
-}
-
-function toGoogleDate(value) {
-  return new Date(value).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
 }
 
 function formatDateHeading(date) {
@@ -458,13 +244,6 @@ function formatTime(value) {
     minute: "2-digit",
     hour12: false
   }).format(new Date(value));
-}
-
-function toDateInputValue(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
 }
 
 function startOfMonth(date) {
