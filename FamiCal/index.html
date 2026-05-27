@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>家族カレンダー</title>
-    <link rel="stylesheet" href="./styles.css?v=20260527-8">
+    <link rel="stylesheet" href="./styles.css?v=20260527-9">
   </head>
   <body>
     <div class="app-shell">
@@ -46,16 +46,18 @@
             <p class="import-status" id="importStatus" role="status"></p>
           </div>
 
-          <div class="weekday-row" aria-hidden="true">
-            <span>日</span>
-            <span>月</span>
-            <span>火</span>
-            <span>水</span>
-            <span>木</span>
-            <span>金</span>
-            <span>土</span>
+          <div class="calendar-scroll">
+            <div class="weekday-row" aria-hidden="true">
+              <span>日</span>
+              <span>月</span>
+              <span>火</span>
+              <span>水</span>
+              <span>木</span>
+              <span>金</span>
+              <span>土</span>
+            </div>
+            <div class="calendar-grid" id="calendarGrid"></div>
           </div>
-          <div class="calendar-grid" id="calendarGrid"></div>
         </section>
 
         <aside class="side-panel" aria-label="予定">
@@ -72,7 +74,7 @@
       </main>
     </div>
 
-    <script src="./data/events.js?v=20260527-8"></script>
-    <script src="./app.js?v=20260527-8" defer></script>
+    <script src="./data/events.js?v=20260527-9"></script>
+    <script src="./app.js?v=20260527-9" defer></script>
   </body>
 </html>

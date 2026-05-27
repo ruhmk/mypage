@@ -170,6 +170,11 @@ h2 {
   overflow: hidden;
 }
 
+.calendar-scroll {
+  width: 100%;
+  max-width: 100%;
+}
+
 .month-strip {
   display: flex;
   justify-content: space-between;
@@ -612,12 +617,20 @@ h2 {
     overflow: visible;
   }
 
+  .calendar-scroll {
+    overflow-x: auto;
+    overflow-y: visible;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+
   .month-strip {
     position: sticky;
     top: calc(max(8px, env(safe-area-inset-top)) + 47px);
     z-index: 5;
     align-items: center;
     flex-direction: row;
+    flex-wrap: nowrap;
     gap: 8px;
     padding: 8px 10px;
     background: rgba(255, 253, 248, 0.98);
@@ -634,6 +647,7 @@ h2 {
   }
 
   .source-toggles {
+    margin-left: auto;
     justify-content: flex-end;
     gap: 6px;
     flex-wrap: nowrap;
@@ -678,6 +692,8 @@ h2 {
 
   .side-panel {
     grid-template-columns: 1fr;
+    width: min(100%, 560px);
+    margin: 0 auto;
   }
 
   .day-panel {
@@ -763,7 +779,7 @@ h2 {
   }
 
   .month-strip {
-    padding: 14px;
+    padding: 8px 10px;
   }
 
   .day-panel {
