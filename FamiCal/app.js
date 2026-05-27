@@ -683,11 +683,14 @@ function refreshGoogleEvents({ sync }) {
     if (payload && payload.error) {
       refreshGoogleButton.disabled = false;
       importStatus.textContent = "Google予定の更新に失敗しました";
-      window.alert(payload.error);
+      const versionText = payload.scriptVersion ? `\n\nApps Script: ${payload.scriptVersion}` : "";
+      window.alert(`${payload.error}${versionText}`);
       return;
     }
 
-    const events = Array.isArray(payload && payload.events) ? payload.events : [];
+    const events = Array.isArray(payload && payload.events)
+      ? payload.events.filter((item) => !isExcludedWorkEvent(item))
+      : [];
     state.remoteEvents = events;
     if (events.length > 0) {
       state.viewDate = startOfMonth(new Date(events[0].start));
@@ -695,7 +698,11 @@ function refreshGoogleEvents({ sync }) {
     }
     refreshGoogleButton.disabled = false;
     render();
-    window.alert(`Google予定を${events.length}件読み込みました。`);
+    const versionText = payload && payload.scriptVersion ? `\nApps Script: ${payload.scriptVersion}` : "";
+    const diagnostics = payload && payload.diagnostics
+      ? `\n仕事: ${payload.diagnostics.workCount}件 / 個人: ${payload.diagnostics.personalCount}件`
+      : "";
+    window.alert(`Google予定を${events.length}件読み込みました。${diagnostics}${versionText}`);
   };
 
   script.src = url.toString();
@@ -725,6 +732,21 @@ function formatEventRange(event) {
     return `${formatShortDate(event.start)} 終日`;
   }
   return `${formatShortDate(event.start)} ${formatTime(event.start)}-${formatTime(event.end)}`;
+}
+
+function isExcludedWorkEvent(event) {
+  if (!event || event.source !== "work") {
+    return false;
+  }
+
+  const start = new Date(event.start);
+  const end = new Date(event.end);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return false;
+  }
+
+  const durationHours = (end.getTime() - start.getTime()) / (60 * 60 * 1000);
+  return event.allDay || formatTime(event.start) === "00:00" || durationHours >= 23.5;
 }
 
 function toGoogleDate(value) {
