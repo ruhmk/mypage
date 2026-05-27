@@ -1,6 +1,6 @@
 # 家族カレンダー
 
-GitHub Pagesにそのまま置ける静的カレンダーです。今は `data/events.json` を読み込み、画面から追加した予定はブラウザ内に保存します。
+GitHub Pagesにそのまま置ける静的カレンダーです。今は `data/events.js` を読み込み、画面から追加した予定はブラウザ内に保存します。
 
 ## ローカル表示
 
@@ -27,7 +27,7 @@ window.FAMILY_CALENDAR_EVENTS = [
 
 ## NASCA予定の手動取り込み
 
-画面右上の「NASCA予定を取得」から、NASCAで出力した予定ファイルを選びます。
+画面右上の「NASCAファイル取込」から、NASCAで出力した予定ファイルを選びます。
 
 対応している形式:
 
@@ -40,7 +40,7 @@ window.FAMILY_CALENDAR_EVENTS = [
 ## Googleカレンダー連携の方針
 
 - 家族はGitHub Pagesを見るだけにする
-- 表示用データは、個人Googleカレンダーから公開してよい形に整えたJSONにする
+- 表示用データは、Googleカレンダーから公開してよい形に整えたJSONにする
 - ページ上の「Googleで作成」はGoogleカレンダーの予定作成画面を開く
 - 完全自動でGoogleカレンダーへ書き込む場合は、GitHub PagesではなくApps Scriptや小さなバックエンド側で処理する
 
@@ -53,13 +53,13 @@ GitHub Pagesは公開される前提なので、秘密情報や更新トーク�
 ```text
 NASCA
   -> 仕事用Googleカレンダー
-  -> 家族用Googleカレンダーには「仕事」だけで同期
+  -> Apps Scriptが「仕事」だけに変換
 
 respectinspire0805@gmail.com の個人Googleカレンダー
-  -> 家族用Googleカレンダーへタイトルだけ同期
+  -> Apps Scriptがタイトルだけ、または「予定あり」に変換
 
 GitHub Pages
-  -> 家族用Googleカレンダーの表示用データだけ読む
+  -> Apps Scriptの表示用データだけ読む
 ```
 
 同期処理は [apps-script/Code.gs](<C:/Users/S18344/Documents/Codex/2026-05-27/nasca-google/apps-script/Code.gs>) にあります。セットアップ手順は [apps-script/README.md](<C:/Users/S18344/Documents/Codex/2026-05-27/nasca-google/apps-script/README.md>) を見てください。
@@ -69,8 +69,10 @@ Apps Scriptをデプロイしたら、発行されたURLを [data/config.js](<C:
 ```js
 window.FAMILY_CALENDAR_CONFIG = {
   googleSyncUrl: "https://script.google.com/macros/s/XXXXXXXX/exec",
-  autoLoadGoogleEvents: true
+  autoLoadGoogleEvents: false
 };
 ```
 
 これで画面右上の「Google予定を更新」ボタンが使えるようになります。
+
+この方式では、家族用Googleカレンダーは不要です。
