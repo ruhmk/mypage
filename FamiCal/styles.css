@@ -368,8 +368,7 @@ h2 {
   top: 20px;
 }
 
-.day-panel,
-.upcoming-panel {
+.day-panel {
   padding: 18px;
 }
 
@@ -554,7 +553,6 @@ h2 {
 
   .side-panel {
     position: static;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -578,13 +576,15 @@ h2 {
   }
 
   .day-cell {
-    min-height: 92px;
-    padding: 7px;
+    min-height: 128px;
+    padding: 6px;
+    gap: 4px;
   }
 
   .day-chip {
-    min-height: 22px;
-    font-size: 0.72rem;
+    min-height: 20px;
+    grid-template-columns: 5px minmax(0, 1fr);
+    font-size: 0.68rem;
   }
 
   .side-panel {
@@ -602,8 +602,8 @@ h2 {
   }
 
   .day-cell {
-    min-height: 76px;
-    gap: 5px;
+    min-height: 112px;
+    gap: 4px;
   }
 
   .day-number {
@@ -613,15 +613,14 @@ h2 {
   }
 
   .day-chip span {
-    padding: 0 4px;
+    padding: 0 3px;
   }
 
   .month-strip {
     padding: 14px;
   }
 
-  .day-panel,
-  .upcoming-panel {
+  .day-panel {
     padding: 14px;
   }
 }

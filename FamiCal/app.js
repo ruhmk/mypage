@@ -16,7 +16,6 @@ const monthLabel = document.querySelector("#monthLabel");
 const yearLabel = document.querySelector("#yearLabel");
 const selectedDateLabel = document.querySelector("#selectedDateLabel");
 const selectedEventList = document.querySelector("#selectedEventList");
-const upcomingEventList = document.querySelector("#upcomingEventList");
 const importStatus = document.querySelector("#importStatus");
 
 document.querySelector("#prevMonth").addEventListener("click", () => {
@@ -63,7 +62,6 @@ function render() {
 
   renderCalendarGrid();
   renderSelectedEvents();
-  renderUpcomingEvents();
   renderImportStatus();
 }
 
@@ -105,7 +103,8 @@ function renderCalendarGrid() {
     eventsWrapper.className = "day-events";
 
     const events = getEventsForDay(date);
-    events.slice(0, 3).forEach((item) => {
+    const eventLimit = window.matchMedia("(max-width: 720px)").matches ? 6 : 4;
+    events.slice(0, eventLimit).forEach((item) => {
       const chip = document.createElement("div");
       chip.className = `day-chip ${item.source}`;
       const text = document.createElement("span");
@@ -114,10 +113,10 @@ function renderCalendarGrid() {
       eventsWrapper.append(chip);
     });
 
-    if (events.length > 3) {
+    if (events.length > eventLimit) {
       const more = document.createElement("div");
       more.className = "more-chip";
-      more.textContent = `+${events.length - 3}`;
+      more.textContent = `+${events.length - eventLimit}`;
       eventsWrapper.append(more);
     }
 
@@ -129,16 +128,6 @@ function renderCalendarGrid() {
 function renderSelectedEvents() {
   const events = getEventsForDay(state.selectedDate);
   renderEventList(selectedEventList, events, "予定なし");
-}
-
-function renderUpcomingEvents() {
-  const today = stripTime(new Date());
-  const events = getVisibleEvents()
-    .filter((item) => new Date(item.end) >= today)
-    .sort(sortByStart)
-    .slice(0, 8);
-
-  renderEventList(upcomingEventList, events, "予定なし");
 }
 
 function renderEventList(target, events, emptyText) {
