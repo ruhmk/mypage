@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>家族カレンダー</title>
-    <link rel="stylesheet" href="./styles.css?v=20260527-9">
+    <link rel="stylesheet" href="./styles.css?v=20260527-10">
   </head>
   <body>
     <div class="app-shell">
@@ -26,36 +26,41 @@
 
       <main class="calendar-layout">
         <section class="calendar-main" aria-label="月間カレンダー">
-          <div class="month-strip">
-            <div>
-              <p class="month-kicker" id="yearLabel"></p>
-              <h2 id="monthLabel"></h2>
+          <div class="calendar-fixed-head">
+            <div class="month-strip">
+              <div>
+                <p class="month-kicker" id="yearLabel"></p>
+                <h2 id="monthLabel"></h2>
+              </div>
+              <div class="source-toggles" aria-label="表示する予定">
+                <label class="source-toggle">
+                  <input type="checkbox" value="personal" checked>
+                  <span class="source-dot personal"></span>
+                  <span>個人</span>
+                </label>
+                <label class="source-toggle">
+                  <input type="checkbox" value="work" checked>
+                  <span class="source-dot work"></span>
+                  <span>仕事</span>
+                </label>
+              </div>
+              <p class="import-status" id="importStatus" role="status"></p>
             </div>
-            <div class="source-toggles" aria-label="表示する予定">
-              <label class="source-toggle">
-                <input type="checkbox" value="personal" checked>
-                <span class="source-dot personal"></span>
-                <span>個人</span>
-              </label>
-              <label class="source-toggle">
-                <input type="checkbox" value="work" checked>
-                <span class="source-dot work"></span>
-                <span>仕事</span>
-              </label>
+
+            <div class="weekday-scroll" id="weekdayScroll">
+              <div class="weekday-row" aria-hidden="true">
+                <span>日</span>
+                <span>月</span>
+                <span>火</span>
+                <span>水</span>
+                <span>木</span>
+                <span>金</span>
+                <span>土</span>
+              </div>
             </div>
-            <p class="import-status" id="importStatus" role="status"></p>
           </div>
 
-          <div class="calendar-scroll">
-            <div class="weekday-row" aria-hidden="true">
-              <span>日</span>
-              <span>月</span>
-              <span>火</span>
-              <span>水</span>
-              <span>木</span>
-              <span>金</span>
-              <span>土</span>
-            </div>
+          <div class="calendar-scroll" id="calendarScroll">
             <div class="calendar-grid" id="calendarGrid"></div>
           </div>
         </section>
@@ -74,7 +79,7 @@
       </main>
     </div>
 
-    <script src="./data/events.js?v=20260527-9"></script>
-    <script src="./app.js?v=20260527-9" defer></script>
+    <script src="./data/events.js?v=20260527-10"></script>
+    <script src="./app.js?v=20260527-10" defer></script>
   </body>
 </html>

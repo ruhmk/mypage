@@ -17,6 +17,14 @@ const yearLabel = document.querySelector("#yearLabel");
 const selectedDateLabel = document.querySelector("#selectedDateLabel");
 const selectedEventList = document.querySelector("#selectedEventList");
 const importStatus = document.querySelector("#importStatus");
+const calendarScroll = document.querySelector("#calendarScroll");
+const weekdayScroll = document.querySelector("#weekdayScroll");
+
+if (calendarScroll && weekdayScroll) {
+  calendarScroll.addEventListener("scroll", () => {
+    weekdayScroll.scrollLeft = calendarScroll.scrollLeft;
+  });
+}
 
 document.querySelector("#prevMonth").addEventListener("click", () => {
   state.viewDate = addMonths(state.viewDate, -1);
