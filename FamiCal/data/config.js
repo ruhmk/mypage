@@ -1,4 +1,4 @@
 window.FAMILY_CALENDAR_CONFIG = {
-  googleSyncUrl: "https://script.google.com/a/macros/qualiarts.jp/s/AKfycbxnJvNn75UL3aED4RVtJejKxNp01SnxeUq4E8r9rT4fFfTcC3bND0xg6DZk3jMHXKtd/exec",
+  googleSyncUrl: "https://script.google.com/a/macros/qua-vision.com/s/AKfycbzrwGa_70EEuMhqoIV3Ydp99roBKzRjJbHxmgx2tiR0XFPCfpwxc6BVLl6Uf8nBFR69/exec",
   autoLoadGoogleEvents: false
 };

@@ -28,7 +28,7 @@ function doGet(event) {
     console.error(error);
     payload = {
       ok: false,
-      error: "Google予定を取得できませんでした。Apps Scriptの設定とカレンダー共有を確認してください。",
+      error: `Google予定を取得できませんでした。${getErrorMessage_(error)}`,
       events: []
     };
   }
@@ -54,6 +54,9 @@ function readWorkBusyEvents_(timeMin, timeMax) {
     items: [{ id: CONFIG.WORK_SOURCE_CALENDAR_ID }]
   });
   const calendar = response.calendars && response.calendars[CONFIG.WORK_SOURCE_CALENDAR_ID];
+  if (calendar && calendar.errors && calendar.errors.length > 0) {
+    throw new Error(`仕事用カレンダーを読めません: ${JSON.stringify(calendar.errors)}`);
+  }
   const busy = calendar && calendar.busy ? calendar.busy : [];
 
   return busy.map((item) => ({
@@ -160,4 +163,20 @@ function sanitizeCallback_(callback) {
 function hash_(value) {
   const bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, value);
   return Utilities.base64EncodeWebSafe(bytes).replace(/=+$/, "").slice(0, 18);
+}
+
+function getErrorMessage_(error) {
+  const message = error && error.message ? error.message : String(error);
+  return message || "詳細不明のエラーです。";
+}
+
+function testCalendarAccess() {
+  const syncWindow = getSyncWindow_();
+  const result = {
+    workCalendarId: CONFIG.WORK_SOURCE_CALENDAR_ID,
+    personalCalendarId: CONFIG.PERSONAL_SOURCE_CALENDAR_ID,
+    workBusyCount: readWorkBusyEvents_(syncWindow.start, syncWindow.end).length,
+    personalEventCount: readPersonalEvents_(syncWindow.start, syncWindow.end).length
+  };
+  console.log(JSON.stringify(result, null, 2));
 }
