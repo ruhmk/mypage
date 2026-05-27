@@ -103,6 +103,7 @@ const els = {
   markdownFileInput: document.getElementById("markdownFileInput"),
   nodeDetailTitle: document.getElementById("nodeDetailTitle"),
   nodeNoteInput: document.getElementById("nodeNoteInput"),
+  summaryOutput: document.getElementById("summaryOutput"),
 };
 
 function clone(value) {
@@ -931,6 +932,215 @@ function prettyOutline(node, depth = 0) {
   return [prefix + node.text, ...node.children.flatMap((child) => prettyOutline(child, depth + 1))];
 }
 
+function summarizeTree(root) {
+  const summary = analyzeTree(root);
+  const background = makeSummaryBackground(summary);
+  const actions = makeSummaryActions(summary);
+
+  return [
+    "今の課題：",
+    makeSummaryIssue(summary),
+    "",
+    "背景：",
+    ...background,
+    "",
+    "まずやること：",
+    ...actions.map((action, index) => `${index + 1}. ${action}`),
+  ].join("\n");
+}
+
+function analyzeTree(root) {
+  const children = root.children || [];
+  const goalBranch = findSummaryBranch(children, ["ゴール", "目的", "目標"]);
+  const handoverBranch = findSummaryBranch(children, ["引継ぎ", "引き継ぎ", "引継", "やること", "対応"]);
+  const exclusionBranch = findSummaryBranch(children, ["やらない", "対象外", "しない", "除外"]);
+  const goals = branchChildren(goalBranch);
+  const handovers = branchChildren(handoverBranch);
+  const exclusions = branchChildren(exclusionBranch);
+  const allTexts = collectSummaryTexts(root);
+
+  return {
+    rootText: cleanSummaryText(root.text),
+    assignee: extractAssignee(root.text),
+    theme: extractTheme(root.text),
+    goals,
+    handovers,
+    exclusions,
+    topItems: children.map((child) => cleanSummaryText(child.text)).filter(Boolean),
+    allTexts,
+  };
+}
+
+function findSummaryBranch(children, keywords) {
+  return children.find((child) => keywords.some((keyword) => cleanSummaryKey(child.text).includes(keyword)));
+}
+
+function branchChildren(node) {
+  if (!node) return [];
+  return (node.children || []).map((child) => cleanSummaryText(child.text)).filter(Boolean);
+}
+
+function collectSummaryTexts(node) {
+  const texts = [];
+  walkSummaryTree(node, (item) => {
+    const text = cleanSummaryText(item.text);
+    if (text) texts.push(text);
+  });
+  return texts;
+}
+
+function walkSummaryTree(node, visitor) {
+  visitor(node);
+  (node.children || []).forEach((child) => walkSummaryTree(child, visitor));
+}
+
+function makeSummaryIssue(summary) {
+  const lead = makeSummaryLead(summary);
+  if (summary.exclusions.length) {
+    return `${lead}、任せる範囲と最終判断が必要な範囲を切り分ける。`;
+  }
+  if (summary.handovers.length) {
+    return `${lead}、引継ぎ項目と次に進める順番を整理する。`;
+  }
+  return `${summary.rootText || "このマインドマップ"}について、課題と次にやることを整理する。`;
+}
+
+function makeSummaryLead(summary) {
+  const goal = pickGoal(summary.goals);
+  if (summary.assignee && goal) {
+    return `${summary.assignee}が${goalToLead(goal)}`;
+  }
+  if (goal) return goalToLead(goal);
+  if (summary.assignee && summary.theme) return `${summary.assignee}が${summary.theme}を進められるように`;
+  return summary.rootText || "このマインドマップ";
+}
+
+function pickGoal(goals) {
+  return (
+    goals.find((goal) => /自走|担う|管理|把握|確認/.test(goal)) ||
+    goals.find((goal) => goal.length <= 34) ||
+    goals[0] ||
+    ""
+  );
+}
+
+function goalToLead(goal) {
+  const cleanGoal = cleanSummaryText(goal).replace(/[。.]$/, "");
+  if (/できる$|担う$|握れている$|進められる$|回せる$/.test(cleanGoal)) return `${cleanGoal}ように`;
+  return `${cleanGoal}を進められるように`;
+}
+
+function makeSummaryBackground(summary) {
+  const lines = [];
+  const scopes = summarizeScopeItems(summary);
+  if (scopes.length) {
+    lines.push(`引継ぎ対象は、${joinJapaneseList(scopes)}など${summary.handovers.length > 4 ? "広い" : "が中心"}。`);
+  } else if (summary.topItems.length) {
+    lines.push(`論点は、${joinJapaneseList(summary.topItems.slice(0, 5))}が中心。`);
+  } else {
+    lines.push("論点がまだ分散しているため、全体像を短く整理する。");
+  }
+
+  if (summary.exclusions.length) {
+    lines.push(`一方で、${joinJapaneseList(summarizeExclusions(summary.exclusions))}の判断は担当外にする。`);
+  } else if (summary.goals.length) {
+    lines.push(`目指す状態は、${joinJapaneseList(summary.goals.slice(0, 3))}。`);
+  }
+
+  return lines.slice(0, 2);
+}
+
+function makeSummaryActions(summary) {
+  const actions = [];
+  if (summary.handovers.length) {
+    actions.push("引継ぎ項目を「日次運用」「定例」「判断が必要なもの」に分ける");
+  } else {
+    actions.push("ノードを「課題」「背景」「次にやること」に分ける");
+  }
+
+  if (summary.exclusions.length || summary.goals.length) {
+    const subject = summary.assignee ? `${summary.assignee}が` : "";
+    actions.push(`${subject}判断してよい範囲と、相談すべき範囲を明文化する`);
+  } else {
+    actions.push("優先度が高いものを1つ選ぶ");
+  }
+
+  const operatingTools = summarizeOperatingTools(summary.handovers);
+  if (operatingTools.length) {
+    const subject = summary.assignee ? `${summary.assignee}が` : "";
+    actions.push(`${joinJapaneseList(operatingTools)}を、${subject}回せる形に整える`);
+  } else {
+    actions.push("次に試す小さなアクションを1つ決める");
+  }
+
+  return actions.slice(0, 3);
+}
+
+function summarizeScopeItems(summary) {
+  const texts = [...summary.handovers, ...summary.goals];
+  const items = [];
+  addSummaryItem(items, texts, /スケジュール|ガント|進捗/, "スケジュール管理");
+  addSummaryItem(items, texts, /課題/, "課題整理");
+  addSummaryItem(items, texts, /スプシ|spreadsheet/i, "スプシ運用");
+  addSummaryItem(items, texts, /定例/, "各定例");
+  addSummaryItem(items, texts, /2D|3D/i, "2D・3D確認");
+  addSummaryItem(items, texts, /ID/, "ID整理");
+  summary.handovers.forEach((item) => {
+    if (items.length < 5 && !items.some((existing) => item.includes(existing))) items.push(item);
+  });
+  return items.slice(0, 5);
+}
+
+function summarizeExclusions(exclusions) {
+  const items = [];
+  addSummaryItem(items, exclusions, /品質|クオリティ/, "品質");
+  addSummaryItem(items, exclusions, /表現/, "表現");
+  addSummaryItem(items, exclusions, /工数/, "工数増");
+  addSummaryItem(items, exclusions, /レギュレーション/, "レギュレーション更新");
+  exclusions.forEach((item) => {
+    if (items.length < 4 && !items.includes(item)) items.push(item.replace(/判断|最終決定/g, ""));
+  });
+  return items.slice(0, 4);
+}
+
+function summarizeOperatingTools(handovers) {
+  const tools = [];
+  addSummaryItem(tools, handovers, /ガント/, "ガント");
+  addSummaryItem(tools, handovers, /スプシ|spreadsheet/i, "スプシ");
+  addSummaryItem(tools, handovers, /課題/, "課題一覧");
+  addSummaryItem(tools, handovers, /定例/, "定例");
+  return tools.slice(0, 3);
+}
+
+function addSummaryItem(items, texts, pattern, label) {
+  if (texts.some((text) => pattern.test(text)) && !items.includes(label)) items.push(label);
+}
+
+function joinJapaneseList(items) {
+  return items.filter(Boolean).join("、");
+}
+
+function extractAssignee(text) {
+  const match = cleanSummaryText(text).match(/([^\s　#-]+さん)/);
+  return match ? match[1] : "";
+}
+
+function extractTheme(text) {
+  return cleanSummaryText(text)
+    .replace(/^#+\s*/, "")
+    .replace(/([^\s　#-]+さん)/, "")
+    .replace(/オンボーディング|オンボ|onboarding/gi, "")
+    .trim();
+}
+
+function cleanSummaryText(text) {
+  return String(text || "").replace(/^[-*#\s　]+/, "").trim();
+}
+
+function cleanSummaryKey(text) {
+  return cleanSummaryText(text).replace(/\s|　/g, "");
+}
+
 function makeStateComment() {
   const metadata = {
     version: 1,
@@ -1005,8 +1215,6 @@ function updateMapSelect() {
     els.mapSelect.appendChild(option);
   });
   els.mapSelect.value = state.mapId;
-  const deleteButton = document.getElementById("deleteMapButton");
-  if (deleteButton) deleteButton.disabled = state.maps.length <= 1;
 }
 
 function setActiveMap(map, shouldFit = true, resetHistory = true) {
@@ -1115,12 +1323,6 @@ function wireControls() {
     }
   });
 
-  document.getElementById("formatButton").addEventListener("click", () => {
-    const markdown = toMarkdown(state.tree, { includeMeta: true }).join("\n");
-    els.outlineInput.value = markdown;
-    els.exportOutput.value = markdown;
-  });
-
   let noteSnapshot = null;
   let noteRecorded = false;
   els.nodeNoteInput.addEventListener("focus", () => {
@@ -1163,14 +1365,6 @@ function wireControls() {
     els.statusText.textContent = `${state.mapName} を保存しました。`;
   });
 
-  document.getElementById("deleteMapButton").addEventListener("click", () => {
-    if (state.maps.length <= 1) return;
-    const ok = window.confirm(`${state.mapName} を保存済み一覧から削除しますか？`);
-    if (!ok) return;
-    state.maps = state.maps.filter((map) => map.id !== state.mapId);
-    setActiveMap(state.maps[0]);
-  });
-
   document.getElementById("openMarkdownButton").addEventListener("click", () => {
     els.markdownFileInput.click();
   });
@@ -1210,6 +1404,11 @@ function wireControls() {
 
   document.getElementById("exportMarkdownButton").addEventListener("click", () => {
     els.exportOutput.value = toMarkdown(state.tree, { includeMeta: true }).join("\n");
+  });
+
+  document.getElementById("summaryButton").addEventListener("click", () => {
+    els.summaryOutput.value = summarizeTree(state.tree);
+    els.statusText.textContent = "要約を作成しました。";
   });
 
   els.searchInput.addEventListener("input", () => {
