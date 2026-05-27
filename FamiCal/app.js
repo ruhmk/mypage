@@ -73,20 +73,17 @@ function renderCalendarGrid() {
   const days = Array.from({ length: 42 }, (_, index) => addDays(start, index));
 
   days.forEach((date) => {
-    const cell = document.createElement("div");
+    const cell = document.createElement("button");
     const isOutside = date.getMonth() !== state.viewDate.getMonth();
+    cell.type = "button";
     cell.className = [
       "day-cell",
       isOutside ? "outside" : "",
       isSameDay(date, new Date()) ? "today" : "",
       isSameDay(date, state.selectedDate) ? "selected" : ""
     ].filter(Boolean).join(" ");
-
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "day-button";
-    button.setAttribute("aria-label", formatDateHeading(date));
-    button.addEventListener("click", () => {
+    cell.setAttribute("aria-label", formatDateHeading(date));
+    cell.addEventListener("click", () => {
       state.selectedDate = stripTime(date);
       if (isOutside) {
         state.viewDate = startOfMonth(date);
@@ -97,13 +94,12 @@ function renderCalendarGrid() {
     const number = document.createElement("span");
     number.className = "day-number";
     number.textContent = date.getDate();
-    button.append(number);
 
     const eventsWrapper = document.createElement("div");
     eventsWrapper.className = "day-events";
 
     const events = getEventsForDay(date);
-    const eventLimit = window.matchMedia("(max-width: 720px)").matches ? 6 : 4;
+    const eventLimit = 4;
     events.slice(0, eventLimit).forEach((item) => {
       const chip = document.createElement("div");
       chip.className = `day-chip ${item.source}`;
@@ -120,7 +116,7 @@ function renderCalendarGrid() {
       eventsWrapper.append(more);
     }
 
-    cell.append(button, eventsWrapper);
+    cell.append(number, eventsWrapper);
     calendarGrid.append(cell);
   });
 }

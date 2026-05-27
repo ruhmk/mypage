@@ -277,8 +277,13 @@ h2 {
   min-height: 112px;
   padding: 10px;
   border-right: 1px solid var(--line);
+  border-top: 0;
+  border-left: 0;
   border-bottom: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.72);
+  color: inherit;
+  text-align: left;
+  appearance: none;
 }
 
 .day-cell:nth-child(7n) {
@@ -297,15 +302,6 @@ h2 {
 
 .day-cell.selected {
   background: #fff8e8;
-}
-
-.day-button {
-  width: 100%;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  text-align: left;
-  padding: 0;
 }
 
 .day-number {
@@ -567,6 +563,15 @@ h2 {
     flex-direction: column;
   }
 
+  .calendar-main {
+    overflow-x: auto;
+  }
+
+  .weekday-row,
+  .calendar-grid {
+    min-width: 760px;
+  }
+
   .top-actions {
     justify-content: space-between;
   }
@@ -576,7 +581,7 @@ h2 {
   }
 
   .day-cell {
-    min-height: 128px;
+    min-height: 112px;
     padding: 6px;
     gap: 4px;
   }
@@ -602,7 +607,7 @@ h2 {
   }
 
   .day-cell {
-    min-height: 112px;
+    min-height: 104px;
     gap: 4px;
   }
 
