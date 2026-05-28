@@ -12,42 +12,49 @@ const CONFIG = {
   PERSONAL_SOURCE_CALENDAR_ID: "respectinspire0805@gmail.com",
 
   // "title": 個人予定のタイトルを出す / "busy": すべて「予定あり」にする
-  PERSONAL_MODE: "title"
+  PERSONAL_MODE: "title",
+
+  // GitHub Pagesのリポジトリです。トークンはコードに書かず、スクリプトプロパティに入れます。
+  GITHUB_OWNER: "ruhmk",
+  GITHUB_REPO: "ruhmk.github.io",
+  GITHUB_BRANCH: "main",
+  GITHUB_EVENTS_PATH: "data/events.js"
 };
 
-const SCRIPT_VERSION = "direct-display-2026-05-27-11";
+const SCRIPT_VERSION = "direct-display-2026-05-28-1";
 
 function doGet(event) {
   event = event || { parameter: {} };
+  const action = String(event.parameter.action || "");
   const callback = sanitizeCallback_(event.parameter.callback);
   let payload;
 
   try {
-    if (event.parameter.action === "calendars") {
+    if (action === "calendars") {
       payload = {
         ok: true,
         scriptVersion: SCRIPT_VERSION,
         calendars: listVisibleCalendars_()
       };
-    } else {
+    } else if (action === "publish") {
+      const updatedAt = new Date().toISOString();
       const events = listDisplayEvents_();
-      payload = {
-        ok: true,
-        scriptVersion: SCRIPT_VERSION,
-        updatedAt: new Date().toISOString(),
-        diagnostics: {
-          workCount: events.filter((item) => item.source === "work").length,
-          personalCount: events.filter((item) => item.source === "personal").length
-        },
-        events
-      };
+      payload = buildDisplayPayload_(events, updatedAt);
+      payload.publish = publishEventsToGitHub_(events, updatedAt);
+    } else {
+      const updatedAt = new Date().toISOString();
+      const events = listDisplayEvents_();
+      payload = buildDisplayPayload_(events, updatedAt);
     }
   } catch (error) {
     console.error(error);
+    const prefix = action === "publish"
+      ? "GitHubへ反映できませんでした。"
+      : "Google予定を取得できませんでした。";
     payload = {
       ok: false,
       scriptVersion: SCRIPT_VERSION,
-      error: `Google予定を取得できませんでした。${getErrorMessage_(error)}`,
+      error: `${prefix}${getErrorMessage_(error)}`,
       events: []
     };
   }
@@ -69,6 +76,127 @@ function listDisplayEvents_() {
     ...readWorkEvents_(syncWindow.start, syncWindow.end),
     ...readPersonalEvents_(syncWindow.start, syncWindow.end)
   ].sort((left, right) => new Date(left.start) - new Date(right.start));
+}
+
+function buildDisplayPayload_(events, updatedAt) {
+  return {
+    ok: true,
+    scriptVersion: SCRIPT_VERSION,
+    updatedAt,
+    diagnostics: {
+      workCount: events.filter((item) => item.source === "work").length,
+      personalCount: events.filter((item) => item.source === "personal").length
+    },
+    events
+  };
+}
+
+function publishEventsToGitHub_(events, updatedAt) {
+  const config = getGitHubConfig_();
+  const content = buildEventsJs_(events, updatedAt);
+  const existing = getGitHubFile_(config);
+  const currentContent = existing && existing.content
+    ? Utilities.newBlob(Utilities.base64Decode(existing.content.replace(/\s/g, ""))).getDataAsString("UTF-8")
+    : "";
+
+  if (currentContent === content) {
+    return {
+      changed: false,
+      message: "GitHub上のevents.jsは最新です。",
+      path: config.path,
+      branch: config.branch,
+      htmlUrl: existing && existing.html_url ? existing.html_url : ""
+    };
+  }
+
+  const payload = {
+    message: `Update family calendar events ${Utilities.formatDate(new Date(), CONFIG.TIME_ZONE, "yyyy-MM-dd HH:mm")}`,
+    content: Utilities.base64Encode(Utilities.newBlob(content, "text/javascript", "events.js").getBytes()),
+    branch: config.branch
+  };
+
+  if (existing && existing.sha) {
+    payload.sha = existing.sha;
+  }
+
+  const url = `https://api.github.com/repos/${encodeURIComponent(config.owner)}/${encodeURIComponent(config.repo)}/contents/${encodeGitHubPath_(config.path)}`;
+  const response = fetchGitHub_(url, {
+    method: "put",
+    contentType: "application/json",
+    payload: JSON.stringify(payload)
+  }, config);
+  const result = parseGitHubResponse_(response);
+
+  return {
+    changed: true,
+    message: "GitHubへevents.jsを反映しました。",
+    path: config.path,
+    branch: config.branch,
+    commitSha: result.commit && result.commit.sha ? result.commit.sha : "",
+    htmlUrl: result.content && result.content.html_url ? result.content.html_url : ""
+  };
+}
+
+function buildEventsJs_(events, updatedAt) {
+  return `window.FAMILY_CALENDAR_UPDATED_AT = ${JSON.stringify(updatedAt)};\nwindow.FAMILY_CALENDAR_EVENTS = ${JSON.stringify(events, null, 2)};\n`;
+}
+
+function getGitHubConfig_() {
+  const properties = PropertiesService.getScriptProperties();
+  const token = String(properties.getProperty("GITHUB_TOKEN") || "").trim();
+  if (!token) {
+    throw new Error("Apps Scriptのスクリプトプロパティに GITHUB_TOKEN を設定してください。");
+  }
+
+  return {
+    token,
+    owner: String(properties.getProperty("GITHUB_OWNER") || CONFIG.GITHUB_OWNER).trim(),
+    repo: String(properties.getProperty("GITHUB_REPO") || CONFIG.GITHUB_REPO).trim(),
+    branch: String(properties.getProperty("GITHUB_BRANCH") || CONFIG.GITHUB_BRANCH).trim(),
+    path: String(properties.getProperty("GITHUB_EVENTS_PATH") || CONFIG.GITHUB_EVENTS_PATH).trim()
+  };
+}
+
+function getGitHubFile_(config) {
+  const url = `https://api.github.com/repos/${encodeURIComponent(config.owner)}/${encodeURIComponent(config.repo)}/contents/${encodeGitHubPath_(config.path)}?ref=${encodeURIComponent(config.branch)}`;
+  const response = fetchGitHub_(url, { method: "get" }, config);
+  if (response.getResponseCode() === 404) {
+    return null;
+  }
+  return parseGitHubResponse_(response);
+}
+
+function fetchGitHub_(url, options, config) {
+  const requestOptions = options || {};
+  requestOptions.muteHttpExceptions = true;
+  requestOptions.headers = Object.assign({}, requestOptions.headers || {}, {
+    Authorization: `Bearer ${config.token}`,
+    Accept: "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+    "User-Agent": "family-calendar-apps-script"
+  });
+  return UrlFetchApp.fetch(url, requestOptions);
+}
+
+function parseGitHubResponse_(response) {
+  const status = response.getResponseCode();
+  const text = response.getContentText();
+  let json = {};
+  try {
+    json = text ? JSON.parse(text) : {};
+  } catch (error) {
+    json = {};
+  }
+
+  if (status < 200 || status >= 300) {
+    throw new Error(`GitHub API ${status}: ${json.message || text || "詳細不明のエラーです。"}`);
+  }
+
+  return json;
+}
+
+function encodeGitHubPath_(path) {
+  return String(path || "").split("/").map(encodeURIComponent).join("/");
 }
 
 function readWorkEvents_(timeMin, timeMax) {

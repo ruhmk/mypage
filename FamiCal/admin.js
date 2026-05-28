@@ -2,6 +2,7 @@ const GOOGLE_SYNC_TIMEOUT_MS = 15000;
 const appConfig = window.FAMILY_CALENDAR_CONFIG || {};
 
 const fetchGoogleButton = document.querySelector("#fetchGoogleButton");
+const publishGitHubButton = document.querySelector("#publishGitHubButton");
 const downloadEventsButton = document.querySelector("#downloadEventsButton");
 const adminStatus = document.querySelector("#adminStatus");
 const adminPreview = document.querySelector("#adminPreview");
@@ -10,6 +11,10 @@ let latestEvents = [];
 
 fetchGoogleButton.addEventListener("click", () => {
   fetchGoogleEvents();
+});
+
+publishGitHubButton.addEventListener("click", () => {
+  publishGitHubEvents();
 });
 
 downloadEventsButton.addEventListener("click", () => {
@@ -29,12 +34,14 @@ function fetchGoogleEvents() {
   url.searchParams.set("t", String(Date.now()));
 
   fetchGoogleButton.disabled = true;
+  publishGitHubButton.disabled = true;
   downloadEventsButton.disabled = true;
   adminStatus.textContent = "Google予定を取得中...";
 
   const timeout = window.setTimeout(() => {
     cleanup(callbackName, script);
     fetchGoogleButton.disabled = false;
+    publishGitHubButton.disabled = false;
     adminStatus.textContent = "取得に失敗しました。";
   }, GOOGLE_SYNC_TIMEOUT_MS);
 
@@ -44,6 +51,7 @@ function fetchGoogleEvents() {
 
     if (payload && payload.error) {
       fetchGoogleButton.disabled = false;
+      publishGitHubButton.disabled = false;
       adminStatus.textContent = payload.error;
       return;
     }
@@ -59,6 +67,7 @@ function fetchGoogleEvents() {
       ? `仕事 ${payload.diagnostics.workCount}件 / 個人 ${payload.diagnostics.personalCount}件`
       : "";
     adminStatus.textContent = `取得しました。${latestEvents.length}件 ${diagnostics}`;
+    publishGitHubButton.disabled = false;
   };
 
   script.src = url.toString();
@@ -66,7 +75,77 @@ function fetchGoogleEvents() {
     window.clearTimeout(timeout);
     cleanup(callbackName, script);
     fetchGoogleButton.disabled = false;
+    publishGitHubButton.disabled = false;
     adminStatus.textContent = "取得に失敗しました。";
+  };
+  document.body.append(script);
+}
+
+function publishGitHubEvents() {
+  if (!appConfig.googleSyncUrl) {
+    window.alert("data/config.js に Apps Script のURLを入れてください。");
+    return;
+  }
+
+  const callbackName = `publishFamilyCalendarEvents${Date.now()}`;
+  const script = document.createElement("script");
+  const url = new URL(appConfig.googleSyncUrl);
+  url.searchParams.set("action", "publish");
+  url.searchParams.set("callback", callbackName);
+  url.searchParams.set("t", String(Date.now()));
+
+  fetchGoogleButton.disabled = true;
+  publishGitHubButton.disabled = true;
+  downloadEventsButton.disabled = true;
+  adminStatus.textContent = "Google予定を取得してGitHubへ反映中...";
+
+  const timeout = window.setTimeout(() => {
+    cleanup(callbackName, script);
+    fetchGoogleButton.disabled = false;
+    publishGitHubButton.disabled = false;
+    adminStatus.textContent = "GitHubへの反映に失敗しました。";
+  }, 30000);
+
+  window[callbackName] = (payload) => {
+    window.clearTimeout(timeout);
+    cleanup(callbackName, script);
+
+    fetchGoogleButton.disabled = false;
+    publishGitHubButton.disabled = false;
+
+    if (payload && payload.error) {
+      adminStatus.textContent = payload.error;
+      return;
+    }
+
+    latestEvents = Array.isArray(payload && payload.events)
+      ? payload.events.filter((item) => !isExcludedWorkEvent(item))
+      : [];
+    downloadEventsButton.disabled = latestEvents.length === 0;
+    renderPreview(latestEvents);
+
+    const publish = payload && payload.publish ? payload.publish : null;
+    if (!publish) {
+      adminStatus.textContent = "Apps ScriptがGitHub反映に未対応です。Code.gsを更新して再デプロイしてください。";
+      return;
+    }
+
+    const publishText = publish.changed === false
+      ? "GitHub上のevents.jsは最新でした。"
+      : "GitHubへ反映しました。";
+    const diagnostics = payload && payload.diagnostics
+      ? `仕事 ${payload.diagnostics.workCount}件 / 個人 ${payload.diagnostics.personalCount}件`
+      : "";
+    adminStatus.textContent = `${publishText} ${latestEvents.length}件 ${diagnostics}`;
+  };
+
+  script.src = url.toString();
+  script.onerror = () => {
+    window.clearTimeout(timeout);
+    cleanup(callbackName, script);
+    fetchGoogleButton.disabled = false;
+    publishGitHubButton.disabled = false;
+    adminStatus.textContent = "GitHubへの反映に失敗しました。";
   };
   document.body.append(script);
 }
@@ -100,7 +179,7 @@ function renderPreview(events) {
 }
 
 function downloadEventsJs(events) {
-  const body = `window.FAMILY_CALENDAR_EVENTS = ${JSON.stringify(events, null, 2)};\n`;
+  const body = `window.FAMILY_CALENDAR_UPDATED_AT = ${JSON.stringify(new Date().toISOString())};\nwindow.FAMILY_CALENDAR_EVENTS = ${JSON.stringify(events, null, 2)};\n`;
   const blob = new Blob([body], { type: "text/javascript;charset=utf-8" });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);

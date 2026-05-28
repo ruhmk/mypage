@@ -35,6 +35,22 @@ window.FAMILY_CALENDAR_CONFIG = {
 
 これで、`admin.html` から予定を取得できます。
 
+## GitHubへ自動反映する設定
+
+`admin.html` の `GitHubに反映` ボタンを使う場合は、Apps Scriptの「プロジェクトの設定」からスクリプトプロパティを追加します。
+
+```text
+GITHUB_TOKEN=GitHubのPersonal access token
+GITHUB_OWNER=ruhmk
+GITHUB_REPO=ruhmk.github.io
+GITHUB_BRANCH=main
+GITHUB_EVENTS_PATH=data/events.js
+```
+
+GitHubトークンには、対象リポジトリの `Contents` を読み書きできる権限を付けます。トークンは `data/config.js` やGitHub Pages側には置かず、Apps Scriptのスクリプトプロパティだけに保存します。
+
+`appsscript.json` に外部通信の権限を追加しているため、反映後はApps Scriptを保存して再デプロイし、必要に応じて再承認してください。
+
 ## 注意
 
 アクセスできるユーザーを「自分」にすると、Google予定を取得できるのは更新者だけです。
