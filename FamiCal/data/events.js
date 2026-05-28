@@ -1,4 +1,4 @@
-window.FAMILY_CALENDAR_UPDATED_AT = "2026-05-28T03:13:37.391Z";
+window.FAMILY_CALENDAR_UPDATED_AT = "2026-05-28T03:21:26.866Z";
 window.FAMILY_CALENDAR_EVENTS = [
   {
     "id": "work-YrOBqYnMyKN23j8872",
@@ -348,6 +348,15 @@ window.FAMILY_CALENDAR_EVENTS = [
     "start": "2026-05-29T08:00:00.000Z",
     "end": "2026-05-29T09:00:00.000Z",
     "source": "work",
+    "note": "",
+    "allDay": false
+  },
+  {
+    "id": "personal-tdLH8sN93Ca80ief1l",
+    "title": "候補、しんごランチ",
+    "start": "2026-05-31T04:00:00.000Z",
+    "end": "2026-05-31T05:00:00.000Z",
+    "source": "personal",
     "note": "",
     "allDay": false
   },
