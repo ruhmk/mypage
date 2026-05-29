@@ -10,6 +10,9 @@ const LEGACY_DEFAULT_VERTICAL_GAP = 28;
 const LEGACY_DEFAULT_HORIZONTAL_GAP = 260;
 const ANIMATION_MS = 80;
 const COLLISION_GAP = 18;
+const PNG_EXPORT_PADDING = 160;
+const PNG_EXPORT_MAX_SIDE = 16384;
+const PNG_EXPORT_MAX_PIXELS = 90000000;
 const BRANCH_COLORS = [
   "#2f80ed",
   "#e24a68",
@@ -1337,6 +1340,330 @@ async function saveMarkdownFile() {
   els.statusText.textContent = `${fileName} を保存しました。`;
 }
 
+async function savePngFile() {
+  const { canvas, width, height } = renderPngCanvas();
+  const fileName = `${safeFileName(state.mapName || state.tree.text)}.png`;
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+  if (!blob) throw new Error("PNGを作成できませんでした。");
+
+  if ("showSaveFilePicker" in window) {
+    const handle = await window.showSaveFilePicker({
+      suggestedName: fileName,
+      types: [{ description: "PNG", accept: { "image/png": [".png"] } }],
+    });
+    const writable = await handle.createWritable();
+    await writable.write(blob);
+    await writable.close();
+  } else {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  els.statusText.textContent = `${fileName} を保存しました。${width}×${height}px / 100%`;
+}
+
+function renderPngCanvas() {
+  layoutTree();
+  const bounds = getPngExportBounds();
+  if (!bounds) throw new Error("保存できるノードがありません。");
+  if (
+    bounds.width > PNG_EXPORT_MAX_SIDE ||
+    bounds.height > PNG_EXPORT_MAX_SIDE ||
+    bounds.width * bounds.height > PNG_EXPORT_MAX_PIXELS
+  ) {
+    throw new Error(`PNGが大きすぎます。現在 ${bounds.width}×${bounds.height}px です。`);
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = bounds.width;
+  canvas.height = bounds.height;
+  const ctx = canvas.getContext("2d");
+  const palette = getPngPalette();
+  drawPngBackground(ctx, bounds, palette);
+  drawPngEdges(ctx, bounds);
+  drawPngNodes(ctx, bounds, palette);
+  return { canvas, width: bounds.width, height: bounds.height };
+}
+
+function getPngExportBounds() {
+  const positions = [...state.positions.values()];
+  if (!positions.length) return null;
+  const minX = Math.floor(Math.min(...positions.map((pos) => pos.x - pos.width / 2)) - PNG_EXPORT_PADDING);
+  const maxX = Math.ceil(Math.max(...positions.map((pos) => pos.x + pos.width / 2)) + PNG_EXPORT_PADDING);
+  const minY = Math.floor(Math.min(...positions.map((pos) => pos.y - pos.height / 2)) - PNG_EXPORT_PADDING);
+  const maxY = Math.ceil(Math.max(...positions.map((pos) => pos.y + pos.height / 2)) + PNG_EXPORT_PADDING);
+  return {
+    minX,
+    minY,
+    width: Math.max(1, maxX - minX),
+    height: Math.max(1, maxY - minY),
+  };
+}
+
+function getPngPalette() {
+  const style = getComputedStyle(document.documentElement);
+  return {
+    canvas: readCssColor(style, "--canvas", "#101820"),
+    line: readCssColor(style, "--line", "#2b3948"),
+    surface: readCssColor(style, "--surface", "#171f29"),
+    nodeBg: readCssColor(style, "--node-bg", "#182331"),
+    ink: readCssColor(style, "--ink", "#edf2f7"),
+    muted: readCssColor(style, "--muted", "#a7b3c4"),
+    danger: readCssColor(style, "--danger", "#ff8a80"),
+    shadow: document.documentElement.dataset.theme === "dark" ? "rgba(0,0,0,0.28)" : "rgba(20,32,48,0.12)",
+  };
+}
+
+function readCssColor(style, name, fallback) {
+  return style.getPropertyValue(name).trim() || fallback;
+}
+
+function drawPngBackground(ctx, bounds, palette) {
+  ctx.fillStyle = palette.canvas;
+  ctx.fillRect(0, 0, bounds.width, bounds.height);
+  ctx.strokeStyle = palette.line;
+  ctx.lineWidth = 1;
+  ctx.globalAlpha = 0.9;
+
+  const grid = 44;
+  const startX = Math.floor(bounds.minX / grid) * grid;
+  const startY = Math.floor(bounds.minY / grid) * grid;
+  for (let x = startX; x <= bounds.minX + bounds.width; x += grid) {
+    const localX = Math.round(x - bounds.minX) - 0.5;
+    ctx.beginPath();
+    ctx.moveTo(localX, 0);
+    ctx.lineTo(localX, bounds.height);
+    ctx.stroke();
+  }
+  for (let y = startY; y <= bounds.minY + bounds.height; y += grid) {
+    const localY = Math.round(y - bounds.minY) - 0.5;
+    ctx.beginPath();
+    ctx.moveTo(0, localY);
+    ctx.lineTo(bounds.width, localY);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawPngEdges(ctx, bounds) {
+  const matches = getSearchMatches();
+  const hasSearch = state.search.trim().length > 0;
+  state.edgeList.forEach((edge) => {
+    const from = state.positions.get(edge.from);
+    const to = state.positions.get(edge.to);
+    if (!from || !to) return;
+    const fromSide = to.x >= from.x ? from.width / 2 : -from.width / 2;
+    const toSide = to.x >= from.x ? -to.width / 2 : to.width / 2;
+    const startX = from.x + fromSide - bounds.minX;
+    const endX = to.x + toSide - bounds.minX;
+    const startY = from.y - bounds.minY;
+    const endY = to.y - bounds.minY;
+    const curve = Math.max(82, Math.abs(endX - startX) * 0.42);
+    const direction = to.x >= from.x ? 1 : -1;
+    ctx.save();
+    ctx.globalAlpha = edgeClass(edge, matches, hasSearch).includes("is-muted") ? 0.18 : 0.72;
+    ctx.strokeStyle = edge.color;
+    ctx.lineWidth = 2.4;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(startX, startY);
+    ctx.bezierCurveTo(startX + curve * direction, startY, endX - curve * direction, endY, endX, endY);
+    ctx.stroke();
+    ctx.restore();
+  });
+}
+
+function drawPngNodes(ctx, bounds, palette) {
+  const matches = getSearchMatches();
+  const hasSearch = state.search.trim().length > 0;
+  walk(state.tree, (node) => {
+    const pos = state.positions.get(node.id);
+    if (!pos) return;
+    const className = nodeClass(node, pos, matches, hasSearch);
+    const isMuted = className.includes("is-muted");
+    const isMatch = className.includes("is-match");
+    ctx.save();
+    ctx.globalAlpha = isMuted ? 0.18 : 1;
+    drawPngNode(ctx, node, pos, bounds, palette, isMatch);
+    ctx.restore();
+  });
+}
+
+function drawPngNode(ctx, node, pos, bounds, palette, isMatch) {
+  const x = pos.x - bounds.minX - pos.width / 2;
+  const y = pos.y - bounds.minY - pos.height / 2;
+  const branch = pos.color;
+  const fill = mixColors(palette.nodeBg, branch, pos.depth === 0 ? 0.16 : 0.08);
+  const border = mixColors(branch, palette.line, pos.depth === 0 ? 0.2 : 0.38);
+
+  ctx.shadowColor = palette.shadow;
+  ctx.shadowBlur = 24;
+  ctx.shadowOffsetY = 10;
+  roundedRectPath(ctx, x, y, pos.width, pos.height, 8);
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.shadowColor = "transparent";
+
+  ctx.strokeStyle = border;
+  ctx.lineWidth = 1;
+  roundedRectPath(ctx, x, y, pos.width, pos.height, 8);
+  ctx.stroke();
+
+  if (pos.depth > 0) {
+    roundedLeftRectPath(ctx, x, y, 6, pos.height, 8);
+    ctx.fillStyle = branch;
+    ctx.fill();
+  }
+
+  if (isMatch) {
+    roundedRectPath(ctx, x - 4, y - 4, pos.width + 8, pos.height + 8, 10);
+    ctx.strokeStyle = "rgba(255,209,102,0.72)";
+    ctx.lineWidth = 4;
+    ctx.stroke();
+  }
+
+  drawPngNodeText(ctx, node.text, x, y, pos, palette);
+  drawPngNodeActions(ctx, node, x, y, pos, palette);
+}
+
+function drawPngNodeText(ctx, text, x, y, pos, palette) {
+  const isRoot = pos.depth === 0;
+  const fontSize = isRoot ? 17 : 14;
+  const lineHeight = isRoot ? 22 : 19;
+  const textX = x + 14;
+  const textWidth = Math.max(64, pos.width - 120);
+  const lines = wrapCanvasText(ctx, text, textWidth, fontSize, isRoot);
+  const maxLines = Math.max(1, Math.floor((pos.height - 20) / lineHeight));
+  const visibleLines = lines.slice(0, maxLines);
+  if (lines.length > maxLines) {
+    visibleLines[visibleLines.length - 1] = trimCanvasText(ctx, `${visibleLines[visibleLines.length - 1]}...`, textWidth);
+  }
+  const textBlockHeight = visibleLines.length * lineHeight;
+  let textY = y + (pos.height - textBlockHeight) / 2 + fontSize;
+
+  ctx.fillStyle = palette.ink;
+  ctx.font = `${isRoot ? "700 " : ""}${fontSize}px "Segoe UI", "Yu Gothic UI", "Hiragino Sans", sans-serif`;
+  ctx.textBaseline = "alphabetic";
+  visibleLines.forEach((line) => {
+    ctx.fillText(line, textX, textY);
+    textY += lineHeight;
+  });
+}
+
+function wrapCanvasText(ctx, text, maxWidth, fontSize, isRoot) {
+  ctx.font = `${isRoot ? "700 " : ""}${fontSize}px "Segoe UI", "Yu Gothic UI", "Hiragino Sans", sans-serif`;
+  const chars = [...String(text || "無題")];
+  const lines = [];
+  let current = "";
+  chars.forEach((char) => {
+    const next = `${current}${char}`;
+    if (current && ctx.measureText(next).width > maxWidth) {
+      lines.push(current);
+      current = char.trimStart();
+    } else {
+      current = next;
+    }
+  });
+  if (current) lines.push(current);
+  return lines.length ? lines : ["無題"];
+}
+
+function trimCanvasText(ctx, text, maxWidth) {
+  const ellipsis = "...";
+  if (ctx.measureText(ellipsis).width > maxWidth) return "";
+  let value = text;
+  while (value.length > ellipsis.length && ctx.measureText(value).width > maxWidth) {
+    value = `${value.slice(0, -(ellipsis.length + 1))}${ellipsis}`;
+  }
+  return value;
+}
+
+function drawPngNodeActions(ctx, node, x, y, pos, palette) {
+  const startX = x + pos.width - 88;
+  const buttonY = y + pos.height / 2 - 13;
+  const labels = ["+", "×", node.children.length ? (node.collapsed ? "▸" : "▾") : ""];
+  labels.forEach((label, index) => {
+    if (!label) return;
+    const buttonX = startX + index * 31;
+    const disabled = node.id === state.tree.id && index === 1;
+    ctx.save();
+    ctx.globalAlpha *= disabled ? 0.32 : 0.72;
+    roundedRectPath(ctx, buttonX, buttonY, 26, 26, 7);
+    ctx.fillStyle = mixColors(pos.color, palette.surface, 0.78);
+    ctx.fill();
+    ctx.strokeStyle = mixColors(pos.color, palette.line, 0.48);
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = index === 1 ? palette.danger : palette.ink;
+    ctx.font = '700 14px "Segoe UI", "Yu Gothic UI", sans-serif';
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(label, buttonX + 13, buttonY + 13);
+    ctx.restore();
+  });
+}
+
+function roundedRectPath(ctx, x, y, width, height, radius) {
+  const r = Math.min(radius, width / 2, height / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + width - r, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+  ctx.lineTo(x + width, y + height - r);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+  ctx.lineTo(x + r, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function roundedLeftRectPath(ctx, x, y, width, height, radius) {
+  const r = Math.min(radius, width, height / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + width, y);
+  ctx.lineTo(x + width, y + height);
+  ctx.lineTo(x + r, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function mixColors(first, second, secondWeight) {
+  const a = parseCssColor(first);
+  const b = parseCssColor(second);
+  const w2 = clamp(secondWeight, 0, 1);
+  const w1 = 1 - w2;
+  return `rgba(${Math.round(a.r * w1 + b.r * w2)}, ${Math.round(a.g * w1 + b.g * w2)}, ${Math.round(
+    a.b * w1 + b.b * w2,
+  )}, ${(a.a * w1 + b.a * w2).toFixed(3)})`;
+}
+
+function parseCssColor(color) {
+  const value = String(color || "").trim();
+  const hex = value.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+  if (hex) {
+    const raw = hex[1].length === 3 ? [...hex[1]].map((char) => `${char}${char}`).join("") : hex[1];
+    return {
+      r: parseInt(raw.slice(0, 2), 16),
+      g: parseInt(raw.slice(2, 4), 16),
+      b: parseInt(raw.slice(4, 6), 16),
+      a: 1,
+    };
+  }
+  const rgb = value.match(/^rgba?\(([^)]+)\)$/i);
+  if (rgb) {
+    const parts = rgb[1].split(",").map((part) => Number(part.trim()));
+    return { r: parts[0] || 0, g: parts[1] || 0, b: parts[2] || 0, a: Number.isFinite(parts[3]) ? parts[3] : 1 };
+  }
+  return { r: 0, g: 0, b: 0, a: 1 };
+}
+
 function wireControls() {
   document.getElementById("sampleButton").addEventListener("click", () => {
     els.outlineInput.value = toMarkdown(sampleTree).join("\n");
@@ -1438,6 +1765,15 @@ function wireControls() {
 
   document.getElementById("exportMarkdownButton").addEventListener("click", () => {
     els.exportOutput.value = toMarkdown(state.tree, { includeMeta: true }).join("\n");
+  });
+
+  document.getElementById("savePngButton").addEventListener("click", async () => {
+    try {
+      await savePngFile();
+    } catch (error) {
+      els.statusText.textContent =
+        error.name === "AbortError" ? "PNG保存を中止しました。" : `PNG保存に失敗しました: ${error.message}`;
+    }
   });
 
   document.getElementById("summaryButton").addEventListener("click", () => {
