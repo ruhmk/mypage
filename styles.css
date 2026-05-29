@@ -209,6 +209,19 @@ h2 {
   font-size: 13px;
 }
 
+.field-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.field-value {
+  color: var(--ink);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
 .field input[type="search"] {
   min-height: 36px;
   padding: 0 10px;

@@ -5,6 +5,7 @@ const NODE_WIDTH = 238;
 const ROOT_WIDTH = 250;
 const DEFAULT_VERTICAL_GAP = 26;
 const DEFAULT_HORIZONTAL_GAP = 452;
+const DEFAULT_SNAP_STEP = 32;
 const LEGACY_DEFAULT_VERTICAL_GAP = 28;
 const LEGACY_DEFAULT_HORIZONTAL_GAP = 260;
 const ANIMATION_MS = 80;
@@ -72,6 +73,7 @@ const state = {
   maxDepth: initialSettings.maxDepth,
   horizontalSpacing: initialSettings.horizontalSpacing,
   verticalSpacing: initialSettings.verticalSpacing,
+  snapStep: initialSettings.snapStep,
   search: "",
   flashId: null,
   removingId: null,
@@ -99,6 +101,8 @@ const els = {
   depthSlider: document.getElementById("depthSlider"),
   horizontalSpacingSlider: document.getElementById("horizontalSpacingSlider"),
   verticalSpacingSlider: document.getElementById("verticalSpacingSlider"),
+  snapStepSlider: document.getElementById("snapStepSlider"),
+  snapStepValue: document.getElementById("snapStepValue"),
   mapSelect: document.getElementById("mapSelect"),
   markdownFileInput: document.getElementById("markdownFileInput"),
   nodeDetailTitle: document.getElementById("nodeDetailTitle"),
@@ -159,6 +163,7 @@ function defaultSettings() {
     maxDepth: 8,
     horizontalSpacing: DEFAULT_HORIZONTAL_GAP,
     verticalSpacing: DEFAULT_VERTICAL_GAP,
+    snapStep: DEFAULT_SNAP_STEP,
   };
 }
 
@@ -166,6 +171,7 @@ function normalizeSettings(settings = {}) {
   settings = settings || {};
   const horizontalSpacing = Number(settings.horizontalSpacing);
   const verticalSpacing = Number(settings.verticalSpacing);
+  const snapStep = Number(settings.snapStep);
   const shouldMigrateLegacySpacing =
     horizontalSpacing === LEGACY_DEFAULT_HORIZONTAL_GAP && verticalSpacing === LEGACY_DEFAULT_VERTICAL_GAP;
   return {
@@ -174,6 +180,7 @@ function normalizeSettings(settings = {}) {
       shouldMigrateLegacySpacing || !Number.isFinite(horizontalSpacing) ? DEFAULT_HORIZONTAL_GAP : horizontalSpacing,
     verticalSpacing:
       shouldMigrateLegacySpacing || !Number.isFinite(verticalSpacing) ? DEFAULT_VERTICAL_GAP : verticalSpacing,
+    snapStep: Number.isFinite(snapStep) ? clamp(Math.round(snapStep), 8, 96) : DEFAULT_SNAP_STEP,
   };
 }
 
@@ -182,6 +189,7 @@ function currentSettings() {
     maxDepth: state.maxDepth,
     horizontalSpacing: state.horizontalSpacing,
     verticalSpacing: state.verticalSpacing,
+    snapStep: state.snapStep,
   };
 }
 
@@ -231,6 +239,7 @@ function captureSnapshot() {
     maxDepth: state.maxDepth,
     horizontalSpacing: state.horizontalSpacing,
     verticalSpacing: state.verticalSpacing,
+    snapStep: state.snapStep,
     search: state.search,
   };
 }
@@ -249,9 +258,11 @@ function restoreSnapshot(snapshot) {
   state.mapName = snapshot.mapName;
   state.tree = normalizeNode(snapshot.tree);
   state.selectedId = snapshot.selectedId || state.tree.id;
-  state.maxDepth = snapshot.maxDepth || 8;
-  state.horizontalSpacing = snapshot.horizontalSpacing || DEFAULT_HORIZONTAL_GAP;
-  state.verticalSpacing = snapshot.verticalSpacing || DEFAULT_VERTICAL_GAP;
+  const settings = normalizeSettings(snapshot);
+  state.maxDepth = settings.maxDepth;
+  state.horizontalSpacing = settings.horizontalSpacing;
+  state.verticalSpacing = settings.verticalSpacing;
+  state.snapStep = settings.snapStep;
   state.search = snapshot.search || "";
   state.flashId = null;
   state.removingId = null;
@@ -259,6 +270,8 @@ function restoreSnapshot(snapshot) {
   els.depthSlider.value = state.maxDepth;
   els.horizontalSpacingSlider.value = state.horizontalSpacing;
   els.verticalSpacingSlider.value = state.verticalSpacing;
+  els.snapStepSlider.value = state.snapStep;
+  updateSnapStepValue();
   els.outlineInput.value = toMarkdown(state.tree).join("\n");
   els.exportOutput.value = toMarkdown(state.tree).join("\n");
   render();
@@ -670,6 +683,7 @@ function startNodeDrag(event, id) {
     started: false,
     snapshot: captureSnapshot(),
     originalOffsets: collectSubtreeOffsets(found.node),
+    startPosition: clonePosition(state.positions.get(id)),
   };
   window.addEventListener("pointermove", handleNodeDragMove);
   window.addEventListener("pointerup", finishNodeDrag, { once: true });
@@ -692,7 +706,13 @@ function handleNodeDragMove(event) {
 
   const dx = screenDx / state.zoom;
   const dy = screenDy / state.zoom;
-  applySubtreeDragOffsets(activeNodeDrag.id, activeNodeDrag.originalOffsets, dx, dy);
+  applySubtreeDragOffsets(
+    activeNodeDrag.id,
+    activeNodeDrag.originalOffsets,
+    dx,
+    dy,
+    activeNodeDrag.startPosition,
+  );
   render();
 }
 
@@ -712,14 +732,34 @@ function collectSubtreeOffsets(node, offsets = new Map()) {
   return offsets;
 }
 
-function applySubtreeDragOffsets(id, originalOffsets, dx, dy) {
+function clonePosition(pos) {
+  if (!pos) return null;
+  return {
+    x: pos.x,
+    y: pos.y,
+    baseX: pos.baseX,
+    baseY: pos.baseY,
+  };
+}
+
+function applySubtreeDragOffsets(id, originalOffsets, dx, dy, startPosition = null) {
   const found = findNode(id);
   if (!found) return;
+  const dragOriginal = originalOffsets.get(id) || { x: 0, y: 0 };
+  const baseX = Number.isFinite(startPosition?.baseX) ? startPosition.baseX : (startPosition?.x || 0) - dragOriginal.x;
+  const baseY = Number.isFinite(startPosition?.baseY) ? startPosition.baseY : (startPosition?.y || 0) - dragOriginal.y;
+  const startX = Number.isFinite(startPosition?.x) ? startPosition.x : baseX + dragOriginal.x;
+  const startY = Number.isFinite(startPosition?.y) ? startPosition.y : baseY + dragOriginal.y;
+  const targetX = snapValue(startX + dx);
+  const targetY = snapValue(startY + dy);
+  const appliedDx = targetX - baseX - dragOriginal.x;
+  const appliedDy = targetY - baseY - dragOriginal.y;
+
   walkSubtree(found.node, (node) => {
     const original = originalOffsets.get(node.id) || { x: 0, y: 0 };
     node.offset = {
-      x: Math.round(original.x + dx),
-      y: Math.round(original.y + dy),
+      x: Math.round(original.x + appliedDx),
+      y: Math.round(original.y + appliedDy),
     };
   });
 }
@@ -784,42 +824,39 @@ function fitToView() {
 }
 
 function optimizeLayout() {
-  pushHistory();
-  const rect = els.viewport.getBoundingClientRect();
-  const stats = getLayoutStats(state.tree);
-  const usableHeight = Math.max(420, rect.height * 0.78);
-  const leafSlots = Math.max(1, stats.leafCount - 1);
-  const nodeHeight = 76;
-
-  const vertical = clamp(Math.round((usableHeight - stats.leafCount * nodeHeight) / leafSlots), 18, 72);
-
-  state.verticalSpacing = vertical;
-  els.verticalSpacingSlider.value = vertical;
+  const snapshot = captureSnapshot();
+  const resetCount = resetManualOffsets();
+  if (resetCount) pushHistory(snapshot);
   render();
   requestAnimationFrame(fitToView);
-  els.statusText.textContent = `レイアウトを最適化しました。縦 ${vertical} / 横と表示の細かさは維持`;
+  els.statusText.textContent = resetCount
+    ? `自動整列しました。${resetCount}件の手動位置を初期化しました。`
+    : "すでに自動レイアウトです。";
 }
 
-function getLayoutStats(node, depth = 0) {
-  const children = getVisibleChildren(node, depth);
-  if (!children.length) {
-    return { maxDepth: depth, leafCount: 1, visibleCount: 1 };
-  }
-  return children.reduce(
-    (stats, child) => {
-      const childStats = getLayoutStats(child, depth + 1);
-      return {
-        maxDepth: Math.max(stats.maxDepth, childStats.maxDepth),
-        leafCount: stats.leafCount + childStats.leafCount,
-        visibleCount: stats.visibleCount + childStats.visibleCount,
-      };
-    },
-    { maxDepth: depth, leafCount: 0, visibleCount: 1 },
-  );
+function resetManualOffsets() {
+  let resetCount = 0;
+  walk(state.tree, (node) => {
+    const offset = normalizeOffset(node.offset);
+    if (!offset.x && !offset.y) return;
+    node.offset = { x: 0, y: 0 };
+    resetCount += 1;
+  });
+  return resetCount;
 }
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+function snapValue(value, step = state.snapStep) {
+  const snapStep = clamp(Math.round(Number(step) || DEFAULT_SNAP_STEP), 8, 96);
+  return Math.round(value / snapStep) * snapStep;
+}
+
+function updateSnapStepValue() {
+  if (!els.snapStepValue) return;
+  els.snapStepValue.textContent = `${state.snapStep}px`;
 }
 
 function addChild() {
@@ -1225,6 +1262,7 @@ function setActiveMap(map, shouldFit = true, resetHistory = true) {
   state.maxDepth = settings.maxDepth;
   state.horizontalSpacing = settings.horizontalSpacing;
   state.verticalSpacing = settings.verticalSpacing;
+  state.snapStep = settings.snapStep;
   state.selectedId = state.tree.id;
   state.flashId = null;
   state.removingId = null;
@@ -1237,6 +1275,8 @@ function setActiveMap(map, shouldFit = true, resetHistory = true) {
   els.depthSlider.value = state.maxDepth;
   els.horizontalSpacingSlider.value = state.horizontalSpacing;
   els.verticalSpacingSlider.value = state.verticalSpacing;
+  els.snapStepSlider.value = state.snapStep;
+  updateSnapStepValue();
   els.outlineInput.value = toMarkdown(state.tree).join("\n");
   render();
   if (shouldFit) requestAnimationFrame(fitToView);
@@ -1311,9 +1351,12 @@ function wireControls() {
       state.maxDepth = settings.maxDepth;
       state.horizontalSpacing = settings.horizontalSpacing;
       state.verticalSpacing = settings.verticalSpacing;
+      state.snapStep = settings.snapStep;
       els.depthSlider.value = state.maxDepth;
       els.horizontalSpacingSlider.value = state.horizontalSpacing;
       els.verticalSpacingSlider.value = state.verticalSpacing;
+      els.snapStepSlider.value = state.snapStep;
+      updateSnapStepValue();
       state.selectedId = state.tree.id;
       state.mapName = state.mapName || state.tree.text;
       render();
@@ -1388,15 +1431,6 @@ function wireControls() {
 
   document.getElementById("optimizeLayoutButton").addEventListener("click", optimizeLayout);
   document.getElementById("fitButton").addEventListener("click", fitToView);
-  document.getElementById("resetButton").addEventListener("click", () => {
-    pushHistory();
-    state.tree = clone(sampleTree);
-    state.mapName = "サンプル";
-    state.selectedId = state.tree.id;
-    els.outlineInput.value = toMarkdown(state.tree).join("\n");
-    render();
-    fitToView();
-  });
 
   document.getElementById("exportJsonButton").addEventListener("click", () => {
     els.exportOutput.value = JSON.stringify({ tree: state.tree, settings: currentSettings() }, null, 2);
@@ -1429,6 +1463,12 @@ function wireControls() {
   els.verticalSpacingSlider.addEventListener("input", () => {
     state.verticalSpacing = Number(els.verticalSpacingSlider.value);
     render();
+  });
+
+  els.snapStepSlider.addEventListener("input", () => {
+    state.snapStep = Number(els.snapStepSlider.value);
+    updateSnapStepValue();
+    saveTree();
   });
 
   document.getElementById("zoomOutButton").addEventListener("click", () => setZoom(state.zoom * 0.86));
@@ -1528,6 +1568,8 @@ function init() {
   els.depthSlider.value = state.maxDepth;
   els.horizontalSpacingSlider.value = state.horizontalSpacing;
   els.verticalSpacingSlider.value = state.verticalSpacing;
+  els.snapStepSlider.value = state.snapStep;
+  updateSnapStepValue();
   updateMapSelect();
   wireControls();
   wireKeyboardShortcuts();
