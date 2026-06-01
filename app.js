@@ -90,6 +90,7 @@ const state = {
 
 let removeTimer = null;
 let activeNodeDrag = null;
+let viewBeforeMapMaximize = null;
 
 const els = {
   viewport: document.getElementById("canvasViewport"),
@@ -1814,6 +1815,19 @@ function wireControls() {
     centerRoot();
   });
 
+  document.getElementById("maximizeMapButton").addEventListener("click", () => {
+    setMapMaximized(true);
+  });
+
+  const restoreMapButton = document.getElementById("restoreMapButton");
+  restoreMapButton.addEventListener("pointerdown", (event) => {
+    event.stopPropagation();
+  });
+  restoreMapButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    setMapMaximized(false);
+  });
+
   document.getElementById("themeToggle").addEventListener("click", () => {
     const root = document.documentElement;
     root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
@@ -1822,6 +1836,12 @@ function wireControls() {
 
 function wireKeyboardShortcuts() {
   document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && document.body.classList.contains("map-maximized")) {
+      event.preventDefault();
+      setMapMaximized(false);
+      return;
+    }
+
     const target = event.target;
     const tagName = target?.tagName;
     const isTextControl =
@@ -1838,6 +1858,41 @@ function wireKeyboardShortcuts() {
       redo();
     } else {
       undo();
+    }
+  });
+}
+
+function setMapMaximized(isMaximized) {
+  const alreadyMaximized = document.body.classList.contains("map-maximized");
+  if (isMaximized === alreadyMaximized) return;
+
+  const maximizeButton = document.getElementById("maximizeMapButton");
+  const restoreButton = document.getElementById("restoreMapButton");
+
+  if (isMaximized) {
+    viewBeforeMapMaximize = {
+      zoom: state.zoom,
+      pan: { ...state.pan },
+    };
+  }
+
+  document.body.classList.toggle("map-maximized", isMaximized);
+  maximizeButton.hidden = isMaximized;
+  restoreButton.hidden = !isMaximized;
+
+  requestAnimationFrame(() => {
+    if (isMaximized) {
+      fitToView();
+      return;
+    }
+
+    if (viewBeforeMapMaximize) {
+      state.zoom = viewBeforeMapMaximize.zoom;
+      state.pan = { ...viewBeforeMapMaximize.pan };
+      viewBeforeMapMaximize = null;
+      updateTransform();
+    } else {
+      fitToView();
     }
   });
 }

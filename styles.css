@@ -308,6 +308,47 @@ h2 {
   cursor: grabbing;
 }
 
+.restore-map-button {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 8;
+  min-width: 74px;
+  box-shadow: var(--shadow);
+}
+
+.restore-map-button[hidden] {
+  display: none;
+}
+
+body.map-maximized {
+  overflow: hidden;
+}
+
+body.map-maximized .app-shell {
+  display: block;
+  height: 100vh;
+}
+
+body.map-maximized .sidebar,
+body.map-maximized .workspace-bar {
+  display: none;
+}
+
+body.map-maximized .workspace {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  height: 100vh;
+}
+
+body.map-maximized .canvas-viewport {
+  width: 100vw;
+  height: 100vh;
+}
+
 .canvas-world {
   position: absolute;
   left: 0;
