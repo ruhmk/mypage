@@ -1,4 +1,4 @@
-window.FAMILY_CALENDAR_UPDATED_AT = "2026-06-01T09:28:48.288Z";
+window.FAMILY_CALENDAR_UPDATED_AT = "2026-06-01T09:29:42.973Z";
 window.FAMILY_CALENDAR_EVENTS = [
   {
     "id": "work-BSRKNZnwtGYi6dLaFI",
@@ -379,6 +379,15 @@ window.FAMILY_CALENDAR_EVENTS = [
     "allDay": false
   },
   {
+    "id": "personal-fX4ftuauZTUrj1QNsZ",
+    "title": "リモート",
+    "start": "2026-06-03T01:00:00.000Z",
+    "end": "2026-06-03T02:00:00.000Z",
+    "source": "personal",
+    "note": "",
+    "allDay": false
+  },
+  {
     "id": "work-c9cpDAdTPfIt_z3YAx",
     "title": "仕事",
     "start": "2026-06-03T01:20:00.000Z",
@@ -447,6 +456,15 @@ window.FAMILY_CALENDAR_EVENTS = [
     "start": "2026-06-04T06:00:00.000Z",
     "end": "2026-06-04T06:30:00.000Z",
     "source": "work",
+    "note": "",
+    "allDay": false
+  },
+  {
+    "id": "personal-n7sr5dI7tjrGbSIaXE",
+    "title": "リモート",
+    "start": "2026-06-05T01:00:00.000Z",
+    "end": "2026-06-05T02:00:00.000Z",
+    "source": "personal",
     "note": "",
     "allDay": false
   },
