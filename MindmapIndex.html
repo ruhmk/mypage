@@ -105,6 +105,7 @@
             <strong id="selectionLabel">未選択</strong>
           </div>
           <div class="zoom-controls" aria-label="Zoom controls">
+            <button id="maximizeMapButton" type="button" title="マップを最大化">最大化</button>
             <button id="zoomOutButton" type="button" title="縮小">−</button>
             <button id="zoomResetButton" type="button" title="100%">100%</button>
             <button id="zoomInButton" type="button" title="拡大">＋</button>
@@ -112,6 +113,7 @@
         </div>
 
         <div id="canvasViewport" class="canvas-viewport">
+          <button id="restoreMapButton" class="restore-map-button" type="button" hidden>戻す</button>
           <div id="canvasWorld" class="canvas-world">
             <svg id="edgeLayer" class="edge-layer" aria-hidden="true"></svg>
             <div id="nodeLayer" class="node-layer"></div>
