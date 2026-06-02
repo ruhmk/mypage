@@ -171,7 +171,10 @@
         <section class="queue-panel" aria-label="AIによる仕分け">
           <div class="section-title">
             <span>AI SORT</span>
-            <button class="text-button" id="resurfaceButton" type="button">再提示</button>
+            <div class="section-actions">
+              <button class="text-button" id="reportButton" type="button" aria-pressed="false">レポート</button>
+              <button class="text-button" id="resurfaceButton" type="button">再提示</button>
+            </div>
           </div>
           <div class="queue-filter" id="queueFilter" aria-label="AI SORTの表示条件">
             <button type="button" data-filter="all">全件</button>
@@ -181,6 +184,19 @@
             <button type="button" data-filter="unscheduled">未定保留</button>
           </div>
           <p class="queue-filter-note" id="queueFilterNote">全件を表示</p>
+          <section class="completion-report" id="completionReport" aria-label="完了レポート" hidden>
+            <div class="report-grid">
+              <article>
+                <span>過去1週間</span>
+                <strong id="reportWeekCount">0</strong>
+              </article>
+              <article>
+                <span>過去1か月</span>
+                <strong id="reportMonthCount">0</strong>
+              </article>
+            </div>
+            <p id="reportNote">完了したカードはまだありません。</p>
+          </section>
           <div class="queue-list" id="queueList"></div>
         </section>
 
@@ -208,12 +224,14 @@
                 <option value="pending">保留</option>
                 <option value="delegate">委任</option>
                 <option value="idea">アイデア</option>
+                <option value="done">完了</option>
               </select>
               <div class="status-switch" id="inspectorStatusSwitch" aria-label="状態を切り替え">
                 <button type="button" data-status="now">今やる</button>
                 <button type="button" data-status="pending">保留</button>
                 <button type="button" data-status="delegate">委任</button>
                 <button type="button" data-status="idea">アイデア</button>
+                <button type="button" data-status="done">完了</button>
               </div>
             </label>
 
@@ -251,11 +269,13 @@
                 <option value="home">家庭</option>
                 <option value="work">仕事</option>
                 <option value="side">副業</option>
+                <option value="done">完了</option>
               </select>
               <div class="category-switch" id="inspectorCategorySwitch" aria-label="カテゴリを切り替え">
                 <button type="button" data-category="home">家庭</button>
                 <button type="button" data-category="work">仕事</button>
                 <button type="button" data-category="side">副業</button>
+                <button type="button" data-category="done">完了</button>
               </div>
             </label>
 

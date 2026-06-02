@@ -481,6 +481,12 @@ h1 {
   gap: 12px;
 }
 
+.section-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
 .section-title span {
   color: var(--muted);
   font-size: 0.8rem;
@@ -859,6 +865,11 @@ h1 {
   font-weight: 800;
 }
 
+.text-button.is-active {
+  color: var(--text);
+  background: rgba(182, 110, 115, 0.72);
+}
+
 .queue-filter {
   display: flex;
   flex-wrap: wrap;
@@ -888,6 +899,61 @@ h1 {
   margin-top: 8px;
   color: var(--muted-2);
   font-size: 0.76rem;
+}
+
+.completion-report {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid rgba(159, 208, 191, 0.2);
+  border-radius: 8px;
+  background:
+    linear-gradient(145deg, rgba(159, 208, 191, 0.1), rgba(255, 255, 255, 0.025)),
+    rgba(255, 255, 255, 0.04);
+}
+
+.completion-report[hidden] {
+  display: none;
+}
+
+.report-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.report-grid article {
+  min-height: 76px;
+  padding: 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.report-grid span,
+.report-grid strong {
+  display: block;
+}
+
+.report-grid span {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.report-grid strong {
+  margin-top: 12px;
+  color: var(--accent-strong);
+  font-size: 2rem;
+  line-height: 1;
+  font-weight: 860;
+}
+
+.completion-report p {
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.55;
 }
 
 .queue-list {
@@ -1016,6 +1082,10 @@ h1 {
   opacity: 0.46;
 }
 
+.queue-item.is-done {
+  opacity: 0.72;
+}
+
 .queue-item:hover,
 .queue-item:focus-visible,
 .queue-item.is-selected {
@@ -1113,6 +1183,36 @@ h1 {
 
 .status-chip.idea {
   background: var(--bluegreen);
+}
+
+.status-chip.done {
+  color: var(--text);
+  background: rgba(138, 150, 147, 0.6);
+}
+
+.complete-button {
+  min-width: 72px;
+  min-height: 30px;
+  border: 1px solid rgba(159, 208, 191, 0.34);
+  border-radius: 8px;
+  color: #07100e;
+  background: var(--accent-strong);
+  font-size: 0.72rem;
+  font-weight: 850;
+}
+
+.complete-button:hover,
+.complete-button:focus-visible {
+  outline: 0;
+  filter: brightness(1.08);
+}
+
+.complete-button.is-done,
+.complete-button:disabled {
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.045);
+  cursor: default;
+  filter: none;
 }
 
 .loop-alert {

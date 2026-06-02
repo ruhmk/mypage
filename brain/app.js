@@ -12,6 +12,11 @@ const voiceStatus = document.querySelector("#voiceStatus");
 const voiceTranscript = document.querySelector("#voiceTranscript");
 const voicePreview = document.querySelector("#voicePreview");
 const resurfaceButton = document.querySelector("#resurfaceButton");
+const reportButton = document.querySelector("#reportButton");
+const completionReport = document.querySelector("#completionReport");
+const reportWeekCount = document.querySelector("#reportWeekCount");
+const reportMonthCount = document.querySelector("#reportMonthCount");
+const reportNote = document.querySelector("#reportNote");
 const queueFilter = document.querySelector("#queueFilter");
 const queueFilterNote = document.querySelector("#queueFilterNote");
 const workspace = document.querySelector(".workspace");
@@ -64,17 +69,22 @@ let finalTranscript = "";
 let draggedItemId = null;
 let activeQueueFilter = "all";
 let adviceFilterItemIds = [];
+let isReportVisible = false;
 
 const categoryOrder = [
   { id: "home", label: "家庭" },
   { id: "work", label: "仕事" },
   { id: "side", label: "副業" },
+  { id: "done", label: "完了" },
 ];
+
+const activeCategoryOrder = categoryOrder.filter((category) => category.id !== "done");
 
 const categoryColors = {
   home: "#77c7d2",
   work: "#c97379",
   side: "#d2b765",
+  done: "#8a9693",
 };
 
 const loadLevelCopy = {
@@ -102,6 +112,7 @@ const statusCopy = {
   pending: "保留",
   delegate: "委任",
   idea: "アイデア",
+  done: "完了",
 };
 
 const statusReason = {
@@ -109,6 +120,7 @@ const statusReason = {
   pending: "期限まで見ない。脳内監視から外す。",
   delegate: "条件を渡せば他人に任せられる可能性あり。",
   idea: "今は実行せず、素材として保存。",
+  done: "完了済み。履歴として保存。",
 };
 
 const priorityCopy = {
@@ -257,6 +269,20 @@ function dateAfter(days) {
   return formatDate(date);
 }
 
+function formatShortDateTime(value) {
+  if (!value) {
+    return "";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return `${date.getMonth() + 1}/${date.getDate()}`;
+}
+
 function classify(text) {
   const normalized = text.toLowerCase();
 
@@ -360,11 +386,17 @@ function normalizeItem(item) {
   const legacyStatus = String(item?.status || "");
   const status = statusCopy[item?.status] ? item.status : "pending";
   const assignee = String(item?.assignee || "");
-  const category = isCategory(item?.category) ? item.category : inferCategory(rawInput, assignee);
+  const category =
+    status === "done"
+      ? "done"
+      : isCategory(item?.category) && item.category !== "done"
+        ? item.category
+        : inferCategory(rawInput, assignee);
   const priority = isPriority(item?.priority)
     ? item.priority
     : inferPriority(rawInput, status, legacyStatus);
   const effort = isEffort(item?.effort) ? item.effort : inferEffort(rawInput, status, priority);
+  const completedAt = status === "done" ? String(item?.completedAt || item?.updatedAt || now) : "";
 
   return {
     id: String(item?.id || createId()),
@@ -376,6 +408,7 @@ function normalizeItem(item) {
     assignee,
     reviewAt: String(item?.reviewAt || ""),
     category,
+    completedAt,
     source: String(item?.source || "text"),
     loopCount: Number.isFinite(item?.loopCount) ? item.loopCount : 1,
     createdAt: String(item?.createdAt || now),
@@ -586,25 +619,36 @@ function renderQueueFilter() {
 }
 
 function createQueueCard(item) {
-  const button = document.createElement("button");
-    button.className = item.id === selectedItemId ? "queue-item is-selected" : "queue-item";
-    button.type = "button";
-    button.draggable = true;
-    button.dataset.status = item.status;
-    button.dataset.priority = item.priority;
-    button.dataset.effort = item.effort;
-    button.dataset.itemId = item.id;
-  button.setAttribute("aria-pressed", String(item.id === selectedItemId));
+  const card = document.createElement("article");
+  card.className = [
+    "queue-item",
+    item.id === selectedItemId ? "is-selected" : "",
+    item.status === "done" ? "is-done" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  card.draggable = item.status !== "done";
+  card.dataset.status = item.status;
+  card.dataset.priority = item.priority;
+  card.dataset.effort = item.effort;
+  card.dataset.itemId = item.id;
+  card.setAttribute("role", "button");
+  card.setAttribute("tabindex", "0");
+  card.setAttribute("aria-pressed", String(item.id === selectedItemId));
 
   const content = document.createElement("div");
   const title = document.createElement("strong");
   const reason = document.createElement("p");
   const chip = document.createElement("span");
   const effortChip = document.createElement("span");
+  const completeButton = document.createElement("button");
   const tags = document.createElement("div");
 
   title.textContent = summarize(item.rawInput);
-  reason.textContent = item.note || statusReason[item.status];
+  reason.textContent =
+    item.status === "done" && item.completedAt
+      ? `完了 ${formatShortDateTime(item.completedAt)}`
+      : item.note || statusReason[item.status];
   chip.className =
     item.status === "pending"
       ? `status-chip ${item.status} priority-${item.priority}`
@@ -613,16 +657,38 @@ function createQueueCard(item) {
     item.status === "pending" ? `${statusCopy[item.status]} ${priorityCopy[item.priority]}` : statusCopy[item.status];
   effortChip.className = `effort-chip effort-${item.effort}`;
   effortChip.textContent = `重さ ${effortCopy[item.effort]}`;
+  completeButton.className = item.status === "done" ? "complete-button is-done" : "complete-button";
+  completeButton.type = "button";
+  completeButton.textContent = item.status === "done" ? "完了済" : "完了";
+  completeButton.disabled = item.status === "done";
+  completeButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    completeItem(item.id);
+  });
 
   content.append(title, reason);
   tags.className = "queue-tags";
-  tags.append(chip, effortChip);
-  button.append(content, tags);
-  button.addEventListener("click", () => selectItem(item.id));
-  button.addEventListener("dragstart", handleCardDragStart);
-  button.addEventListener("dragend", handleCardDragEnd);
+  tags.append(chip, effortChip, completeButton);
+  card.append(content, tags);
+  card.addEventListener("click", (event) => {
+    if (event.target.closest("button")) {
+      return;
+    }
 
-  return button;
+    selectItem(item.id);
+  });
+  card.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+
+    event.preventDefault();
+    selectItem(item.id);
+  });
+  card.addEventListener("dragstart", handleCardDragStart);
+  card.addEventListener("dragend", handleCardDragEnd);
+
+  return card;
 }
 
 function toggleCategory(categoryId) {
@@ -701,10 +767,18 @@ function moveItemToCategory(itemId, categoryId, targetId = null, position = "end
     return;
   }
 
+  const movedAt = new Date().toISOString();
   const movedItem = normalizeItem({
     ...draggedItem,
+    ...(categoryId === "done"
+      ? {
+          status: "done",
+          reviewAt: "",
+          completedAt: draggedItem.completedAt || movedAt,
+        }
+      : {}),
     category: categoryId,
-    updatedAt: new Date().toISOString(),
+    updatedAt: movedAt,
   });
   const nextItems = items.filter((item) => item.id !== itemId);
   let insertIndex = nextItems.length;
@@ -731,6 +805,10 @@ function moveItemToCategory(itemId, categoryId, targetId = null, position = "end
 }
 
 function itemLoadScore(item) {
+  if (item.status === "done" || item.category === "done") {
+    return 0;
+  }
+
   const statusWeight = {
     now: 9,
     pending: 3,
@@ -772,7 +850,7 @@ function loadLevel(percent) {
 }
 
 function categoryStats() {
-  return categoryOrder.map((category) => {
+  return activeCategoryOrder.map((category) => {
     const categoryItems = items.filter((item) => item.category === category.id);
     const score = categoryItems.reduce((sum, item) => sum + itemLoadScore(item), 0);
     const percent = Math.min(100, Math.round(score * 4));
@@ -843,7 +921,7 @@ function renderCategoryLegend(stats) {
 
 function effortStats() {
   return effortOrder.map((effort) => {
-    const effortItems = items.filter((item) => item.effort === effort.id);
+    const effortItems = items.filter((item) => item.effort === effort.id && item.status !== "done");
     const score = effortItems.reduce((sum, item) => sum + itemLoadScore(item), 0);
 
     return {
@@ -961,7 +1039,7 @@ function reductionAdvice(stats, load) {
 }
 
 function renderStats() {
-  const unresolvedCount = items.filter((item) => item.status !== "idea").length;
+  const unresolvedCount = items.filter((item) => item.status !== "idea" && item.status !== "done").length;
   const pendingCount = items.filter((item) => item.status === "pending").length;
   const highPendingCount = items.filter(
     (item) => item.status === "pending" && item.priority === "high",
@@ -1008,6 +1086,44 @@ function renderStats() {
     button.classList.toggle("is-active", isActive);
     button.setAttribute("aria-pressed", String(isActive));
   });
+}
+
+function completedItemsWithin(days) {
+  const threshold = new Date();
+  threshold.setDate(threshold.getDate() - days);
+
+  return items.filter((item) => {
+    if (item.status !== "done" || !item.completedAt) {
+      return false;
+    }
+
+    const completedAt = new Date(item.completedAt);
+
+    return !Number.isNaN(completedAt.getTime()) && completedAt >= threshold;
+  });
+}
+
+function renderCompletionReport() {
+  completionReport.hidden = !isReportVisible;
+  reportButton.classList.toggle("is-active", isReportVisible);
+  reportButton.setAttribute("aria-pressed", String(isReportVisible));
+
+  if (!isReportVisible) {
+    return;
+  }
+
+  const weekItems = completedItemsWithin(7);
+  const monthItems = completedItemsWithin(30);
+  const recentItems = [...monthItems]
+    .sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime())
+    .slice(0, 3);
+
+  reportWeekCount.textContent = String(weekItems.length);
+  reportMonthCount.textContent = String(monthItems.length);
+  reportNote.textContent =
+    recentItems.length === 0
+      ? "完了したカードはまだありません。"
+      : `最近の完了: ${recentItems.map((item) => `「${summarize(item.rawInput)}」`).join("、")}`;
 }
 
 function renderInspector() {
@@ -1067,6 +1183,7 @@ function setInspectorCategory(category) {
 function renderAll() {
   renderFocusList();
   renderStats();
+  renderCompletionReport();
   renderQueueList();
   renderInspector();
 }
@@ -1128,6 +1245,42 @@ function toggleAdviceFilter() {
   };
   activeQueueFilter = "advice";
   persistCollapsedCategories();
+  renderAll();
+}
+
+function completeItem(itemId) {
+  const completedAt = new Date().toISOString();
+  const item = items.find((candidate) => candidate.id === itemId);
+
+  if (!item || item.status === "done") {
+    return;
+  }
+
+  items = items.map((candidate) => {
+    if (candidate.id !== itemId) {
+      return candidate;
+    }
+
+    return normalizeItem({
+      ...candidate,
+      status: "done",
+      category: "done",
+      reviewAt: "",
+      completedAt,
+      updatedAt: completedAt,
+    });
+  });
+
+  if (selectedItemId === itemId) {
+    selectedItemId = null;
+  }
+
+  collapsedCategories = {
+    ...collapsedCategories,
+    done: false,
+  };
+  persistCollapsedCategories();
+  markDirty();
   renderAll();
 }
 
@@ -1603,7 +1756,29 @@ function updateFromInspector(fields) {
     return;
   }
 
-  updateSelectedItem(fields, { keepInspector: true });
+  const currentItem = items.find((item) => item.id === selectedItemId);
+
+  if (!currentItem) {
+    return;
+  }
+
+  const nextFields = { ...fields };
+
+  if (fields.status === "done" || fields.category === "done") {
+    const completedAt = currentItem.completedAt || new Date().toISOString();
+    nextFields.status = "done";
+    nextFields.category = "done";
+    nextFields.reviewAt = "";
+    nextFields.completedAt = completedAt;
+  } else if (currentItem.status === "done" && fields.status && fields.status !== "done") {
+    nextFields.completedAt = "";
+    nextFields.category =
+      fields.category && fields.category !== "done"
+        ? fields.category
+        : inferCategory(currentItem.rawInput, currentItem.assignee);
+  }
+
+  updateSelectedItem(nextFields, { keepInspector: true });
 }
 
 form.addEventListener("submit", (event) => {
@@ -1629,6 +1804,9 @@ inspectorStatusSwitch.addEventListener("click", (event) => {
 
   if (button) {
     setInspectorStatus(button.dataset.status);
+    if (button.dataset.status === "done") {
+      setInspectorCategory("done");
+    }
     updateFromInspector({ status: button.dataset.status });
   }
 });
@@ -1656,6 +1834,9 @@ inspectorCategorySwitch.addEventListener("click", (event) => {
 
   if (button) {
     setInspectorCategory(button.dataset.category);
+    if (button.dataset.category === "done") {
+      setInspectorStatus("done");
+    }
     updateFromInspector({ category: button.dataset.category });
   }
 });
@@ -1711,6 +1892,11 @@ voiceTranscript.addEventListener("input", updateVoicePreview);
 
 resurfaceButton.addEventListener("click", () => {
   addItem("採用ページの方針、決めないまま再浮上", "now");
+});
+
+reportButton.addEventListener("click", () => {
+  isReportVisible = !isReportVisible;
+  renderCompletionReport();
 });
 
 queueFilter.addEventListener("click", (event) => {
