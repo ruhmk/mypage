@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mental Cache / Cognitive Offload Prototype</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="scene" aria-label="Mental Cache prototype">
+      <header class="topbar">
+        <div class="brand-lockup">
+          <strong>MENTAL CACHE</strong>
+          <span>COGNITIVE OFFLOAD</span>
+        </div>
+        <div class="top-actions">
+          <div class="file-state">
+            <span class="save-status" id="saveStatus" aria-live="polite">未保存</span>
+          <span class="file-name" id="fileName">ファイル未選択</span>
+          </div>
+          <button class="quiet-button" id="loadButton" type="button">読込</button>
+          <button class="quiet-button" id="saveButton" type="button">保存</button>
+        </div>
+        <input class="sr-only" id="fileInput" type="file" accept="application/json,.json" />
+      </header>
+
+      <section class="workspace" aria-label="Cognitive offload workspace">
+        <section class="capture-panel" aria-label="Input">
+          <div class="panel-kicker">NOW BUFFER</div>
+          <h1>考えなくていい状態を増やす</h1>
+          <p class="concept-copy">
+            未確定事項を脳から退避し、必要な日まで視界から消す。
+          </p>
+
+          <form class="capture" id="captureForm">
+            <button class="voice-button" id="voiceButton" type="button" aria-label="音声入力">
+              <span class="voice-bars" aria-hidden="true">
+                <i></i><i></i><i></i>
+              </span>
+            </button>
+            <label class="sr-only" for="captureInput">気がかりを入力</label>
+            <input
+              id="captureInput"
+              name="capture"
+              autocomplete="off"
+              placeholder="思いつきをそのまま入力"
+            />
+            <button class="send-button" type="submit">送る</button>
+          </form>
+
+          <section class="voice-dump" aria-label="音声メモ">
+            <div class="voice-dump-header">
+              <span class="panel-kicker">VOICE DUMP</span>
+              <strong id="voiceStatus">待機中</strong>
+            </div>
+            <label class="sr-only" for="voiceTranscript">音声メモ全文</label>
+            <textarea
+              id="voiceTranscript"
+              rows="5"
+              placeholder="未整理のまま話した内容"
+            ></textarea>
+            <div class="voice-actions">
+              <button class="quiet-button" id="voiceListenButton" type="button">聞き取り開始</button>
+              <button class="quiet-button" id="voiceStopButton" type="button">停止</button>
+              <button class="send-button" id="voiceSplitButton" type="button">分解して追加</button>
+              <button class="quiet-button" id="voiceClearButton" type="button">クリア</button>
+            </div>
+            <div class="voice-preview" id="voicePreview" aria-live="polite">
+              <span>0件</span>
+            </div>
+          </section>
+
+        </section>
+
+        <div
+          class="column-resizer column-resizer-left"
+          data-resizer="left"
+          role="separator"
+          aria-label="入力カラムの幅を調整"
+          tabindex="0"
+        ></div>
+
+        <div class="middle-stack" aria-label="Cognitive load and insights">
+          <section class="load-panel" aria-label="脳内占有率">
+            <div class="load-meter">
+              <div class="meter-ring" style="--load: 67">
+                <span>67</span>
+                <small>%</small>
+              </div>
+              <div>
+                <p class="metric-title">脳内占有率</p>
+                <p class="metric-note" id="metricNote">保留 11 / ループ 3 / 決断待ち 4</p>
+                <div class="category-legend" id="categoryLegend" aria-label="カテゴリ別の負荷内訳"></div>
+              </div>
+            </div>
+
+            <div class="effort-load" aria-label="重さを鑑みた負荷内訳">
+              <div class="effort-ring">
+                <span id="effortHeavyCount">0</span>
+                <small>高</small>
+              </div>
+              <div>
+                <p class="metric-title">重さインパクト</p>
+                <p class="metric-note" id="effortSummary">重いカード 0件</p>
+                <div class="effort-legend" id="effortLegend" aria-label="重さ別の負荷内訳"></div>
+              </div>
+            </div>
+
+            <button class="load-advice" id="loadAdvice" type="button" aria-pressed="false">
+              仕事の2件を保留または委任に動かすと、負荷の偏りが馴らされます。
+            </button>
+
+            <div class="stat-grid">
+              <button class="stat-card status-now" type="button" data-stat-filter="now" aria-pressed="false">
+                <span>今やる</span>
+                <strong id="statNow">4</strong>
+              </button>
+              <button class="stat-card status-pending" type="button" data-stat-filter="pending" aria-pressed="false">
+                <span>保留</span>
+                <strong id="statPending">11</strong>
+              </button>
+              <button class="stat-card status-delegate" type="button" data-stat-filter="delegate" aria-pressed="false">
+                <span>委任</span>
+                <strong id="statDelegate">7</strong>
+              </button>
+              <button class="stat-card status-idea" type="button" data-stat-filter="idea" aria-pressed="false">
+                <span>アイデア</span>
+                <strong id="statIdea">2</strong>
+              </button>
+            </div>
+
+            <div class="burden-bars" id="burdenBars" aria-label="カテゴリ別の負荷バー"></div>
+          </section>
+
+          <section class="insight-panel" aria-label="Loop insights">
+            <article class="loop-alert">
+              <span class="alert-mark">!</span>
+              <div>
+                <strong>繰り返し検出</strong>
+                <p>「採用ページの方針」が21日で6回出現</p>
+              </div>
+            </article>
+
+            <section class="today-strip" aria-label="今日見るもの">
+              <div class="section-title">
+                <span>今日見るもの</span>
+                <strong id="todayCount">3</strong>
+              </div>
+              <div class="focus-list" id="focusList"></div>
+            </section>
+
+            <article class="decision-card">
+              <div>
+                <span class="panel-kicker">NEXT DECISION</span>
+                <h2>採用ページは今週決める価値あり</h2>
+                <p>同じ迷いが増えているため、15分の壁打ちで「決める条件」だけ抽出。</p>
+              </div>
+              <button class="angle-button" type="button">壁打ち</button>
+            </article>
+          </section>
+        </div>
+
+        <div
+          class="column-resizer column-resizer-right"
+          data-resizer="right"
+          role="separator"
+          aria-label="保留カラムの幅を調整"
+          tabindex="0"
+        ></div>
+
+        <section class="queue-panel" aria-label="AIによる仕分け">
+          <div class="section-title">
+            <span>AI SORT</span>
+            <button class="text-button" id="resurfaceButton" type="button">再提示</button>
+          </div>
+          <div class="queue-filter" id="queueFilter" aria-label="AI SORTの表示条件">
+            <button type="button" data-filter="all">全件</button>
+            <button type="button" data-filter="now">今やる</button>
+            <button type="button" data-filter="week">7日以内</button>
+            <button type="button" data-filter="month">1か月以内</button>
+            <button type="button" data-filter="unscheduled">未定保留</button>
+          </div>
+          <p class="queue-filter-note" id="queueFilterNote">全件を表示</p>
+          <div class="queue-list" id="queueList"></div>
+        </section>
+
+        <aside class="inspector-panel" id="inspectorPanel" aria-label="Item inspector">
+          <div class="inspector-empty" id="inspectorEmpty">
+            <span class="panel-kicker">INSPECTOR</span>
+            <p>AI SORTの項目を選ぶと、ここで状態や期限を編集できます。</p>
+          </div>
+
+          <form class="inspector-form" id="inspectorForm" hidden>
+            <div class="inspector-header">
+              <span class="panel-kicker">INSPECTOR</span>
+              <button class="icon-close" id="closeInspectorButton" type="button" aria-label="閉じる">×</button>
+            </div>
+
+            <label class="field">
+              <span>内容</span>
+              <textarea id="inspectorRawInput" rows="4"></textarea>
+            </label>
+
+            <label class="field">
+              <span>状態</span>
+              <select class="sr-only" id="inspectorStatus" aria-label="状態">
+                <option value="now">今やる</option>
+                <option value="pending">保留</option>
+                <option value="delegate">委任</option>
+                <option value="idea">アイデア</option>
+              </select>
+              <div class="status-switch" id="inspectorStatusSwitch" aria-label="状態を切り替え">
+                <button type="button" data-status="now">今やる</button>
+                <button type="button" data-status="pending">保留</button>
+                <button type="button" data-status="delegate">委任</button>
+                <button type="button" data-status="idea">アイデア</button>
+              </div>
+            </label>
+
+            <label class="field">
+              <span>保留優先度</span>
+              <select class="sr-only" id="inspectorPriority" aria-label="保留優先度">
+                <option value="high">高</option>
+                <option value="medium">中</option>
+                <option value="low">低</option>
+              </select>
+              <div class="priority-switch" id="inspectorPrioritySwitch" aria-label="保留優先度を切り替え">
+                <button type="button" data-priority="high">高</button>
+                <button type="button" data-priority="medium">中</button>
+                <button type="button" data-priority="low">低</button>
+              </div>
+            </label>
+
+            <label class="field">
+              <span>重さ</span>
+              <select class="sr-only" id="inspectorEffort" aria-label="やる内容の重さ">
+                <option value="high">高</option>
+                <option value="medium">中</option>
+                <option value="low">低</option>
+              </select>
+              <div class="effort-switch" id="inspectorEffortSwitch" aria-label="やる内容の重さを切り替え">
+                <button type="button" data-effort="high">高</button>
+                <button type="button" data-effort="medium">中</button>
+                <button type="button" data-effort="low">低</button>
+              </div>
+            </label>
+
+            <label class="field">
+              <span>カテゴリ</span>
+              <select class="sr-only" id="inspectorCategory" aria-label="カテゴリ">
+                <option value="home">家庭</option>
+                <option value="work">仕事</option>
+                <option value="side">副業</option>
+              </select>
+              <div class="category-switch" id="inspectorCategorySwitch" aria-label="カテゴリを切り替え">
+                <button type="button" data-category="home">家庭</button>
+                <button type="button" data-category="work">仕事</button>
+                <button type="button" data-category="side">副業</button>
+              </div>
+            </label>
+
+            <label class="field">
+              <span>いつまで非表示 / 再提示</span>
+              <input id="inspectorReviewAt" type="date" />
+              <div class="date-shortcuts" aria-label="再提示日ショートカット">
+                <button type="button" data-review-days="1">明日</button>
+                <button type="button" data-review-days="7">来週</button>
+                <button type="button" data-review-days="30">1か月後</button>
+                <button type="button" data-review-clear="true">解除</button>
+              </div>
+            </label>
+
+            <label class="field">
+              <span>委任先 / 確認先</span>
+              <input id="inspectorAssignee" type="text" placeholder="例: 佐藤さん、家族、外注先" />
+            </label>
+
+            <label class="field">
+              <span>メモ</span>
+              <textarea id="inspectorNote" rows="5" placeholder="判断条件、保留理由、優先度の理由など"></textarea>
+            </label>
+
+            <div class="inspector-actions">
+              <button class="quiet-button danger-button" id="deleteItemButton" type="button">削除</button>
+            </div>
+          </form>
+        </aside>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
