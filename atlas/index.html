@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Atlas Snapper</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div class="brand">
+          <strong>Atlas Snapper</strong>
+          <span>ローカル専用 128px スナップ アトラス作成</span>
+        </div>
+
+        <div class="topControls" aria-label="アトラス設定">
+          <label class="field compact">
+            <span>最終サイズ</span>
+            <select id="atlasSizeSelect">
+              <option value="1024">1024</option>
+              <option value="2048" selected>2048</option>
+              <option value="4096">4096</option>
+              <option value="8192">8192</option>
+            </select>
+          </label>
+
+          <label class="field compact">
+            <span>表示倍率</span>
+            <select id="zoomSelect">
+              <option value="12.5">12.5%</option>
+              <option value="25">25%</option>
+              <option value="50" selected>50%</option>
+              <option value="75">75%</option>
+              <option value="100">100%</option>
+            </select>
+          </label>
+
+          <button id="fitZoomBtn" type="button">表示に合わせる</button>
+          <button id="undoBtn" type="button">Undo</button>
+          <button id="redoBtn" type="button">Redo</button>
+          <button id="packBtn" type="button">未配置を詰める</button>
+          <button id="saveProjectBtn" type="button">プロジェクト保存</button>
+          <button id="loadProjectBtn" type="button">プロジェクト読込</button>
+          <input id="projectInput" type="file" accept="application/json,.json" hidden />
+          <button id="exportPngBtn" type="button">PNG出力</button>
+          <button id="exportJsonBtn" type="button">JSON出力</button>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <section class="stagePanel" aria-label="アトラス編集領域">
+          <div class="stageToolbar">
+            <div>
+              <strong id="atlasLabel">2048 x 2048</strong>
+              <span id="atlasMeta">128px グリッド / 透明PNG出力</span>
+            </div>
+            <div class="stageStats" id="stageStats">0 / 0 配置</div>
+          </div>
+
+          <div id="stageViewport" class="stageViewport">
+            <div id="canvasWrap" class="canvasWrap">
+              <canvas id="atlasCanvas" width="2048" height="2048"></canvas>
+            </div>
+          </div>
+        </section>
+
+        <aside class="sidePanel" aria-label="画像リストとインスペクター">
+          <section class="assetPanel">
+            <div class="panelHeader">
+              <div>
+                <h1>画像</h1>
+                <p>読み込んだ画像は端末内だけで扱われます。</p>
+              </div>
+              <button id="addImagesBtn" type="button">追加</button>
+              <input id="fileInput" type="file" accept="image/*" multiple hidden />
+            </div>
+
+            <div id="assetDropZone" class="dropZone">
+              PNG/JPG/WebP をここへドロップ
+            </div>
+
+            <div id="assetList" class="assetList" aria-live="polite"></div>
+          </section>
+
+          <section class="inspectorPanel" aria-label="インスペクター">
+            <div class="panelHeader simple">
+              <div>
+                <h2>インスペクター</h2>
+                <p>画像または配置済みの領域を選択します。</p>
+              </div>
+            </div>
+            <div id="inspector" class="inspector"></div>
+          </section>
+        </aside>
+      </main>
+
+      <footer id="statusBar" class="statusBar">画像を追加して、右のサムネイルをアトラスへドラッグします。</footer>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

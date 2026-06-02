@@ -1,0 +1,528 @@
+:root {
+  color-scheme: light;
+  --ink: #1e232b;
+  --muted: #68717d;
+  --line: #d8dee6;
+  --panel: #ffffff;
+  --surface: #f4f6f8;
+  --canvas: #273949;
+  --canvas-grid: rgba(255, 255, 255, 0.18);
+  --teal: #24757a;
+  --teal-dark: #15565a;
+  --amber: #d4873d;
+  --danger: #c4475b;
+  --selected: #f0b44d;
+  --shadow: 0 12px 34px rgba(26, 33, 43, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family:
+    "Yu Gothic UI",
+    "Hiragino Kaku Gothic ProN",
+    Meiryo,
+    system-ui,
+    sans-serif;
+  color: var(--ink);
+  background: var(--surface);
+}
+
+button,
+select,
+input {
+  font: inherit;
+}
+
+button,
+select,
+input[type="number"] {
+  min-height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink);
+}
+
+button {
+  padding: 0 12px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+button:hover {
+  border-color: var(--teal);
+}
+
+button:disabled {
+  color: #9aa3ad;
+  border-color: #e0e5eb;
+  background: #f7f8fa;
+  cursor: not-allowed;
+}
+
+button.primary {
+  background: var(--teal);
+  border-color: var(--teal);
+  color: #fff;
+}
+
+button.primary:hover {
+  background: var(--teal-dark);
+}
+
+button.danger {
+  color: var(--danger);
+}
+
+select,
+input[type="number"] {
+  padding: 0 10px;
+}
+
+.app {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  height: 100vh;
+  min-height: 100vh;
+}
+
+.topbar {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+  background: #fff;
+}
+
+.brand {
+  display: grid;
+  gap: 2px;
+  min-width: 220px;
+}
+
+.brand strong {
+  font-size: 18px;
+}
+
+.brand span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.topControls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+.field span,
+.readoutLabel {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.field.compact {
+  grid-template-columns: auto auto;
+  align-items: center;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 16px;
+  min-height: 0;
+  overflow: hidden;
+  padding: 16px;
+}
+
+.stagePanel,
+.assetPanel,
+.inspectorPanel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.stagePanel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+}
+
+.stageToolbar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.stageToolbar div:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.stageToolbar span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.stageStats {
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.stageViewport {
+  min-height: 0;
+  overflow: auto;
+  padding: 18px;
+  background:
+    linear-gradient(45deg, rgba(30, 35, 43, 0.05) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(30, 35, 43, 0.05) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(30, 35, 43, 0.05) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(30, 35, 43, 0.05) 75%);
+  background-position:
+    0 0,
+    0 10px,
+    10px -10px,
+    -10px 0;
+  background-size: 20px 20px;
+}
+
+.canvasWrap {
+  width: 1024px;
+  height: 1024px;
+  outline: 1px solid #1c2b38;
+  background: var(--canvas);
+}
+
+.canvasWrap.dragActive {
+  outline: 3px solid var(--amber);
+}
+
+#atlasCanvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--canvas);
+  image-rendering: auto;
+  touch-action: none;
+}
+
+.sidePanel {
+  display: grid;
+  grid-template-rows: minmax(260px, 1fr) minmax(280px, 0.8fr);
+  gap: 16px;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.assetPanel,
+.inspectorPanel {
+  min-width: 0;
+}
+
+.assetPanel {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-height: 0;
+}
+
+.panelHeader {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.panelHeader.simple {
+  border-bottom: 0;
+  padding-bottom: 8px;
+}
+
+.panelHeader h1,
+.panelHeader h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.panelHeader p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.dropZone {
+  margin: 12px 14px;
+  padding: 14px;
+  border: 1px dashed #aeb7c2;
+  border-radius: 8px;
+  color: var(--muted);
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+  background: #f9fafb;
+}
+
+.dropZone.dragActive {
+  border-color: var(--amber);
+  color: #925419;
+  background: #fff6e8;
+}
+
+.assetList {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 14px 14px;
+}
+
+.assetItem {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  cursor: grab;
+}
+
+.assetItem:active {
+  cursor: grabbing;
+}
+
+.assetItem.selected {
+  border-color: var(--selected);
+  box-shadow: 0 0 0 2px rgba(240, 180, 77, 0.24);
+}
+
+.assetItem img {
+  width: 74px;
+  height: 74px;
+  border-radius: 6px;
+  object-fit: contain;
+  background:
+    linear-gradient(45deg, #e9edf2 25%, transparent 25%),
+    linear-gradient(-45deg, #e9edf2 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #e9edf2 75%),
+    linear-gradient(-45deg, transparent 75%, #e9edf2 75%);
+  background-position:
+    0 0,
+    0 8px,
+    8px -8px,
+    -8px 0;
+  background-size: 16px 16px;
+}
+
+.assetMeta {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.assetMeta strong {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assetMeta span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.badge.ok {
+  border-color: rgba(36, 117, 122, 0.28);
+  color: var(--teal);
+}
+
+.badge.warn {
+  border-color: rgba(196, 71, 91, 0.28);
+  color: var(--danger);
+}
+
+.inspectorPanel {
+  display: grid;
+  grid-template-rows: auto auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.inspector {
+  display: grid;
+  gap: 12px;
+  padding: 0 14px 14px;
+}
+
+.emptyState {
+  padding: 18px 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.inspectorTitle {
+  display: grid;
+  gap: 4px;
+}
+
+.inspectorTitle strong {
+  overflow-wrap: anywhere;
+}
+
+.inspectorTitle span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.inspectorGrid {
+  display: grid;
+  gap: 10px;
+}
+
+.controlRow {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.controlRow label,
+.controlRow .readoutLabel {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.controlRow .readout {
+  min-width: 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.actionRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.statusBar {
+  min-height: 34px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  background: #fff;
+  font-size: 12px;
+}
+
+@media (max-width: 980px) {
+  .app {
+    height: auto;
+  }
+
+  .topbar {
+    align-items: flex-start;
+  }
+
+  .workspace {
+    grid-template-columns: 1fr;
+    overflow: visible;
+  }
+
+  .sidePanel {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+    overflow: visible;
+  }
+
+  .stagePanel {
+    min-height: 460px;
+  }
+}
+
+@media (max-width: 620px) {
+  .topbar,
+  .stageToolbar,
+  .panelHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .topControls {
+    justify-content: stretch;
+  }
+
+  .topControls > * {
+    flex: 1 1 140px;
+  }
+
+  .workspace {
+    padding: 10px;
+  }
+
+  .field.compact {
+    grid-template-columns: 1fr;
+  }
+}
