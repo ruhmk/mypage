@@ -140,7 +140,6 @@ button {
 .text-button,
 .send-button,
 .voice-button,
-.angle-button,
 .icon-close {
   border: 0;
   border-radius: 8px;
@@ -199,7 +198,6 @@ button:disabled {
 .focus-item,
 .queue-item,
 .loop-alert,
-.decision-card,
 .capture {
   border: 1px solid var(--line);
   background:
@@ -705,7 +703,8 @@ h1 {
 }
 
 .load-advice {
-  display: block;
+  display: grid;
+  gap: 7px;
   width: 100%;
   margin: 0;
   padding: 13px 14px;
@@ -718,6 +717,41 @@ h1 {
   font-size: 0.86rem;
   line-height: 1.55;
   text-align: left;
+}
+
+.advice-label {
+  color: var(--muted-2);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.advice-line,
+.advice-hint {
+  display: block;
+}
+
+.advice-line {
+  position: relative;
+  padding-left: 16px;
+}
+
+.advice-line::before {
+  content: "";
+  position: absolute;
+  top: 0.72em;
+  left: 3px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 12px rgba(159, 208, 191, 0.55);
+}
+
+.advice-hint {
+  color: var(--muted-2);
+  font-size: 0.72rem;
+  font-weight: 760;
 }
 
 .load-advice.is-filterable:hover,
@@ -1190,31 +1224,6 @@ h1 {
   background: rgba(138, 150, 147, 0.6);
 }
 
-.complete-button {
-  min-width: 72px;
-  min-height: 30px;
-  border: 1px solid rgba(159, 208, 191, 0.34);
-  border-radius: 8px;
-  color: #07100e;
-  background: var(--accent-strong);
-  font-size: 0.72rem;
-  font-weight: 850;
-}
-
-.complete-button:hover,
-.complete-button:focus-visible {
-  outline: 0;
-  filter: brightness(1.08);
-}
-
-.complete-button.is-done,
-.complete-button:disabled {
-  color: var(--muted);
-  background: rgba(255, 255, 255, 0.045);
-  cursor: default;
-  filter: none;
-}
-
 .loop-alert {
   display: flex;
   gap: 14px;
@@ -1250,41 +1259,6 @@ h1 {
   color: var(--muted);
   font-size: 0.84rem;
   line-height: 1.5;
-}
-
-.decision-card {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 18px;
-  align-items: end;
-  padding: 18px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.065), rgba(255, 255, 255, 0.018)),
-    rgba(255, 255, 255, 0.045);
-}
-
-.decision-card h2 {
-  margin-top: 12px;
-  font-size: 1.28rem;
-  line-height: 1.25;
-}
-
-.decision-card p {
-  margin-top: 10px;
-  color: var(--muted);
-  font-size: 0.88rem;
-  line-height: 1.55;
-}
-
-.angle-button {
-  min-width: 90px;
-  min-height: 46px;
-  padding: 0 15px;
-  color: #07100e;
-  background: var(--brass);
-  font-weight: 840;
 }
 
 .inspector-empty {
@@ -1512,8 +1486,7 @@ h1 {
   }
 
   .stat-grid,
-  .queue-item,
-  .decision-card {
+  .queue-item {
     grid-template-columns: 1fr;
   }
 

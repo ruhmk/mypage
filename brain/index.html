@@ -107,7 +107,8 @@
             </div>
 
             <button class="load-advice" id="loadAdvice" type="button" aria-pressed="false">
-              仕事の2件を保留または委任に動かすと、負荷の偏りが馴らされます。
+              <span class="advice-label">ADVICE</span>
+              <span class="advice-line">総合負荷から削減候補を出します。</span>
             </button>
 
             <div class="stat-grid">
@@ -148,15 +149,6 @@
               </div>
               <div class="focus-list" id="focusList"></div>
             </section>
-
-            <article class="decision-card">
-              <div>
-                <span class="panel-kicker">NEXT DECISION</span>
-                <h2>採用ページは今週決める価値あり</h2>
-                <p>同じ迷いが増えているため、15分の壁打ちで「決める条件」だけ抽出。</p>
-              </div>
-              <button class="angle-button" type="button">壁打ち</button>
-            </article>
           </section>
         </div>
 
@@ -269,13 +261,11 @@
                 <option value="home">家庭</option>
                 <option value="work">仕事</option>
                 <option value="side">副業</option>
-                <option value="done">完了</option>
               </select>
               <div class="category-switch" id="inspectorCategorySwitch" aria-label="カテゴリを切り替え">
                 <button type="button" data-category="home">家庭</button>
                 <button type="button" data-category="work">仕事</button>
                 <button type="button" data-category="side">副業</button>
-                <button type="button" data-category="done">完了</button>
               </div>
             </label>
 

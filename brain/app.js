@@ -313,6 +313,14 @@ function isCategory(value) {
   return categoryOrder.some((category) => category.id === value);
 }
 
+function isWorkCategory(value) {
+  return activeCategoryOrder.some((category) => category.id === value);
+}
+
+function itemDisplayCategory(item) {
+  return item.status === "done" ? "done" : item.category;
+}
+
 function isPriority(value) {
   return Boolean(priorityCopy[value]);
 }
@@ -380,18 +388,18 @@ function summarize(text) {
   return trimmed.length > 24 ? `${trimmed.slice(0, 24)}...` : trimmed;
 }
 
+function summarizeAdvice(text) {
+  const trimmed = text.trim().replace(/\s+/g, " ");
+  return trimmed.length > 14 ? `${trimmed.slice(0, 14)}...` : trimmed;
+}
+
 function normalizeItem(item) {
   const now = new Date().toISOString();
   const rawInput = String(item?.rawInput || item?.summary || "").trim();
   const legacyStatus = String(item?.status || "");
   const status = statusCopy[item?.status] ? item.status : "pending";
   const assignee = String(item?.assignee || "");
-  const category =
-    status === "done"
-      ? "done"
-      : isCategory(item?.category) && item.category !== "done"
-        ? item.category
-        : inferCategory(rawInput, assignee);
+  const category = isWorkCategory(item?.category) ? item.category : inferCategory(rawInput, assignee);
   const priority = isPriority(item?.priority)
     ? item.priority
     : inferPriority(rawInput, status, legacyStatus);
@@ -565,7 +573,7 @@ function renderQueueList() {
   renderQueueFilter();
 
   categoryOrder.forEach((category) => {
-    const categoryItems = filteredQueueItems().filter((item) => item.category === category.id);
+    const categoryItems = filteredQueueItems().filter((item) => itemDisplayCategory(item) === category.id);
     const section = document.createElement("section");
     const header = document.createElement("button");
     const title = document.createElement("span");
@@ -587,9 +595,12 @@ function renderQueueList() {
 
     header.append(toggle, title, count);
     header.addEventListener("click", () => toggleCategory(category.id));
-    list.addEventListener("dragover", handleCategoryDragOver);
-    list.addEventListener("drop", handleCategoryDrop);
-    list.addEventListener("dragleave", clearDragTargets);
+
+    if (isWorkCategory(category.id)) {
+      list.addEventListener("dragover", handleCategoryDragOver);
+      list.addEventListener("drop", handleCategoryDrop);
+      list.addEventListener("dragleave", clearDragTargets);
+    }
 
     if (isCollapsed) {
       list.hidden = true;
@@ -641,7 +652,6 @@ function createQueueCard(item) {
   const reason = document.createElement("p");
   const chip = document.createElement("span");
   const effortChip = document.createElement("span");
-  const completeButton = document.createElement("button");
   const tags = document.createElement("div");
 
   title.textContent = summarize(item.rawInput);
@@ -657,18 +667,9 @@ function createQueueCard(item) {
     item.status === "pending" ? `${statusCopy[item.status]} ${priorityCopy[item.priority]}` : statusCopy[item.status];
   effortChip.className = `effort-chip effort-${item.effort}`;
   effortChip.textContent = `重さ ${effortCopy[item.effort]}`;
-  completeButton.className = item.status === "done" ? "complete-button is-done" : "complete-button";
-  completeButton.type = "button";
-  completeButton.textContent = item.status === "done" ? "完了済" : "完了";
-  completeButton.disabled = item.status === "done";
-  completeButton.addEventListener("click", (event) => {
-    event.stopPropagation();
-    completeItem(item.id);
-  });
-
   content.append(title, reason);
   tags.className = "queue-tags";
-  tags.append(chip, effortChip, completeButton);
+  tags.append(chip, effortChip);
   card.append(content, tags);
   card.addEventListener("click", (event) => {
     if (event.target.closest("button")) {
@@ -757,7 +758,7 @@ function handleCategoryDrop(event) {
 }
 
 function moveItemToCategory(itemId, categoryId, targetId = null, position = "end") {
-  if (!isCategory(categoryId)) {
+  if (!isWorkCategory(categoryId)) {
     return;
   }
 
@@ -770,13 +771,6 @@ function moveItemToCategory(itemId, categoryId, targetId = null, position = "end
   const movedAt = new Date().toISOString();
   const movedItem = normalizeItem({
     ...draggedItem,
-    ...(categoryId === "done"
-      ? {
-          status: "done",
-          reviewAt: "",
-          completedAt: draggedItem.completedAt || movedAt,
-        }
-      : {}),
     category: categoryId,
     updatedAt: movedAt,
   });
@@ -791,7 +785,7 @@ function moveItemToCategory(itemId, categoryId, targetId = null, position = "end
     }
   } else {
     const lastCategoryIndex = nextItems.reduce(
-      (lastIndex, item, index) => (item.category === categoryId ? index : lastIndex),
+      (lastIndex, item, index) => (itemDisplayCategory(item) === categoryId ? index : lastIndex),
       -1,
     );
 
@@ -805,7 +799,7 @@ function moveItemToCategory(itemId, categoryId, targetId = null, position = "end
 }
 
 function itemLoadScore(item) {
-  if (item.status === "done" || item.category === "done") {
+  if (item.status === "done") {
     return 0;
   }
 
@@ -851,7 +845,7 @@ function loadLevel(percent) {
 
 function categoryStats() {
   return activeCategoryOrder.map((category) => {
-    const categoryItems = items.filter((item) => item.category === category.id);
+    const categoryItems = items.filter((item) => item.status !== "done" && item.category === category.id);
     const score = categoryItems.reduce((sum, item) => sum + itemLoadScore(item), 0);
     const percent = Math.min(100, Math.round(score * 4));
 
@@ -976,19 +970,86 @@ function renderBurdenBars(stats) {
   });
 }
 
-function reductionAdvice(stats, load) {
+function adviceItemAction(item) {
+  if (item.status === "now") {
+    return "保留か委任へ落とす";
+  }
+
+  if (item.status === "delegate") {
+    return item.assignee ? "渡した後の監視を外す" : "委任先だけ決める";
+  }
+
+  if (item.status === "pending") {
+    if (!item.reviewAt) {
+      return "再提示日を入れる";
+    }
+
+    return item.priority === "high" ? "優先度を下げる" : "期限まで見ない";
+  }
+
+  return "今は見ない";
+}
+
+function adviceCandidateScore(item, dominantEffortId, heaviestCategoryId) {
+  let score = itemLoadScore(item);
+
+  if (item.status === "now") {
+    score += 4;
+  }
+
+  if (item.status === "delegate") {
+    score += 2;
+  }
+
+  if (item.status === "pending" && isWithinDays(item, 7)) {
+    score += 3;
+  }
+
+  if (item.loopCount > 1) {
+    score += 4;
+  }
+
+  if (item.effort === dominantEffortId) {
+    score += 3;
+  }
+
+  if (item.category === heaviestCategoryId) {
+    score += 2;
+  }
+
+  return score;
+}
+
+function renderLoadAdvice(advice) {
+  loadAdvice.replaceChildren();
+
+  const label = document.createElement("span");
+  label.className = "advice-label";
+  label.textContent = "ADVICE";
+  loadAdvice.append(label);
+
+  advice.bullets.forEach((text) => {
+    const line = document.createElement("span");
+    line.className = "advice-line";
+    line.textContent = text;
+    loadAdvice.append(line);
+  });
+
+  if (advice.itemIds.length > 0) {
+    const hint = document.createElement("span");
+    hint.className = "advice-hint";
+    hint.textContent = "クリックで対象カードを表示";
+    loadAdvice.append(hint);
+  }
+}
+
+function reductionAdvice(stats) {
   const activeStats = stats.filter((category) => category.items.length > 0);
-  const effortRank = {
-    high: 3,
-    medium: 2,
-    low: 1,
-  };
-  const sortByEffortLoad = (a, b) =>
-    (effortRank[b.effort] || 0) - (effortRank[a.effort] || 0) || itemLoadScore(b) - itemLoadScore(a);
+  const activeItems = activeStats.flatMap((category) => category.items);
 
   if (activeStats.length === 0) {
     return {
-      text: "まだ負荷はありません。思いついたものを入れるだけで、脳内監視を外に出せます。",
+      bullets: ["まだ負荷はありません。思いついたものを入れるだけでOK。"],
       itemIds: [],
     };
   }
@@ -996,45 +1057,75 @@ function reductionAdvice(stats, load) {
   const sortedStats = [...stats].sort((a, b) => b.score - a.score);
   const heaviest = sortedStats[0];
   const average = stats.reduce((sum, category) => sum + category.score, 0) / stats.length;
-  const candidates = [...heaviest.items]
-    .filter((item) => item.status !== "idea" && !(item.status === "pending" && item.priority === "low"))
-    .sort(sortByEffortLoad);
-
-  if (heaviest.score <= average + 4 || candidates.length === 0) {
-    const fallbackTargets = [...activeStats]
-      .flatMap((category) => category.items)
-      .filter((item) => item.status !== "idea" && !(item.status === "pending" && item.priority === "low"))
-      .sort(sortByEffortLoad)
-      .slice(0, 2);
-    const fallbackNames = fallbackTargets.map((item) => `「${summarize(item.rawInput)}」（重さ${effortCopy[item.effort]}）`).join("、");
-    const fallbackText =
-      fallbackTargets.length > 0
-        ? `3カテゴリの負荷は大きく偏っていません。重さインパクトが高い${fallbackTargets.length}件（${fallbackNames}）を低優先の保留か委任に落とすと、余白が作りやすくなります。`
-        : "3カテゴリの負荷は大きく偏っていません。低優先の保留を増やせると、さらに余白が残ります。";
+  const effortSegments = effortOrder.map((effort) => {
+    const effortItems = activeItems.filter((item) => item.effort === effort.id);
+    const score = effortItems.reduce((sum, item) => sum + itemLoadScore(item), 0);
 
     return {
-      text: fallbackText,
-      itemIds: fallbackTargets.map((item) => item.id),
+      ...effort,
+      items: effortItems,
+      score,
     };
-  }
+  });
+  const totalEffortScore = effortSegments.reduce((sum, effort) => sum + effort.score, 0);
+  const dominantEffort = [...effortSegments].sort((a, b) => b.score - a.score)[0];
+  const dominantEffortShare =
+    totalEffortScore === 0 ? 0 : Math.round((dominantEffort.score / totalEffortScore) * 100);
+  const nowItems = activeItems.filter((item) => item.status === "now");
+  const dueItems = activeItems.filter((item) => item.status === "pending" && isWithinDays(item, 7));
+  const loopItems = activeItems.filter((item) => item.status !== "idea" && item.loopCount > 1);
+  const categoryIsSkewed = heaviest.score > average + 4;
+  const scoreItem = (item) => adviceCandidateScore(item, dominantEffort.id, heaviest.id);
+  const targetPool = activeItems
+    .filter((item) => item.status !== "idea" && !(item.status === "pending" && item.priority === "low"))
+    .sort((a, b) => scoreItem(b) - scoreItem(a));
+  const dominantEffortTargets =
+    dominantEffortShare >= 55
+      ? targetPool.filter((item) => item.effort === dominantEffort.id).slice(0, 2)
+      : [];
+  const targets = [...dominantEffortTargets];
 
-  const reductionCount = Math.min(candidates.length, Math.max(1, Math.ceil((heaviest.score - average) / 7)));
-  const targets = candidates.slice(0, reductionCount);
-  const targetNames = targets.map((item) => `「${summarize(item.rawInput)}」（重さ${effortCopy[item.effort]}）`).join("、");
-  const projectedDrop = Math.max(4, Math.min(24, Math.round(targets.reduce((sum, item) => sum + itemLoadScore(item), 0) * 1.4)));
-  const hasNow = targets.some((item) => item.status === "now");
-  const hasDelegate = targets.some((item) => item.status === "delegate");
-  const hasHeavyEffort = targets.some((item) => item.effort === "high");
-  const action = hasNow
-    ? "保留または委任に動かす"
-    : hasDelegate
-      ? "担当者へ渡して自分の監視から外す"
-      : "再提示日を入れて低めの保留に落とす";
-  const effortPrefix = hasHeavyEffort ? "重さ高のカードを先に減らすと効きます。" : "重さ中以上のカードから減らすと効きます。";
+  targetPool.forEach((item) => {
+    if (targets.length >= 2 || targets.some((target) => target.id === item.id)) {
+      return;
+    }
+
+    targets.push(item);
+  });
+
+  const decisionTarget = [...loopItems, ...nowItems, ...dueItems]
+    .filter((item, index, list) => list.findIndex((candidate) => candidate.id === item.id) === index)
+    .sort((a, b) => scoreItem(b) - scoreItem(a))[0];
+  const targetIds = [...targets, decisionTarget]
+    .filter(Boolean)
+    .filter((item, index, list) => list.findIndex((candidate) => candidate.id === item.id) === index)
+    .map((item) => item.id);
+  const targetLine =
+    targets.length > 0
+      ? [...new Set(targets.map(adviceItemAction))].join(" / ")
+      : "低優先の保留を増やす";
+  const targetNameLine =
+    targets.length > 0
+      ? targets.map((item) => `「${summarizeAdvice(item.rawInput)}」`).join(" / ")
+      : "対象なし";
+  const basisParts = [
+    `重さ${dominantEffort.label}${dominantEffortShare}%`,
+    categoryIsSkewed ? `${heaviest.label}が偏り大` : "カテゴリ偏り小",
+    nowItems.length > 0 ? `今やる${nowItems.length}件` : "",
+    loopItems.length > 0 ? `ループ${loopItems.length}件` : "",
+  ].filter(Boolean);
+  const decisionLine = decisionTarget
+    ? `次の判断: 「${summarizeAdvice(decisionTarget.rawInput)}」の決める条件だけ書く`
+    : "次の判断: 今日は追加で決めなくてよい";
 
   return {
-    text: `${effortPrefix} ${heaviest.label}の${reductionCount}件（${targetNames}）を${action}と、占有率は約${Math.min(load, projectedDrop)}pt下がり、負荷の偏りが馴らされます。`,
-    itemIds: targets.map((item) => item.id),
+    bullets: [
+      `判断: ${basisParts.join(" / ")}`,
+      `減らす: ${targetLine}`,
+      `対象: ${targetNameLine}`,
+      decisionLine,
+    ],
+    itemIds: targetIds,
   };
 }
 
@@ -1073,9 +1164,9 @@ function renderStats() {
   renderCategoryLegend(stats);
   renderEffortChart(effortLoadStats);
   renderBurdenBars(stats);
-  const advice = reductionAdvice(stats, load);
+  const advice = reductionAdvice(stats);
   adviceFilterItemIds = advice.itemIds;
-  loadAdvice.textContent = advice.text;
+  renderLoadAdvice(advice);
   loadAdvice.classList.toggle("is-active", activeQueueFilter === "advice");
   loadAdvice.classList.toggle("is-filterable", adviceFilterItemIds.length > 0);
   loadAdvice.setAttribute("aria-pressed", String(activeQueueFilter === "advice"));
@@ -1203,7 +1294,7 @@ function jumpToQueueItem(itemId) {
   activeQueueFilter = "all";
   collapsedCategories = {
     ...collapsedCategories,
-    [item.category]: false,
+    [itemDisplayCategory(item)]: false,
   };
   selectedItemId = itemId;
   persistCollapsedCategories();
@@ -1236,7 +1327,7 @@ function toggleAdviceFilter() {
   const targetCategories = new Set(
     items
       .filter((item) => adviceFilterItemIds.includes(item.id))
-      .map((item) => item.category),
+      .map(itemDisplayCategory),
   );
 
   collapsedCategories = {
@@ -1264,16 +1355,11 @@ function completeItem(itemId) {
     return normalizeItem({
       ...candidate,
       status: "done",
-      category: "done",
       reviewAt: "",
       completedAt,
       updatedAt: completedAt,
     });
   });
-
-  if (selectedItemId === itemId) {
-    selectedItemId = null;
-  }
 
   collapsedCategories = {
     ...collapsedCategories,
@@ -1764,18 +1850,27 @@ function updateFromInspector(fields) {
 
   const nextFields = { ...fields };
 
-  if (fields.status === "done" || fields.category === "done") {
+  if (fields.status === "done") {
     const completedAt = currentItem.completedAt || new Date().toISOString();
     nextFields.status = "done";
-    nextFields.category = "done";
     nextFields.reviewAt = "";
     nextFields.completedAt = completedAt;
+    collapsedCategories = {
+      ...collapsedCategories,
+      done: false,
+    };
+    persistCollapsedCategories();
   } else if (currentItem.status === "done" && fields.status && fields.status !== "done") {
     nextFields.completedAt = "";
-    nextFields.category =
-      fields.category && fields.category !== "done"
-        ? fields.category
-        : inferCategory(currentItem.rawInput, currentItem.assignee);
+    collapsedCategories = {
+      ...collapsedCategories,
+      [currentItem.category]: false,
+    };
+    persistCollapsedCategories();
+  }
+
+  if (fields.category && !isWorkCategory(fields.category)) {
+    delete nextFields.category;
   }
 
   updateSelectedItem(nextFields, { keepInspector: true });
@@ -1804,9 +1899,6 @@ inspectorStatusSwitch.addEventListener("click", (event) => {
 
   if (button) {
     setInspectorStatus(button.dataset.status);
-    if (button.dataset.status === "done") {
-      setInspectorCategory("done");
-    }
     updateFromInspector({ status: button.dataset.status });
   }
 });
@@ -1834,9 +1926,6 @@ inspectorCategorySwitch.addEventListener("click", (event) => {
 
   if (button) {
     setInspectorCategory(button.dataset.category);
-    if (button.dataset.category === "done") {
-      setInspectorStatus("done");
-    }
     updateFromInspector({ category: button.dataset.category });
   }
 });
