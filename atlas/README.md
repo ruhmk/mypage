@@ -23,6 +23,8 @@
 - プロジェクト保存は画像データを JSON に埋め込みます
 - padding は配置枠内の余白として扱います
 - bleed は padding 内へ画像外周ピクセルを押し出します
+- PNGは可能な限り生のRGBAとして読み込み、透明ピクセル内のRGBも保持します
+- PNG出力はCanvasの標準PNG化ではなく、保持したRGBAから直接生成します
 - 出力 PNG は空き領域が透明
 - JSON には slot 座標、画像本体の content 座標、UV 座標を含みます
 
@@ -32,3 +34,11 @@
 - `contentX / contentY / contentWidth / contentHeight`: 実際の画像領域
 - `uv`: 実際の画像領域の UV
 - `slotUv`: padding を含む配置枠の UV
+- `alphaRgbPreserved`: PNGの透明ピクセル内RGBを保持できている場合は `true`
+
+## αチャンネルと透明ピクセル内RGB
+
+PNGの完全透明ピクセルにもRGB値が残っている場合、このツールはPNGを直接解析してそのRGBを保持します。
+Photoshopなどで透明部分の色が消えたPNGは復元できませんが、Substance Painterなどから出た透明部分にRGB情報を持つPNGは、その情報をアトラス出力へ持ち越します。
+
+JPG/WebPなど、ブラウザの通常デコードを使う形式では透明ピクセル内RGBの完全保持は保証されません。

@@ -81,6 +81,260 @@
     });
   }
 
+  async function bytesFromDataUrl(dataUrl) {
+    const response = await fetch(dataUrl);
+    return new Uint8Array(await response.arrayBuffer());
+  }
+
+  async function inflateZlib(bytes) {
+    if (!("DecompressionStream" in window)) throw new Error("PNG raw decode is not available in this browser.");
+    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate"));
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  }
+
+  async function deflateZlib(bytes) {
+    if (!("CompressionStream" in window)) throw new Error("PNG raw export is not available in this browser.");
+    const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream("deflate"));
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  }
+
+  function readUint32(bytes, offset) {
+    return ((bytes[offset] << 24) | (bytes[offset + 1] << 16) | (bytes[offset + 2] << 8) | bytes[offset + 3]) >>> 0;
+  }
+
+  function writeUint32(bytes, offset, value) {
+    bytes[offset] = (value >>> 24) & 255;
+    bytes[offset + 1] = (value >>> 16) & 255;
+    bytes[offset + 2] = (value >>> 8) & 255;
+    bytes[offset + 3] = value & 255;
+  }
+
+  function concatBytes(parts) {
+    const total = parts.reduce((sum, part) => sum + part.length, 0);
+    const result = new Uint8Array(total);
+    let offset = 0;
+    parts.forEach((part) => {
+      result.set(part, offset);
+      offset += part.length;
+    });
+    return result;
+  }
+
+  function pngChannels(colorType) {
+    if (colorType === 0 || colorType === 3) return 1;
+    if (colorType === 2) return 3;
+    if (colorType === 4) return 2;
+    if (colorType === 6) return 4;
+    throw new Error(`Unsupported PNG color type: ${colorType}`);
+  }
+
+  function paethPredictor(a, b, c) {
+    const p = a + b - c;
+    const pa = Math.abs(p - a);
+    const pb = Math.abs(p - b);
+    const pc = Math.abs(p - c);
+    if (pa <= pb && pa <= pc) return a;
+    if (pb <= pc) return b;
+    return c;
+  }
+
+  function unfilterPngRows(filtered, width, height, channels, bytesPerSample) {
+    const bpp = channels * bytesPerSample;
+    const stride = width * bpp;
+    const raw = new Uint8Array(stride * height);
+    let src = 0;
+
+    for (let y = 0; y < height; y += 1) {
+      const filter = filtered[src];
+      src += 1;
+      const row = y * stride;
+      const prev = row - stride;
+
+      for (let x = 0; x < stride; x += 1) {
+        const value = filtered[src];
+        src += 1;
+        const left = x >= bpp ? raw[row + x - bpp] : 0;
+        const up = y > 0 ? raw[prev + x] : 0;
+        const upLeft = y > 0 && x >= bpp ? raw[prev + x - bpp] : 0;
+        let restored = value;
+
+        if (filter === 1) restored += left;
+        else if (filter === 2) restored += up;
+        else if (filter === 3) restored += Math.floor((left + up) / 2);
+        else if (filter === 4) restored += paethPredictor(left, up, upLeft);
+        else if (filter !== 0) throw new Error(`Unsupported PNG filter: ${filter}`);
+
+        raw[row + x] = restored & 255;
+      }
+    }
+
+    return raw;
+  }
+
+  async function decodePngPixels(dataUrl) {
+    const bytes = await bytesFromDataUrl(dataUrl);
+    const signature = [137, 80, 78, 71, 13, 10, 26, 10];
+    if (!signature.every((value, index) => bytes[index] === value)) throw new Error("Not a PNG file.");
+
+    let offset = 8;
+    let width = 0;
+    let height = 0;
+    let bitDepth = 0;
+    let colorType = 0;
+    let palette = null;
+    let transparency = null;
+    const idatParts = [];
+
+    while (offset < bytes.length) {
+      const length = readUint32(bytes, offset);
+      offset += 4;
+      const type = String.fromCharCode(bytes[offset], bytes[offset + 1], bytes[offset + 2], bytes[offset + 3]);
+      offset += 4;
+      const data = bytes.slice(offset, offset + length);
+      offset += length + 4;
+
+      if (type === "IHDR") {
+        width = readUint32(data, 0);
+        height = readUint32(data, 4);
+        bitDepth = data[8];
+        colorType = data[9];
+      } else if (type === "PLTE") {
+        palette = data;
+      } else if (type === "tRNS") {
+        transparency = data;
+      } else if (type === "IDAT") {
+        idatParts.push(data);
+      } else if (type === "IEND") {
+        break;
+      }
+    }
+
+    if (![8, 16].includes(bitDepth) || (colorType === 3 && bitDepth !== 8)) {
+      throw new Error("Only 8-bit/16-bit PNG channels are supported for raw preservation.");
+    }
+
+    const channels = pngChannels(colorType);
+    const bytesPerSample = bitDepth === 16 ? 2 : 1;
+    const inflated = await inflateZlib(concatBytes(idatParts));
+    const raw = unfilterPngRows(inflated, width, height, channels, bytesPerSample);
+    const pixels = new Uint8Array(width * height * 4);
+    const transparentGray = colorType === 0 && transparency ? (transparency[0] << 8) | transparency[1] : null;
+    const transparentRgb =
+      colorType === 2 && transparency
+        ? [(transparency[0] << 8) | transparency[1], (transparency[2] << 8) | transparency[3], (transparency[4] << 8) | transparency[5]]
+        : null;
+
+    for (let i = 0; i < width * height; i += 1) {
+      const src = i * channels * bytesPerSample;
+      const dst = i * 4;
+      const sample = (index) => raw[src + index * bytesPerSample];
+
+      if (colorType === 6) {
+        pixels[dst] = sample(0);
+        pixels[dst + 1] = sample(1);
+        pixels[dst + 2] = sample(2);
+        pixels[dst + 3] = sample(3);
+      } else if (colorType === 2) {
+        const r = sample(0);
+        const g = sample(1);
+        const b = sample(2);
+        pixels[dst] = r;
+        pixels[dst + 1] = g;
+        pixels[dst + 2] = b;
+        pixels[dst + 3] = transparentRgb && r === transparentRgb[0] && g === transparentRgb[1] && b === transparentRgb[2] ? 0 : 255;
+      } else if (colorType === 4) {
+        const gray = sample(0);
+        pixels[dst] = gray;
+        pixels[dst + 1] = gray;
+        pixels[dst + 2] = gray;
+        pixels[dst + 3] = sample(1);
+      } else if (colorType === 0) {
+        const gray = sample(0);
+        pixels[dst] = gray;
+        pixels[dst + 1] = gray;
+        pixels[dst + 2] = gray;
+        pixels[dst + 3] = transparentGray !== null && gray === transparentGray ? 0 : 255;
+      } else if (colorType === 3) {
+        if (!palette) throw new Error("PNG palette is missing.");
+        const index = raw[src];
+        const paletteOffset = index * 3;
+        pixels[dst] = palette[paletteOffset] || 0;
+        pixels[dst + 1] = palette[paletteOffset + 1] || 0;
+        pixels[dst + 2] = palette[paletteOffset + 2] || 0;
+        pixels[dst + 3] = transparency?.[index] ?? 255;
+      }
+    }
+
+    return { pixels, width, height, rawPreserved: colorType === 6 || colorType === 4 };
+  }
+
+  function getCanvasPixels(image) {
+    const scratch = document.createElement("canvas");
+    scratch.width = image.naturalWidth;
+    scratch.height = image.naturalHeight;
+    const scratchCtx = scratch.getContext("2d");
+    scratchCtx.drawImage(image, 0, 0);
+    return new Uint8Array(scratchCtx.getImageData(0, 0, scratch.width, scratch.height).data);
+  }
+
+  function makeCrcTable() {
+    const table = new Uint32Array(256);
+    for (let n = 0; n < 256; n += 1) {
+      let c = n;
+      for (let k = 0; k < 8; k += 1) {
+        c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+      }
+      table[n] = c >>> 0;
+    }
+    return table;
+  }
+
+  const crcTable = makeCrcTable();
+
+  function crc32(bytes) {
+    let c = 0xffffffff;
+    for (let i = 0; i < bytes.length; i += 1) {
+      c = crcTable[(c ^ bytes[i]) & 255] ^ (c >>> 8);
+    }
+    return (c ^ 0xffffffff) >>> 0;
+  }
+
+  function pngChunk(type, data) {
+    const typeBytes = new TextEncoder().encode(type);
+    const chunk = new Uint8Array(12 + data.length);
+    writeUint32(chunk, 0, data.length);
+    chunk.set(typeBytes, 4);
+    chunk.set(data, 8);
+    writeUint32(chunk, 8 + data.length, crc32(chunk.slice(4, 8 + data.length)));
+    return chunk;
+  }
+
+  async function encodePngRgba(width, height, pixels) {
+    const raw = new Uint8Array((width * 4 + 1) * height);
+    let src = 0;
+    let dst = 0;
+    for (let y = 0; y < height; y += 1) {
+      raw[dst] = 0;
+      dst += 1;
+      raw.set(pixels.slice(src, src + width * 4), dst);
+      src += width * 4;
+      dst += width * 4;
+    }
+
+    const ihdr = new Uint8Array(13);
+    writeUint32(ihdr, 0, width);
+    writeUint32(ihdr, 4, height);
+    ihdr[8] = 8;
+    ihdr[9] = 6;
+    ihdr[10] = 0;
+    ihdr[11] = 0;
+    ihdr[12] = 0;
+
+    const signature = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+    const compressed = await deflateZlib(raw);
+    return concatBytes([signature, pngChunk("IHDR", ihdr), pngChunk("IDAT", compressed), pngChunk("IEND", new Uint8Array())]);
+  }
+
   function loadImageSource(src) {
     return new Promise((resolve, reject) => {
       const image = new Image();
@@ -393,12 +647,33 @@
     const width = image.naturalWidth;
     const height = image.naturalHeight;
     const padding = normalizePixels(options.padding, 0);
+    let pixelSource = null;
+
+    try {
+      if (dataUrl.startsWith("data:image/png")) {
+        pixelSource = await decodePngPixels(dataUrl);
+      }
+    } catch {
+      pixelSource = null;
+    }
+
+    if (!pixelSource || pixelSource.width !== width || pixelSource.height !== height) {
+      pixelSource = {
+        pixels: getCanvasPixels(image),
+        width,
+        height,
+        rawPreserved: false,
+      };
+    }
+
     return {
       id: options.id || uid("asset"),
       name,
       url: dataUrl,
       dataUrl,
       image,
+      pixels: pixelSource.pixels,
+      rawPreserved: pixelSource.rawPreserved,
       width,
       height,
       defaultScale: Number(options.defaultScale) || 1,
@@ -760,7 +1035,10 @@
       const placedBadge = document.createElement("span");
       placedBadge.className = `badge ${placement ? "ok" : ""}`;
       placedBadge.textContent = placement ? "配置済み" : "未配置";
-      badges.append(potBadge, placedBadge);
+      const alphaBadge = document.createElement("span");
+      alphaBadge.className = `badge ${asset.rawPreserved ? "ok" : ""}`;
+      alphaBadge.textContent = asset.rawPreserved ? "透明RGB保持" : "通常RGBA";
+      badges.append(potBadge, placedBadge, alphaBadge);
 
       meta.append(name, size, badges);
       item.append(image, meta);
@@ -890,6 +1168,7 @@
     const grid = document.createElement("div");
     grid.className = "inspectorGrid";
     grid.append(createReadout("元サイズ", `${asset.width} x ${asset.height}`));
+    grid.append(createReadout("α/RGB", asset.rawPreserved ? "PNGの透明ピクセル内RGBを保持します。" : "通常デコードです。透明RGB保持は保証されません。"));
     grid.append(createReadout("判定", asset.powerOfTwo ? "幅・高さとも2のべき乗です。" : "幅または高さが2のべき乗ではありません。"));
     grid.append(
       createControlRow(
@@ -959,6 +1238,7 @@
     const grid = document.createElement("div");
     grid.className = "inspectorGrid";
     grid.append(createReadout("元サイズ", `${asset.width} x ${asset.height}`));
+    grid.append(createReadout("α/RGB", asset.rawPreserved ? "PNGの透明ピクセル内RGBを保持します。" : "通常デコードです。透明RGB保持は保証されません。"));
     grid.append(createReadout("配置サイズ", `${rect.width} x ${rect.height}`));
     grid.append(createReadout("画像領域", `${content.width} x ${content.height}`));
     grid.append(createReadout("状態", collisions.has(placement.id) ? "ほかの画像と重なっています。" : "重なりはありません。"));
@@ -1049,6 +1329,98 @@
     renderCanvas();
   }
 
+  function copyAtlasPixel(pixels, atlasWidth, fromX, fromY, toX, toY) {
+    if (fromX < 0 || fromY < 0 || toX < 0 || toY < 0 || fromX >= atlasWidth || toX >= atlasWidth) return;
+    if (fromY >= state.atlasSize || toY >= state.atlasSize) return;
+    const from = (fromY * atlasWidth + fromX) * 4;
+    const to = (toY * atlasWidth + toX) * 4;
+    pixels[to] = pixels[from];
+    pixels[to + 1] = pixels[from + 1];
+    pixels[to + 2] = pixels[from + 2];
+    pixels[to + 3] = pixels[from + 3];
+  }
+
+  function sampleSourcePixel(asset, sx, sy, channel) {
+    const x = clamp(sx, 0, asset.width - 1);
+    const y = clamp(sy, 0, asset.height - 1);
+    return asset.pixels[(y * asset.width + x) * 4 + channel];
+  }
+
+  function drawScaledPixels(pixels, atlasWidth, asset, x, y, width, height) {
+    const scaleX = asset.width / width;
+    const scaleY = asset.height / height;
+
+    for (let py = 0; py < height; py += 1) {
+      const sy = (py + 0.5) * scaleY - 0.5;
+      const y0 = clamp(Math.floor(sy), 0, asset.height - 1);
+      const y1 = clamp(y0 + 1, 0, asset.height - 1);
+      const wy = clamp(sy - y0, 0, 1);
+
+      for (let px = 0; px < width; px += 1) {
+        const dx = x + px;
+        const dy = y + py;
+        if (dx < 0 || dy < 0 || dx >= atlasWidth || dy >= state.atlasSize) continue;
+
+        const sx = (px + 0.5) * scaleX - 0.5;
+        const x0 = clamp(Math.floor(sx), 0, asset.width - 1);
+        const x1 = clamp(x0 + 1, 0, asset.width - 1);
+        const wx = clamp(sx - x0, 0, 1);
+        const dst = (dy * atlasWidth + dx) * 4;
+
+        for (let channel = 0; channel < 4; channel += 1) {
+          const p00 = sampleSourcePixel(asset, x0, y0, channel);
+          const p10 = sampleSourcePixel(asset, x1, y0, channel);
+          const p01 = sampleSourcePixel(asset, x0, y1, channel);
+          const p11 = sampleSourcePixel(asset, x1, y1, channel);
+          const top = p00 * (1 - wx) + p10 * wx;
+          const bottom = p01 * (1 - wx) + p11 * wx;
+          pixels[dst + channel] = Math.round(top * (1 - wy) + bottom * wy);
+        }
+      }
+    }
+  }
+
+  function applyBleedPixels(pixels, atlasWidth, content, bleed) {
+    if (bleed <= 0) return;
+    const left = content.x;
+    const top = content.y;
+    const right = content.x + content.width - 1;
+    const bottom = content.y + content.height - 1;
+
+    for (let offset = 1; offset <= bleed; offset += 1) {
+      for (let x = left; x <= right; x += 1) {
+        copyAtlasPixel(pixels, atlasWidth, x, top, x, top - offset);
+        copyAtlasPixel(pixels, atlasWidth, x, bottom, x, bottom + offset);
+      }
+
+      for (let y = top; y <= bottom; y += 1) {
+        copyAtlasPixel(pixels, atlasWidth, left, y, left - offset, y);
+        copyAtlasPixel(pixels, atlasWidth, right, y, right + offset, y);
+      }
+
+      for (let cornerY = 1; cornerY <= bleed; cornerY += 1) {
+        copyAtlasPixel(pixels, atlasWidth, left, top, left - offset, top - cornerY);
+        copyAtlasPixel(pixels, atlasWidth, right, top, right + offset, top - cornerY);
+        copyAtlasPixel(pixels, atlasWidth, left, bottom, left - offset, bottom + cornerY);
+        copyAtlasPixel(pixels, atlasWidth, right, bottom, right + offset, bottom + cornerY);
+      }
+    }
+  }
+
+  function drawPlacementPixels(pixels, placement) {
+    const asset = getAsset(placement.assetId);
+    if (!asset?.pixels) return;
+    const content = placementContentRect(placement);
+    drawScaledPixels(pixels, state.atlasSize, asset, content.x, content.y, content.width, content.height);
+    applyBleedPixels(pixels, state.atlasSize, content, Math.min(assetBleed(asset), content.padding));
+  }
+
+  function buildAtlasPixels() {
+    const pixels = new Uint8Array(state.atlasSize * state.atlasSize * 4);
+    state.placements.forEach((placement) => drawPlacementPixels(pixels, placement));
+    return pixels;
+  }
+
   function drawExportCanvas() {
     const exportCanvas = document.createElement("canvas");
     exportCanvas.width = state.atlasSize;
@@ -1076,21 +1448,28 @@
     window.setTimeout(() => URL.revokeObjectURL(url), 1200);
   }
 
-  function exportPng() {
+  async function exportPng() {
     if (!state.placements.length) {
       setStatus("PNG出力する配置がありません。");
       return;
     }
     const collisions = getCollisionIds();
-    const canvas = drawExportCanvas();
-    canvas.toBlob((blob) => {
-      if (!blob) {
-        setStatus("PNG出力に失敗しました。");
-        return;
-      }
-      downloadBlob(blob, `atlas_${state.atlasSize}.png`);
-      setStatus(`PNGを書き出しました。${collisions.size ? "重なりがあるため内容を確認してください。" : ""}`);
-    }, "image/png");
+    try {
+      const pixels = buildAtlasPixels();
+      const pngBytes = await encodePngRgba(state.atlasSize, state.atlasSize, pixels);
+      downloadBlob(new Blob([pngBytes], { type: "image/png" }), `atlas_${state.atlasSize}.png`);
+      setStatus(`PNGを書き出しました。透明ピクセル内のRGBも保持します。${collisions.size ? "重なりがあるため内容を確認してください。" : ""}`);
+    } catch {
+      const canvas = drawExportCanvas();
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          setStatus("PNG出力に失敗しました。");
+          return;
+        }
+        downloadBlob(blob, `atlas_${state.atlasSize}.png`);
+        setStatus("PNGを書き出しました。このブラウザでは透明ピクセル内RGBの完全保持は保証されません。");
+      }, "image/png");
+    }
   }
 
   function exportJson() {
@@ -1121,8 +1500,9 @@
           contentHeight: content.height,
           scale: placement.scale,
           padding: assetPadding(asset),
-          bleed: assetBleed(asset),
-          sourceWidth: asset.width,
+        bleed: assetBleed(asset),
+        alphaRgbPreserved: Boolean(asset.rawPreserved),
+        sourceWidth: asset.width,
           sourceHeight: asset.height,
           uv: {
             u0: content.x / state.atlasSize,
