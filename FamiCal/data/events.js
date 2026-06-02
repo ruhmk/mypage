@@ -1,4 +1,4 @@
-window.FAMILY_CALENDAR_UPDATED_AT = "2026-06-02T13:35:03.831Z";
+window.FAMILY_CALENDAR_UPDATED_AT = "2026-06-02T13:40:09.139Z";
 window.FAMILY_CALENDAR_EVENTS = [
   {
     "id": "work-3x_fvtCaovvL6TkmVD",
@@ -397,6 +397,15 @@ window.FAMILY_CALENDAR_EVENTS = [
     "allDay": false
   },
   {
+    "id": "work-AT7GkMoKYuYlL_plV4",
+    "title": "仕事",
+    "start": "2026-06-04T01:00:00.000Z",
+    "end": "2026-06-04T01:30:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": false
+  },
+  {
     "id": "work-yYRavwTmjKAsFi0pyV",
     "title": "仕事",
     "start": "2026-06-04T01:15:00.000Z",
@@ -748,6 +757,15 @@ window.FAMILY_CALENDAR_EVENTS = [
     "allDay": false
   },
   {
+    "id": "work-ZJDl3dH2CsnuwK3uHs",
+    "title": "仕事",
+    "start": "2026-06-16T05:00:00.000Z",
+    "end": "2026-06-16T06:30:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": false
+  },
+  {
     "id": "personal-wbVfcNznB3JRPoj9vo",
     "title": "14:30予約市立病院",
     "start": "2026-06-16T05:00:00.000Z",
@@ -757,9 +775,9 @@ window.FAMILY_CALENDAR_EVENTS = [
     "allDay": false
   },
   {
-    "id": "work-sF7VdNoviXg7qvNpza",
+    "id": "work-hUsrT5TIBAlT1eREqr",
     "title": "仕事",
-    "start": "2026-06-16T06:00:00.000Z",
+    "start": "2026-06-16T06:30:00.000Z",
     "end": "2026-06-16T07:00:00.000Z",
     "source": "work",
     "note": "",
