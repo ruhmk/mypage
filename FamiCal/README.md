@@ -29,11 +29,13 @@ window.FAMILY_CALENDAR_EVENTS = [
 
 管理用の [admin.html](<C:/Users/S18344/Documents/Codex/2026-05-27/nasca-google/admin.html>) を開きます。
 
-1. `Google予定を取得` を押します。
+1. `GitHubに反映` を押します。
 2. 取得結果を確認します。
-3. `events.jsを保存` を押します。
-4. 保存した `events.js` を `data/events.js` に置き換えます。
-5. GitHubへ反映します。
+3. GitHub Pagesへ反映されるのを待ってから、家族向けページを再読み込みします。
+
+GitHub反映時は、GitHub上の既存 `data/events.js` を先に読み、更新ボタンを押した日の前日までに開始する予定はそのまま残します。当日以降に開始する予定だけ、Googleカレンダーから再取得した内容で置き換えます。
+
+`events.jsを保存` は手動更新用の予備ボタンです。
 
 家族は [index.html](<C:/Users/S18344/Documents/Codex/2026-05-27/nasca-google/index.html>) を見るだけです。Googleログインは不要です。
 
@@ -73,7 +75,7 @@ window.FAMILY_CALENDAR_CONFIG = {
 };
 ```
 
-これで `admin.html` からGoogle予定を取得できます。
+これで `admin.html` からGoogle予定を取得し、GitHubへ反映できます。
 
 この方式では、家族用Googleカレンダーは不要です。
 

@@ -66,7 +66,11 @@ function fetchGoogleEvents() {
     const diagnostics = payload && payload.diagnostics
       ? `仕事 ${payload.diagnostics.workCount}件 / 個人 ${payload.diagnostics.personalCount}件`
       : "";
-    adminStatus.textContent = `取得しました。${latestEvents.length}件 ${diagnostics}`;
+    const source = payload && payload.diagnostics && payload.diagnostics.workCalendarId
+      ? ` / 仕事元 ${payload.diagnostics.workCalendarId}`
+      : "";
+    const version = payload && payload.scriptVersion ? ` / ${payload.scriptVersion}` : "";
+    adminStatus.textContent = `取得しました。${latestEvents.length}件 ${diagnostics}${source}${version}`;
     publishGitHubButton.disabled = false;
   };
 
@@ -133,10 +137,17 @@ function publishGitHubEvents() {
     const publishText = publish.changed === false
       ? "GitHub上のevents.jsは最新でした。"
       : "GitHubへ反映しました。";
+    const mergeText = publish.cutoffDate
+      ? ` / ${publish.cutoffDate}以降を更新 / 過去保持 ${publish.preservedCount}件 / 公開 ${publish.publishedCount}件`
+      : "";
     const diagnostics = payload && payload.diagnostics
       ? `仕事 ${payload.diagnostics.workCount}件 / 個人 ${payload.diagnostics.personalCount}件`
       : "";
-    adminStatus.textContent = `${publishText} ${latestEvents.length}件 ${diagnostics}`;
+    const source = payload && payload.diagnostics && payload.diagnostics.workCalendarId
+      ? ` / 仕事元 ${payload.diagnostics.workCalendarId}`
+      : "";
+    const version = payload && payload.scriptVersion ? ` / ${payload.scriptVersion}` : "";
+    adminStatus.textContent = `${publishText} ${latestEvents.length}件 ${diagnostics}${mergeText}${source}${version}`;
   };
 
   script.src = url.toString();
