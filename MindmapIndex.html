@@ -105,6 +105,8 @@
             <strong id="selectionLabel">未選択</strong>
           </div>
           <div class="zoom-controls" aria-label="Zoom controls">
+            <button id="view3dButton" type="button" title="階層を3D表示">3D</button>
+            <button id="clearLayerButton" type="button" title="通常の2D表示へ戻る" hidden>通常2D</button>
             <button id="maximizeMapButton" type="button" title="マップを最大化">最大化</button>
             <button id="zoomOutButton" type="button" title="縮小">−</button>
             <button id="zoomResetButton" type="button" title="100%">100%</button>
@@ -113,8 +115,17 @@
         </div>
 
         <div id="canvasViewport" class="canvas-viewport">
+          <div id="layer3dControls" class="layer-3d-controls" hidden>
+            <button id="layerUpButton" type="button">上</button>
+            <strong id="layerLevelLabel">階層 0</strong>
+            <button id="layerDownButton" type="button">下</button>
+            <button id="addLowerLayerButton" type="button">下層に追加</button>
+            <button id="commitLayerButton" type="button">階層決定</button>
+            <button id="exit3dButton" type="button">2Dへ戻る</button>
+          </div>
           <button id="restoreMapButton" class="restore-map-button" type="button" hidden>戻す</button>
           <div id="canvasWorld" class="canvas-world">
+            <svg id="floorLayer" class="floor-layer" aria-hidden="true"></svg>
             <svg id="edgeLayer" class="edge-layer" aria-hidden="true"></svg>
             <div id="nodeLayer" class="node-layer"></div>
           </div>

@@ -81,10 +81,14 @@ const state = {
   flashId: null,
   removingId: null,
   isDraggingNode: false,
+  isLayer3d: false,
+  focusLayerDepth: 0,
+  layerFilterDepth: 0,
   undoStack: [],
   redoStack: [],
   positions: new Map(),
   visibleIds: new Set(),
+  renderedIds: new Set(),
   edgeList: [],
 };
 
@@ -95,6 +99,7 @@ let viewBeforeMapMaximize = null;
 const els = {
   viewport: document.getElementById("canvasViewport"),
   world: document.getElementById("canvasWorld"),
+  floorLayer: document.getElementById("floorLayer"),
   edgeLayer: document.getElementById("edgeLayer"),
   nodeLayer: document.getElementById("nodeLayer"),
   outlineInput: document.getElementById("outlineInput"),
@@ -127,10 +132,21 @@ function normalizeNode(node) {
     id: node.id || makeId(),
     text: String(node.text || "新しいノード"),
     memo: String(node.memo || ""),
+    layer: normalizeLayer(node.layer),
+    parallelOf: typeof node.parallelOf === "string" ? node.parallelOf : "",
     offset: normalizeOffset(node.offset),
     collapsed: Boolean(node.collapsed),
     children: Array.isArray(node.children) ? node.children.map(normalizeNode) : [],
   };
+}
+
+function normalizeLayer(layer) {
+  const value = Number(layer);
+  return Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0;
+}
+
+function getNodeLayer(node) {
+  return normalizeLayer(node?.layer);
 }
 
 function normalizeOffset(offset) {
@@ -270,6 +286,12 @@ function restoreSnapshot(snapshot) {
   state.search = snapshot.search || "";
   state.flashId = null;
   state.removingId = null;
+  state.isLayer3d = false;
+  state.layerFilterDepth = 0;
+  state.focusLayerDepth = 0;
+  document.body.classList.remove("layer-3d");
+  els.viewport.classList.remove("is-layer-3d");
+  ensureSelectedNodeVisible();
   els.searchInput.value = state.search;
   els.depthSlider.value = state.maxDepth;
   els.horizontalSpacingSlider.value = state.horizontalSpacing;
@@ -321,13 +343,28 @@ function walk(node, visitor, depth = 0, parent = null, branchIndex = 0) {
 
 function getVisibleChildren(node, depth) {
   if (node.collapsed || depth >= state.maxDepth) return [];
-  return node.children;
+  if (state.isLayer3d || state.layerFilterDepth === null) return node.children;
+  const currentLayer = getNodeLayer(node);
+  if (currentLayer !== state.layerFilterDepth) return node.children;
+  return node.children.filter((child) => getNodeLayer(child) === state.layerFilterDepth);
 }
 
 function measureSubtree(node, depth = 0) {
-  const children = getVisibleChildren(node, depth);
+  const children = getLayoutChildren(node, depth);
   if (!children.length) return 86;
   return children.reduce((sum, child) => sum + measureSubtree(child, depth + 1), 0) + Math.max(0, children.length - 1) * state.verticalSpacing;
+}
+
+function getLayoutChildren(node, depth) {
+  return getVisibleChildren(node, depth).filter((child) => !isParallelLayerChild(node, child));
+}
+
+function getParallelLayerChildren(node, depth) {
+  return getVisibleChildren(node, depth).filter((child) => isParallelLayerChild(node, child));
+}
+
+function isParallelLayerChild(parent, child) {
+  return Boolean(child.parallelOf === parent.id || getNodeLayer(parent) !== getNodeLayer(child));
 }
 
 function layoutTree() {
@@ -338,6 +375,46 @@ function layoutTree() {
   const rootSpan = measureSubtree(state.tree);
   placeNode(state.tree, WORLD.cx, WORLD.cy - rootSpan / 2 + rootSpan / 2, 0, 0, null);
   resolveLayoutCollisions();
+  alignParallelLayerNodes();
+  if (state.isLayer3d) applyLayerProjection();
+}
+
+function alignParallelLayerNodes() {
+  walk(state.tree, (node) => {
+    if (!node.parallelOf) return;
+    const pos = state.positions.get(node.id);
+    const anchor = state.positions.get(node.parallelOf);
+    if (!pos || !anchor) return;
+
+    const offset = normalizeOffset(node.offset);
+    const targetBaseX = anchor.x;
+    const targetBaseY = anchor.y;
+    const targetX = targetBaseX + offset.x;
+    const targetY = targetBaseY + offset.y;
+    const dx = targetX - pos.x;
+    const dy = targetY - pos.y;
+
+    walkSubtree(node, (subNode) => {
+      const subPos = state.positions.get(subNode.id);
+      if (!subPos) return;
+      subPos.x += dx;
+      subPos.y += dy;
+      if (subNode.id === node.id) {
+        subPos.baseX = targetBaseX;
+        subPos.baseY = targetBaseY;
+      } else {
+        subPos.baseX += dx;
+        subPos.baseY += dy;
+      }
+    });
+  });
+}
+
+function applyLayerProjection() {
+  state.positions.forEach((pos) => {
+    pos.x -= pos.layer * 122;
+    pos.y += pos.layer * 118;
+  });
 }
 
 function placeNode(node, x, y, depth, branchIndex, parent) {
@@ -345,12 +422,14 @@ function placeNode(node, x, y, depth, branchIndex, parent) {
   const width = depth === 0 ? ROOT_WIDTH : NODE_WIDTH;
   const height = estimateNodeHeight(node, width, depth);
   const offset = normalizeOffset(node.offset);
+  const layer = getNodeLayer(node);
   state.positions.set(node.id, {
     x: x + offset.x,
     y: y + offset.y,
     baseX: x,
     baseY: y,
     depth,
+    layer,
     color,
     branchIndex,
     width,
@@ -361,8 +440,9 @@ function placeNode(node, x, y, depth, branchIndex, parent) {
     state.edgeList.push({ from: parent.id, to: node.id, color });
   }
 
-  const children = getVisibleChildren(node, depth);
-  if (!children.length) return;
+  const children = getLayoutChildren(node, depth);
+  const parallelChildren = getParallelLayerChildren(node, depth);
+  if (!children.length && !parallelChildren.length) return;
 
   const total = children.reduce((sum, child) => sum + measureSubtree(child, depth + 1), 0) + (children.length - 1) * state.verticalSpacing;
   let cursor = y - total / 2;
@@ -374,6 +454,10 @@ function placeNode(node, x, y, depth, branchIndex, parent) {
     const nextBranch = depth === 0 ? index : branchIndex;
     placeNode(child, childX, childY, depth + 1, nextBranch, node);
     cursor += span + state.verticalSpacing;
+  });
+
+  parallelChildren.forEach((child) => {
+    placeNode(child, x, y, depth + 1, branchIndex, node);
   });
 }
 
@@ -449,6 +533,15 @@ function pathForEdge(from, to) {
   return `M ${startX} ${from.y} C ${c1x} ${from.y}, ${c2x} ${to.y}, ${endX} ${to.y}`;
 }
 
+function pathForLayerConnector(from, to) {
+  const startX = from.x;
+  const startY = from.y + from.height / 2;
+  const endX = to.x;
+  const endY = to.y - to.height / 2;
+  const midY = (startY + endY) / 2;
+  return `M ${startX} ${startY} C ${startX} ${midY}, ${endX} ${midY}, ${endX} ${endY}`;
+}
+
 function edgeKey(edge) {
   return `${edge.from}->${edge.to}`;
 }
@@ -457,21 +550,31 @@ function render() {
   const previousPositions = new Map(state.positions);
   const previousEdges = new Set(state.edgeList.map(edgeKey));
   layoutTree();
+  clampFocusLayerDepth();
+  state.renderedIds.clear();
   els.nodeLayer.textContent = "";
+  els.floorLayer.textContent = "";
   els.edgeLayer.textContent = "";
+  els.floorLayer.setAttribute("viewBox", `0 0 ${WORLD.width} ${WORLD.height}`);
   els.edgeLayer.setAttribute("viewBox", `0 0 ${WORLD.width} ${WORLD.height}`);
 
   const fragment = document.createDocumentFragment();
+  const floorFragment = document.createDocumentFragment();
   const edgeFragment = document.createDocumentFragment();
   const matches = getSearchMatches();
   const hasSearch = state.search.trim().length > 0;
 
+  if (state.isLayer3d) {
+    renderLayerFloors(floorFragment);
+  }
+
   state.edgeList.forEach((edge) => {
+    if (!shouldRenderEdge(edge)) return;
     const from = state.positions.get(edge.from);
     const to = state.positions.get(edge.to);
     if (!from || !to) return;
     const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    path.setAttribute("d", pathForEdge(from, to));
+    path.setAttribute("d", isLayerConnectorEdge(edge) ? pathForLayerConnector(from, to) : pathForEdge(from, to));
     const className = edgeClass(edge, matches, hasSearch) + (previousEdges.has(edgeKey(edge)) ? "" : " is-entering");
     path.setAttribute("class", className);
     path.setAttribute("pathLength", "1");
@@ -482,6 +585,8 @@ function render() {
   walk(state.tree, (node) => {
     const pos = state.positions.get(node.id);
     if (!pos) return;
+    if (!shouldRenderLayer(pos.layer)) return;
+    state.renderedIds.add(node.id);
     const nodeEl = document.createElement("article");
     nodeEl.className = nodeClass(node, pos, matches, hasSearch);
     nodeEl.dataset.id = node.id;
@@ -519,13 +624,81 @@ function render() {
     fragment.appendChild(nodeEl);
   });
 
+  els.floorLayer.appendChild(floorFragment);
   els.edgeLayer.appendChild(edgeFragment);
   els.nodeLayer.appendChild(fragment);
   bindRenderedEvents();
   updateTransform();
   updateLabels();
+  updateLayerControls();
   saveTree();
   clearFlashAfterAnimation();
+}
+
+function renderLayerFloors(fragment) {
+  const layers = [...new Set([...state.positions.values()].map((pos) => pos.layer))].sort((a, b) => a - b);
+  layers.forEach((layer) => {
+    const items = [...state.positions.values()].filter((pos) => pos.layer === layer);
+    if (!items.length) return;
+    const paddingX = layer === 0 ? 140 : 170;
+    const paddingY = layer === 0 ? 100 : 120;
+    const minX = Math.min(...items.map((pos) => pos.x - pos.width / 2)) - paddingX;
+    const maxX = Math.max(...items.map((pos) => pos.x + pos.width / 2)) + paddingX;
+    const minY = Math.min(...items.map((pos) => pos.y - pos.height / 2)) - paddingY;
+    const maxY = Math.max(...items.map((pos) => pos.y + pos.height / 2)) + paddingY;
+    const skew = 72;
+    const plate = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+    plate.setAttribute("points", `${minX},${minY} ${maxX},${minY} ${maxX + skew},${maxY} ${minX + skew},${maxY}`);
+    plate.setAttribute(
+      "class",
+      `floor-plate ${layer === state.focusLayerDepth ? "is-layer-focused" : "is-layer-dimmed"}`,
+    );
+    plate.style.fill = layer === state.focusLayerDepth ? "rgba(124,192,255,0.36)" : "rgba(167,179,196,0.34)";
+    plate.style.stroke = layer === state.focusLayerDepth ? "rgba(124,192,255,0.72)" : "rgba(167,179,196,0.38)";
+    fragment.appendChild(plate);
+
+    const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    label.setAttribute("class", "floor-label");
+    label.setAttribute("x", minX + 28);
+    label.setAttribute("y", minY + 46);
+    label.style.opacity = layer === state.focusLayerDepth ? "0.8" : "0.24";
+    label.textContent = `階層 ${layer}`;
+    fragment.appendChild(label);
+  });
+}
+
+function shouldRenderLayer(layer) {
+  return state.layerFilterDepth === null || layer === state.layerFilterDepth;
+}
+
+function shouldRenderEdge(edge) {
+  if (isLayerConnectorEdge(edge)) return state.isLayer3d;
+  if (state.layerFilterDepth === null) return true;
+  const from = state.positions.get(edge.from);
+  const to = state.positions.get(edge.to);
+  return Boolean(from && to && from.layer === state.layerFilterDepth && to.layer === state.layerFilterDepth);
+}
+
+function isLayerConnectorEdge(edge) {
+  const from = findNode(edge.from)?.node;
+  const to = findNode(edge.to)?.node;
+  const fromPos = state.positions.get(edge.from);
+  const toPos = state.positions.get(edge.to);
+  return Boolean(
+    (to?.parallelOf && to.parallelOf === edge.from) ||
+      (from?.parallelOf && from.parallelOf === edge.to) ||
+      (fromPos && toPos && fromPos.layer !== toPos.layer),
+  );
+}
+
+function clampFocusLayerDepth() {
+  const maxLayer = getMaxRenderedLayer();
+  state.focusLayerDepth = clamp(state.focusLayerDepth, 0, maxLayer);
+}
+
+function getMaxRenderedLayer() {
+  const layers = [...state.positions.values()].map((pos) => pos.layer);
+  return layers.length ? Math.max(...layers) : 0;
 }
 
 function applyNodeMotion(nodeEl, pos, previous) {
@@ -562,6 +735,10 @@ function makeNodeButton(className, label, title) {
 function nodeClass(node, pos, matches, hasSearch) {
   const classes = ["mind-node"];
   if (pos.depth === 0) classes.push("root");
+  if (node.parallelOf) classes.push("is-layer-ghost");
+  if (state.isLayer3d) {
+    classes.push(pos.layer === state.focusLayerDepth ? "is-layer-focused" : "is-layer-dimmed");
+  }
   if (node.id === state.selectedId) classes.push("is-selected");
   if (node.id === state.flashId) classes.push("is-new");
   if (node.id === state.removingId) classes.push("is-removing");
@@ -583,6 +760,13 @@ function clearFlashAfterAnimation() {
 
 function edgeClass(edge, matches, hasSearch) {
   const classes = ["edge-path"];
+  if (isLayerConnectorEdge(edge)) classes.push("is-layer-connector");
+  if (state.isLayer3d) {
+    const fromLayer = state.positions.get(edge.from)?.layer;
+    const toLayer = state.positions.get(edge.to)?.layer;
+    const touchesFocusedLayer = fromLayer === state.focusLayerDepth || toLayer === state.focusLayerDepth;
+    classes.push(touchesFocusedLayer ? "is-layer-focused" : "is-layer-dimmed");
+  }
   if (edge.from === state.selectedId || edge.to === state.selectedId) classes.push("is-selected");
   if (hasSearch) {
     const from = findNode(edge.from)?.node;
@@ -732,7 +916,10 @@ function finishNodeDrag() {
 
 function collectSubtreeOffsets(node, offsets = new Map()) {
   offsets.set(node.id, normalizeOffset(node.offset));
-  node.children.forEach((child) => collectSubtreeOffsets(child, offsets));
+  node.children.forEach((child) => {
+    if (child.parallelOf) return;
+    collectSubtreeOffsets(child, offsets);
+  });
   return offsets;
 }
 
@@ -759,12 +946,20 @@ function applySubtreeDragOffsets(id, originalOffsets, dx, dy, startPosition = nu
   const appliedDx = targetX - baseX - dragOriginal.x;
   const appliedDy = targetY - baseY - dragOriginal.y;
 
-  walkSubtree(found.node, (node) => {
+  walkDragSubtree(found.node, (node) => {
     const original = originalOffsets.get(node.id) || { x: 0, y: 0 };
     node.offset = {
       x: Math.round(original.x + appliedDx),
       y: Math.round(original.y + appliedDy),
     };
+  });
+}
+
+function walkDragSubtree(node, visitor) {
+  visitor(node);
+  node.children.forEach((child) => {
+    if (child.parallelOf) return;
+    walkDragSubtree(child, visitor);
   });
 }
 
@@ -792,8 +987,11 @@ function paintSelection() {
 function updateLabels() {
   const found = findNode(state.selectedId);
   const selectedText = found ? found.node.text : "未選択";
+  const visibleCount = state.layerFilterDepth === null ? state.visibleIds.size : state.renderedIds.size;
+  const layerText =
+    state.layerFilterDepth === null || state.layerFilterDepth === 0 ? "" : ` / 階層 ${state.layerFilterDepth}のみ`;
   els.selectionLabel.textContent = selectedText;
-  els.statusText.textContent = `${state.mapName} / ${state.visibleIds.size}件を表示中。編集内容は自動保存されます。`;
+  els.statusText.textContent = `${state.mapName}${layerText} / ${visibleCount}件を表示中。編集内容は自動保存されます。`;
   updateNodeDetailPanel(found?.node);
 }
 
@@ -807,13 +1005,14 @@ function updateNodeDetailPanel(node) {
 }
 
 function updateTransform() {
-  els.world.style.transform = `translate(${state.pan.x}px, ${state.pan.y}px) scale(${state.zoom})`;
+  const layerTilt = state.isLayer3d ? " skewX(-8deg) scaleY(0.84)" : "";
+  els.world.style.transform = `translate(${state.pan.x}px, ${state.pan.y}px) scale(${state.zoom})${layerTilt}`;
   document.getElementById("zoomResetButton").textContent = `${Math.round(state.zoom * 100)}%`;
 }
 
 function fitToView() {
   const rect = els.viewport.getBoundingClientRect();
-  const positions = [...state.positions.values()];
+  const positions = [...state.positions.values()].filter((pos) => shouldRenderLayer(pos.layer));
   if (!positions.length) return;
   const minX = Math.min(...positions.map((p) => p.x)) - 180;
   const maxX = Math.max(...positions.map((p) => p.x)) + 180;
@@ -868,7 +1067,12 @@ function addChild() {
   if (!found) return;
   pushHistory();
   found.node.collapsed = false;
-  const child = normalizeNode({ text: "新しいアイデア", offset: normalizeOffset(found.node.offset), children: [] });
+  const child = normalizeNode({
+    text: "新しいアイデア",
+    layer: getNodeLayer(found.node),
+    offset: normalizeOffset(found.node.offset),
+    children: [],
+  });
   found.node.children.push(child);
   state.selectedId = child.id;
   state.flashId = child.id;
@@ -879,7 +1083,12 @@ function addSibling() {
   const found = findNode(state.selectedId);
   if (!found || !found.parent) return;
   pushHistory();
-  const sibling = normalizeNode({ text: "新しいトピック", offset: normalizeOffset(found.node.offset), children: [] });
+  const sibling = normalizeNode({
+    text: "新しいトピック",
+    layer: getNodeLayer(found.node),
+    offset: normalizeOffset(found.node.offset),
+    children: [],
+  });
   const index = found.parent.children.findIndex((child) => child.id === found.node.id);
   found.parent.children.splice(index + 1, 0, sibling);
   state.selectedId = sibling.id;
@@ -1197,6 +1406,8 @@ function collectNodeMetadata(node, path = []) {
     [key]: {
       collapsed: Boolean(node.collapsed),
       memo: node.memo || "",
+      layer: getNodeLayer(node),
+      parallelOf: node.parallelOf || "",
       offset: normalizeOffset(node.offset),
     },
   };
@@ -1211,6 +1422,8 @@ function applyNodeMetadata(node, metadata, path = []) {
   if (item) {
     node.collapsed = Boolean(item.collapsed);
     node.memo = String(item.memo || "");
+    node.layer = normalizeLayer(item.layer);
+    node.parallelOf = typeof item.parallelOf === "string" ? item.parallelOf : "";
     node.offset = normalizeOffset(item.offset);
   }
   node.children.forEach((child, index) => applyNodeMetadata(child, metadata, [...path, index]));
@@ -1271,6 +1484,11 @@ function setActiveMap(map, shouldFit = true, resetHistory = true) {
   state.flashId = null;
   state.removingId = null;
   state.search = "";
+  state.isLayer3d = false;
+  state.layerFilterDepth = 0;
+  state.focusLayerDepth = 0;
+  document.body.classList.remove("layer-3d");
+  els.viewport.classList.remove("is-layer-3d");
   if (resetHistory) {
     state.undoStack = [];
     state.redoStack = [];
@@ -1391,7 +1609,7 @@ function renderPngCanvas() {
 }
 
 function getPngExportBounds() {
-  const positions = [...state.positions.values()];
+  const positions = [...state.positions.values()].filter((pos) => shouldRenderLayer(pos.layer));
   if (!positions.length) return null;
   const minX = Math.floor(Math.min(...positions.map((pos) => pos.x - pos.width / 2)) - PNG_EXPORT_PADDING);
   const maxX = Math.ceil(Math.max(...positions.map((pos) => pos.x + pos.width / 2)) + PNG_EXPORT_PADDING);
@@ -1454,25 +1672,33 @@ function drawPngEdges(ctx, bounds) {
   const matches = getSearchMatches();
   const hasSearch = state.search.trim().length > 0;
   state.edgeList.forEach((edge) => {
+    if (!shouldRenderEdge(edge)) return;
     const from = state.positions.get(edge.from);
     const to = state.positions.get(edge.to);
     if (!from || !to) return;
-    const fromSide = to.x >= from.x ? from.width / 2 : -from.width / 2;
-    const toSide = to.x >= from.x ? -to.width / 2 : to.width / 2;
+    const isConnector = isLayerConnectorEdge(edge);
+    const fromSide = isConnector ? 0 : to.x >= from.x ? from.width / 2 : -from.width / 2;
+    const toSide = isConnector ? 0 : to.x >= from.x ? -to.width / 2 : to.width / 2;
     const startX = from.x + fromSide - bounds.minX;
     const endX = to.x + toSide - bounds.minX;
-    const startY = from.y - bounds.minY;
-    const endY = to.y - bounds.minY;
-    const curve = Math.max(82, Math.abs(endX - startX) * 0.42);
+    const startY = from.y + (isConnector ? from.height / 2 : 0) - bounds.minY;
+    const endY = to.y - (isConnector ? to.height / 2 : 0) - bounds.minY;
+    const curve = isConnector ? Math.abs(endY - startY) / 2 : Math.max(82, Math.abs(endX - startX) * 0.42);
     const direction = to.x >= from.x ? 1 : -1;
     ctx.save();
-    ctx.globalAlpha = edgeClass(edge, matches, hasSearch).includes("is-muted") ? 0.18 : 0.72;
+    ctx.globalAlpha = edgeClass(edge, matches, hasSearch).includes("is-muted") ? 0.18 : isConnector ? 0.58 : 0.72;
     ctx.strokeStyle = edge.color;
-    ctx.lineWidth = 2.4;
+    ctx.lineWidth = isConnector ? 2 : 2.4;
     ctx.lineCap = "round";
+    if (isConnector) ctx.setLineDash([8, 7]);
     ctx.beginPath();
     ctx.moveTo(startX, startY);
-    ctx.bezierCurveTo(startX + curve * direction, startY, endX - curve * direction, endY, endX, endY);
+    if (isConnector) {
+      const midY = (startY + endY) / 2;
+      ctx.bezierCurveTo(startX, midY, endX, midY, endX, endY);
+    } else {
+      ctx.bezierCurveTo(startX + curve * direction, startY, endX - curve * direction, endY, endX, endY);
+    }
     ctx.stroke();
     ctx.restore();
   });
@@ -1484,6 +1710,7 @@ function drawPngNodes(ctx, bounds, palette) {
   walk(state.tree, (node) => {
     const pos = state.positions.get(node.id);
     if (!pos) return;
+    if (!shouldRenderLayer(pos.layer)) return;
     const className = nodeClass(node, pos, matches, hasSearch);
     const isMuted = className.includes("is-muted");
     const isMatch = className.includes("is-match");
@@ -1498,7 +1725,8 @@ function drawPngNode(ctx, node, pos, bounds, palette, isMatch) {
   const x = pos.x - bounds.minX - pos.width / 2;
   const y = pos.y - bounds.minY - pos.height / 2;
   const branch = pos.color;
-  const fill = mixColors(palette.nodeBg, branch, pos.depth === 0 ? 0.16 : 0.08);
+  const isGhost = Boolean(node.parallelOf);
+  const fill = isGhost ? mixColors(palette.nodeBg, branch, 0.04) : mixColors(palette.nodeBg, branch, pos.depth === 0 ? 0.16 : 0.08);
   const border = mixColors(branch, palette.line, pos.depth === 0 ? 0.2 : 0.38);
 
   ctx.shadowColor = palette.shadow;
@@ -1511,8 +1739,10 @@ function drawPngNode(ctx, node, pos, bounds, palette, isMatch) {
 
   ctx.strokeStyle = border;
   ctx.lineWidth = 1;
+  if (isGhost) ctx.setLineDash([7, 5]);
   roundedRectPath(ctx, x, y, pos.width, pos.height, 8);
   ctx.stroke();
+  ctx.setLineDash([]);
 
   if (pos.depth > 0) {
     roundedLeftRectPath(ctx, x, y, 6, pos.height, 8);
@@ -1525,6 +1755,15 @@ function drawPngNode(ctx, node, pos, bounds, palette, isMatch) {
     ctx.strokeStyle = "rgba(255,209,102,0.72)";
     ctx.lineWidth = 4;
     ctx.stroke();
+  }
+
+  if (isGhost) {
+    roundedRectPath(ctx, x + 8, y + 8, pos.width - 16, pos.height - 16, 6);
+    ctx.setLineDash([5, 5]);
+    ctx.strokeStyle = mixColors(branch, palette.canvas, 0.44);
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.setLineDash([]);
   }
 
   drawPngNodeText(ctx, node.text, x, y, pos, palette);
@@ -1687,6 +1926,11 @@ function wireControls() {
       updateSnapStepValue();
       state.selectedId = state.tree.id;
       state.mapName = state.mapName || state.tree.text;
+      state.isLayer3d = false;
+      state.layerFilterDepth = 0;
+      state.focusLayerDepth = 0;
+      document.body.classList.remove("layer-3d");
+      els.viewport.classList.remove("is-layer-3d");
       render();
       fitToView();
     } catch (error) {
@@ -1815,6 +2059,39 @@ function wireControls() {
     centerRoot();
   });
 
+  document.getElementById("view3dButton").addEventListener("click", () => {
+    setLayer3dMode(true);
+  });
+
+  document.getElementById("clearLayerButton").addEventListener("click", () => {
+    clearLayerFilter();
+  });
+
+  const layer3dControls = document.getElementById("layer3dControls");
+  layer3dControls.addEventListener("pointerdown", (event) => {
+    event.stopPropagation();
+  });
+
+  document.getElementById("layerUpButton").addEventListener("click", () => {
+    changeFocusLayer(-1);
+  });
+
+  document.getElementById("layerDownButton").addEventListener("click", () => {
+    changeFocusLayer(1);
+  });
+
+  document.getElementById("addLowerLayerButton").addEventListener("click", () => {
+    addLowerLayerNode();
+  });
+
+  document.getElementById("commitLayerButton").addEventListener("click", () => {
+    commitFocusedLayerTo2d();
+  });
+
+  document.getElementById("exit3dButton").addEventListener("click", () => {
+    setLayer3dMode(false);
+  });
+
   document.getElementById("maximizeMapButton").addEventListener("click", () => {
     setMapMaximized(true);
   });
@@ -1836,6 +2113,12 @@ function wireControls() {
 
 function wireKeyboardShortcuts() {
   document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && state.isLayer3d) {
+      event.preventDefault();
+      setLayer3dMode(false);
+      return;
+    }
+
     if (event.key === "Escape" && document.body.classList.contains("map-maximized")) {
       event.preventDefault();
       setMapMaximized(false);
@@ -1860,6 +2143,99 @@ function wireKeyboardShortcuts() {
       undo();
     }
   });
+}
+
+function setLayer3dMode(isEnabled) {
+  if (state.isLayer3d === isEnabled) return;
+  if (isEnabled) {
+    state.layerFilterDepth = null;
+    state.focusLayerDepth = getNodeLayer(findNode(state.selectedId)?.node);
+  } else {
+    state.layerFilterDepth = 0;
+    state.focusLayerDepth = 0;
+    ensureSelectedNodeVisible();
+  }
+
+  state.isLayer3d = isEnabled;
+  document.body.classList.toggle("layer-3d", isEnabled);
+  els.viewport.classList.toggle("is-layer-3d", isEnabled);
+  render();
+  requestAnimationFrame(fitToView);
+}
+
+function changeFocusLayer(delta) {
+  if (!state.isLayer3d) return;
+  state.focusLayerDepth = clamp(state.focusLayerDepth + delta, 0, getMaxRenderedLayer());
+  render();
+}
+
+function addLowerLayerNode() {
+  if (!state.isLayer3d) return;
+  const found = findNode(state.selectedId);
+  if (!found) return;
+  pushHistory();
+  found.node.collapsed = false;
+  const layer = getNodeLayer(found.node) + 1;
+  const child = normalizeNode({
+    text: found.node.text,
+    layer,
+    parallelOf: found.node.id,
+    offset: { x: 0, y: 0 },
+    children: [],
+  });
+  found.node.children.push(child);
+  state.selectedId = child.id;
+  state.focusLayerDepth = layer;
+  state.flashId = child.id;
+  render();
+}
+
+function commitFocusedLayerTo2d() {
+  if (!state.isLayer3d) return;
+  state.layerFilterDepth = state.focusLayerDepth;
+  state.isLayer3d = false;
+  document.body.classList.remove("layer-3d");
+  els.viewport.classList.remove("is-layer-3d");
+  render();
+  requestAnimationFrame(fitToView);
+  els.statusText.textContent = `階層 ${state.layerFilterDepth} のみを2D表示にしました。`;
+}
+
+function clearLayerFilter() {
+  if (state.layerFilterDepth === 0 && !state.isLayer3d) return;
+  state.isLayer3d = false;
+  state.layerFilterDepth = 0;
+  state.focusLayerDepth = 0;
+  ensureSelectedNodeVisible();
+  document.body.classList.remove("layer-3d");
+  els.viewport.classList.remove("is-layer-3d");
+  render();
+  requestAnimationFrame(fitToView);
+  els.statusText.textContent = "通常の2D表示に戻しました。";
+}
+
+function ensureSelectedNodeVisible() {
+  const found = findNode(state.selectedId);
+  if (!found || !shouldRenderLayer(getNodeLayer(found.node))) {
+    state.selectedId = state.tree.id;
+  }
+}
+
+function updateLayerControls() {
+  const controls = document.getElementById("layer3dControls");
+  const view3dButton = document.getElementById("view3dButton");
+  const clearLayerButton = document.getElementById("clearLayerButton");
+  const layerLabel = document.getElementById("layerLevelLabel");
+  const layerUpButton = document.getElementById("layerUpButton");
+  const layerDownButton = document.getElementById("layerDownButton");
+  const maxLayer = getMaxRenderedLayer();
+
+  controls.hidden = !state.isLayer3d;
+  view3dButton.hidden = state.isLayer3d;
+  clearLayerButton.hidden = state.isLayer3d || state.layerFilterDepth === 0;
+  layerLabel.textContent = `階層 ${state.focusLayerDepth}`;
+  layerUpButton.disabled = state.focusLayerDepth <= 0;
+  layerDownButton.disabled = state.focusLayerDepth >= maxLayer;
 }
 
 function setMapMaximized(isMaximized) {
@@ -1902,6 +2278,21 @@ function setZoom(nextZoom) {
   updateTransform();
 }
 
+function setZoomAtPoint(nextZoom, clientX, clientY) {
+  const rect = els.viewport.getBoundingClientRect();
+  const viewportX = clientX - rect.left;
+  const viewportY = clientY - rect.top;
+  const previousZoom = state.zoom;
+  const zoom = Math.min(1.8, Math.max(0.28, nextZoom));
+  if (zoom === previousZoom) return;
+
+  const factor = zoom / previousZoom;
+  state.zoom = zoom;
+  state.pan.x = viewportX - (viewportX - state.pan.x) * factor;
+  state.pan.y = viewportY - (viewportY - state.pan.y) * factor;
+  updateTransform();
+}
+
 function centerRoot() {
   const rect = els.viewport.getBoundingClientRect();
   state.pan.x = rect.width / 2 - WORLD.cx * state.zoom;
@@ -1938,16 +2329,8 @@ function wirePanZoom() {
     "wheel",
     (event) => {
       event.preventDefault();
-      const rect = els.viewport.getBoundingClientRect();
-      const before = {
-        x: (event.clientX - rect.left - state.pan.x) / state.zoom,
-        y: (event.clientY - rect.top - state.pan.y) / state.zoom,
-      };
       const factor = event.deltaY > 0 ? 0.9 : 1.1;
-      setZoom(state.zoom * factor);
-      state.pan.x = event.clientX - rect.left - before.x * state.zoom;
-      state.pan.y = event.clientY - rect.top - before.y * state.zoom;
-      updateTransform();
+      setZoomAtPoint(state.zoom * factor, event.clientX, event.clientY);
     },
     { passive: false },
   );

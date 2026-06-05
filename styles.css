@@ -308,6 +308,44 @@ h2 {
   cursor: grabbing;
 }
 
+.canvas-viewport.is-layer-3d {
+  perspective: 1800px;
+  perspective-origin: 50% 34%;
+}
+
+.layer-3d-controls {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 9;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 120px);
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface), transparent 4%);
+  box-shadow: var(--shadow);
+}
+
+.layer-3d-controls[hidden] {
+  display: none;
+}
+
+.layer-3d-controls button {
+  min-width: 52px;
+  padding: 0 10px;
+}
+
+.layer-3d-controls strong {
+  min-width: 72px;
+  color: var(--ink);
+  font-size: 13px;
+  text-align: center;
+  white-space: nowrap;
+}
+
 .restore-map-button {
   position: absolute;
   top: 14px;
@@ -356,6 +394,7 @@ body.map-maximized .canvas-viewport {
   width: 3200px;
   height: 2200px;
   transform-origin: 0 0;
+  transform-style: preserve-3d;
   transition: transform var(--motion-speed) var(--motion-ease);
 }
 
@@ -363,6 +402,7 @@ body.map-maximized .canvas-viewport {
   transition: none;
 }
 
+.floor-layer,
 .edge-layer,
 .node-layer {
   position: absolute;
@@ -371,8 +411,34 @@ body.map-maximized .canvas-viewport {
   height: 100%;
 }
 
+.floor-layer,
 .edge-layer {
   overflow: visible;
+  pointer-events: none;
+}
+
+.floor-plate {
+  stroke-width: 2;
+  stroke-linejoin: round;
+  transition:
+    opacity var(--motion-speed) var(--motion-ease),
+    filter var(--motion-speed) var(--motion-ease);
+}
+
+.floor-plate.is-layer-dimmed {
+  opacity: 0.16;
+  filter: saturate(0.65);
+}
+
+.floor-plate.is-layer-focused {
+  opacity: 0.46;
+}
+
+.floor-label {
+  fill: var(--muted);
+  font-size: 34px;
+  font-weight: 700;
+  opacity: 0.7;
 }
 
 .mind-node {
@@ -438,6 +504,39 @@ body.map-maximized .canvas-viewport {
 .mind-node.is-removing {
   pointer-events: none;
   animation: node-remove var(--motion-speed) var(--motion-ease) forwards;
+}
+
+body.layer-3d .mind-node.is-layer-dimmed {
+  opacity: 0.24;
+  filter: saturate(0.62);
+}
+
+body.layer-3d .mind-node.is-layer-focused {
+  box-shadow:
+    0 0 0 5px color-mix(in srgb, var(--branch), transparent 64%),
+    var(--shadow);
+}
+
+.mind-node.is-layer-ghost {
+  border-style: dashed;
+  background: color-mix(in srgb, var(--node-bg), transparent 22%);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--branch), transparent 64%),
+    0 12px 34px rgba(0, 0, 0, 0.18);
+}
+
+.mind-node.is-layer-ghost .node-title {
+  opacity: 0.82;
+  font-style: italic;
+}
+
+.mind-node.is-layer-ghost::after {
+  content: "";
+  position: absolute;
+  inset: 8px;
+  border: 1px dashed color-mix(in srgb, var(--branch), transparent 44%);
+  border-radius: 6px;
+  pointer-events: none;
 }
 
 .mind-node.is-match {
@@ -543,6 +642,26 @@ body.map-maximized .canvas-viewport {
 
 .edge-path.is-entering {
   animation: edge-enter var(--motion-speed) var(--motion-ease);
+}
+
+.edge-path.is-layer-dimmed {
+  opacity: 0.14;
+}
+
+.edge-path.is-layer-focused {
+  opacity: 0.82;
+  stroke-width: 3;
+}
+
+.edge-path.is-layer-connector {
+  stroke-width: 2;
+  stroke-dasharray: 8 7;
+  opacity: 0.58;
+  filter: drop-shadow(0 2px 6px rgba(124, 192, 255, 0.28));
+}
+
+.edge-path.is-layer-connector.is-layer-dimmed {
+  opacity: 0.26;
 }
 
 .edge-path.is-muted,
