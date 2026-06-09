@@ -6,13 +6,21 @@
   const els = {
     atlasSizeSelect: document.getElementById("atlasSizeSelect"),
     zoomSelect: document.getElementById("zoomSelect"),
+    viewModeSelect: document.getElementById("viewModeSelect"),
+    mipSelect: document.getElementById("mipSelect"),
+    projectModeSelect: document.getElementById("projectModeSelect"),
     fitZoomBtn: document.getElementById("fitZoomBtn"),
     undoBtn: document.getElementById("undoBtn"),
     redoBtn: document.getElementById("redoBtn"),
+    alignLeftBtn: document.getElementById("alignLeftBtn"),
+    alignTopBtn: document.getElementById("alignTopBtn"),
+    distributeXBtn: document.getElementById("distributeXBtn"),
+    distributeYBtn: document.getElementById("distributeYBtn"),
     packBtn: document.getElementById("packBtn"),
     saveProjectBtn: document.getElementById("saveProjectBtn"),
     loadProjectBtn: document.getElementById("loadProjectBtn"),
     projectInput: document.getElementById("projectInput"),
+    externalAssetInput: document.getElementById("externalAssetInput"),
     exportPngBtn: document.getElementById("exportPngBtn"),
     exportJsonBtn: document.getElementById("exportJsonBtn"),
     addImagesBtn: document.getElementById("addImagesBtn"),
@@ -26,6 +34,7 @@
     atlasLabel: document.getElementById("atlasLabel"),
     atlasMeta: document.getElementById("atlasMeta"),
     stageStats: document.getElementById("stageStats"),
+    validationList: document.getElementById("validationList"),
     statusBar: document.getElementById("statusBar"),
   };
 
@@ -33,10 +42,16 @@
   const state = {
     atlasSize: 2048,
     zoom: 0.5,
+    viewMode: "normal",
+    mipLevel: 1,
+    projectMode: "embed",
+    pendingExternalProject: null,
     assets: [],
     placements: [],
     selected: null,
+    selectedPlacementIds: [],
     pointerDrag: null,
+    panDrag: null,
     history: [],
     future: [],
     restoring: false,
@@ -277,6 +292,21 @@
     return new Uint8Array(scratchCtx.getImageData(0, 0, scratch.width, scratch.height).data);
   }
 
+  function analyzePixels(pixels) {
+    let hasAlpha = false;
+    let hasHiddenRgb = false;
+    for (let i = 0; i < pixels.length; i += 4) {
+      const alpha = pixels[i + 3];
+      if (alpha < 255) hasAlpha = true;
+      if (alpha === 0 && (pixels[i] || pixels[i + 1] || pixels[i + 2])) {
+        hasHiddenRgb = true;
+        hasAlpha = true;
+        break;
+      }
+    }
+    return { hasAlpha, hasHiddenRgb };
+  }
+
   function makeCrcTable() {
     const table = new Uint32Array(256);
     for (let n = 0; n < 256; n += 1) {
@@ -363,6 +393,25 @@
     return null;
   }
 
+  function isPlacementSelected(placementId) {
+    return state.selectedPlacementIds.includes(placementId);
+  }
+
+  function selectedPlacements() {
+    return state.selectedPlacementIds.map(getPlacement).filter(Boolean);
+  }
+
+  function selectionBounds() {
+    const placements = selectedPlacements();
+    if (!placements.length) return null;
+    const rects = placements.map(placementRect);
+    const left = Math.min(...rects.map((rect) => rect.x));
+    const top = Math.min(...rects.map((rect) => rect.y));
+    const right = Math.max(...rects.map((rect) => rect.x + rect.width));
+    const bottom = Math.max(...rects.map((rect) => rect.y + rect.height));
+    return { x: left, y: top, width: right - left, height: bottom - top };
+  }
+
   function scaledSize(asset, scale) {
     return {
       width: Math.max(1, Math.round(asset.width * scale)),
@@ -382,13 +431,19 @@
     };
   }
 
-  function setPlacementScale(placement, scale) {
+  function setPlacementScale(placement, scale, options = {}) {
     const asset = getAsset(placement.assetId);
     if (!asset) return;
+    const previousRect = placementRect(placement);
     const size = paddedSize(asset, scale);
     placement.scale = scale;
-    placement.width = size.width;
-    placement.height = size.height;
+    if (placement.locked && options.keepLockedSlot !== false) {
+      placement.width = previousRect.width;
+      placement.height = previousRect.height;
+    } else {
+      placement.width = size.width;
+      placement.height = size.height;
+    }
   }
 
   function snapValue(value) {
@@ -401,6 +456,25 @@
 
   function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
+  }
+
+  function workspaceMargin() {
+    return 2048;
+  }
+
+  function workspaceSize() {
+    return state.atlasSize + workspaceMargin() * 2;
+  }
+
+  function atlasOrigin() {
+    const margin = workspaceMargin();
+    return { x: margin, y: margin };
+  }
+
+  function resizeWorkspaceCanvas() {
+    const size = workspaceSize();
+    els.canvas.width = size;
+    els.canvas.height = size;
   }
 
   function placementRect(placement) {
@@ -433,18 +507,41 @@
     return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
   }
 
-  function clampPlacement(placement) {
+  function isPlacementExportable(placement) {
     const rect = placementRect(placement);
-    placement.x = clamp(snapValue(placement.x), 0, Math.max(0, state.atlasSize - rect.width));
-    placement.y = clamp(snapValue(placement.y), 0, Math.max(0, state.atlasSize - rect.height));
+    return rect.x >= 0 && rect.y >= 0 && rect.x + rect.width <= state.atlasSize && rect.y + rect.height <= state.atlasSize;
   }
 
-  function getCollisionIds() {
+  function exportablePlacements() {
+    return state.placements.filter(isPlacementExportable);
+  }
+
+  function clampPlacement(placement) {
+    const rect = placementRect(placement);
+    const margin = workspaceMargin();
+    placement.x = clamp(snapValue(placement.x), -margin, Math.max(-margin, state.atlasSize + margin - rect.width));
+    placement.y = clamp(snapValue(placement.y), -margin, Math.max(-margin, state.atlasSize + margin - rect.height));
+  }
+
+  function clampedWorkspacePosition(width, height, point) {
+    const margin = workspaceMargin();
+    return {
+      x: clamp(snapValue(point.x), -margin, Math.max(-margin, state.atlasSize + margin - width)),
+      y: clamp(snapValue(point.y), -margin, Math.max(-margin, state.atlasSize + margin - height)),
+    };
+  }
+
+  function pointIsInsideAtlas(point) {
+    return point.x >= 0 && point.y >= 0 && point.x <= state.atlasSize && point.y <= state.atlasSize;
+  }
+
+  function getCollisionIds(options = {}) {
     const ids = new Set();
-    for (let i = 0; i < state.placements.length; i += 1) {
-      for (let j = i + 1; j < state.placements.length; j += 1) {
-        const a = state.placements[i];
-        const b = state.placements[j];
+    const placements = options.exportOnly ? exportablePlacements() : state.placements;
+    for (let i = 0; i < placements.length; i += 1) {
+      for (let j = i + 1; j < placements.length; j += 1) {
+        const a = placements[i];
+        const b = placements[j];
         if (rectanglesOverlap(placementRect(a), placementRect(b))) {
           ids.add(a.id);
           ids.add(b.id);
@@ -480,24 +577,34 @@
     return null;
   }
 
+  function findPlacementPosition(width, height, preferred = null, excludePlacementId = null) {
+    if (preferred && !pointIsInsideAtlas(preferred)) {
+      return clampedWorkspacePosition(width, height, preferred);
+    }
+    return findFreePosition(width, height, preferred, excludePlacementId);
+  }
+
   function setStatus(message) {
     els.statusBar.textContent = message;
   }
 
-  function makeSnapshot() {
+  function makeSnapshot(options = {}) {
+    const embedImages = options.embedImages !== false;
     return {
       type: "atlas-snapper-project",
-      version: 2,
+      version: 3,
       atlasSize: state.atlasSize,
       assets: state.assets.map((asset) => ({
         id: asset.id,
         name: asset.name,
-        dataUrl: asset.dataUrl || asset.url,
+        externalPath: asset.externalPath || asset.name,
+        dataUrl: embedImages ? asset.dataUrl || asset.url : undefined,
         width: asset.width,
         height: asset.height,
         defaultScale: asset.defaultScale,
         padding: assetPadding(asset),
         bleed: assetBleed(asset),
+        rawPreserved: Boolean(asset.rawPreserved),
       })),
       placements: state.placements.map((placement) => ({
         id: placement.id,
@@ -507,8 +614,11 @@
         scale: placement.scale,
         width: placement.width,
         height: placement.height,
+        locked: Boolean(placement.locked),
       })),
       selected: state.selected ? { ...state.selected } : null,
+      selectedPlacementIds: [...state.selectedPlacementIds],
+      projectMode: embedImages ? "embed" : "external",
     };
   }
 
@@ -528,11 +638,18 @@
 
   function normalizeSnapshot(payload) {
     const atlasSize = Number(payload.atlasSize || payload.atlas?.width || 2048);
+    const selected = payload.selected || null;
     return {
       atlasSize,
       assets: Array.isArray(payload.assets) ? payload.assets : [],
       placements: Array.isArray(payload.placements) ? payload.placements : [],
-      selected: payload.selected || null,
+      selected,
+      selectedPlacementIds: Array.isArray(payload.selectedPlacementIds)
+        ? payload.selectedPlacementIds
+        : selected?.type === "placement"
+          ? [selected.id]
+          : [],
+      projectMode: payload.projectMode || "embed",
     };
   }
 
@@ -541,20 +658,24 @@
     state.restoring = true;
     try {
       const assets = await Promise.all(
-        snapshot.assets.map((asset) =>
-          createAssetFromDataUrl(asset.dataUrl || asset.url, asset.name || "image.png", {
+        snapshot.assets.map((asset) => {
+          const dataUrl = asset.dataUrl || asset.url;
+          if (!dataUrl) throw new Error(`${asset.name || asset.externalPath || "image"} の参照画像が必要です。`);
+          return createAssetFromDataUrl(dataUrl, asset.name || asset.externalPath || "image.png", {
             id: asset.id,
+            externalPath: asset.externalPath,
             defaultScale: asset.defaultScale,
             padding: asset.padding,
             bleed: asset.bleed,
-          }),
-        ),
+          });
+        }),
       );
 
       state.atlasSize = snapshot.atlasSize;
       els.atlasSizeSelect.value = String(snapshot.atlasSize);
-      els.canvas.width = snapshot.atlasSize;
-      els.canvas.height = snapshot.atlasSize;
+      state.projectMode = snapshot.projectMode === "external" ? "external" : "embed";
+      els.projectModeSelect.value = state.projectMode;
+      resizeWorkspaceCanvas();
       state.assets = assets;
       state.placements = snapshot.placements.map((placement) => ({
         id: placement.id || uid("placement"),
@@ -564,11 +685,14 @@
         scale: Number(placement.scale) || 1,
         width: Number(placement.width) || undefined,
         height: Number(placement.height) || undefined,
+        locked: Boolean(placement.locked),
       }));
       state.selected = snapshot.selected;
+      state.selectedPlacementIds = snapshot.selectedPlacementIds.filter((id) => state.placements.some((placement) => placement.id === id));
       state.placements.forEach(clampPlacement);
       applyZoom();
       renderAll();
+      queueCenterAtlas();
     } finally {
       state.restoring = false;
       updateHistoryButtons();
@@ -591,27 +715,71 @@
     setStatus("やり直しました。");
   }
 
-  function setSelected(type, id) {
-    state.selected = type && id ? { type, id } : null;
+  function setSelected(type, id, options = {}) {
+    if (type === "placement" && id) {
+      if (options.toggle) {
+        if (isPlacementSelected(id)) {
+          state.selectedPlacementIds = state.selectedPlacementIds.filter((placementId) => placementId !== id);
+          const nextId = state.selectedPlacementIds[state.selectedPlacementIds.length - 1];
+          state.selected = nextId ? { type: "placement", id: nextId } : null;
+        } else {
+          state.selectedPlacementIds.push(id);
+          state.selected = { type, id };
+        }
+      } else if (options.add) {
+        if (!isPlacementSelected(id)) state.selectedPlacementIds.push(id);
+        state.selected = { type, id };
+      } else {
+        state.selectedPlacementIds = [id];
+        state.selected = { type, id };
+      }
+    } else {
+      state.selectedPlacementIds = [];
+      state.selected = type && id ? { type, id } : null;
+    }
     renderAssetList();
     renderInspector();
     renderCanvas();
+    renderValidation();
   }
 
   function setAtlasSize(size, recordHistory = true) {
     state.atlasSize = size;
-    els.canvas.width = size;
-    els.canvas.height = size;
+    resizeWorkspaceCanvas();
     state.placements.forEach(clampPlacement);
     applyZoom();
     renderAll();
+    queueCenterAtlas();
     if (recordHistory) pushHistory();
   }
 
   function applyZoom() {
-    const cssSize = Math.max(64, Math.round(state.atlasSize * state.zoom));
+    const cssSize = Math.max(64, Math.round(workspaceSize() * state.zoom));
     els.canvasWrap.style.width = `${cssSize}px`;
     els.canvasWrap.style.height = `${cssSize}px`;
+  }
+
+  function viewportCenterWorldPoint() {
+    if (!els.stageViewport.clientWidth || !els.stageViewport.clientHeight) return null;
+    return {
+      x: (els.stageViewport.scrollLeft + els.stageViewport.clientWidth / 2) / state.zoom,
+      y: (els.stageViewport.scrollTop + els.stageViewport.clientHeight / 2) / state.zoom,
+    };
+  }
+
+  function scrollToWorldPoint(point) {
+    if (!point) return;
+    els.stageViewport.scrollLeft = Math.max(0, point.x * state.zoom - els.stageViewport.clientWidth / 2);
+    els.stageViewport.scrollTop = Math.max(0, point.y * state.zoom - els.stageViewport.clientHeight / 2);
+  }
+
+  function centerAtlasInViewport() {
+    const origin = atlasOrigin();
+    scrollToWorldPoint({ x: origin.x + state.atlasSize / 2, y: origin.y + state.atlasSize / 2 });
+  }
+
+  function queueCenterAtlas() {
+    window.requestAnimationFrame(centerAtlasInViewport);
   }
 
   function fitZoomToViewport() {
@@ -622,13 +790,20 @@
     state.zoom = rounded / 100;
     els.zoomSelect.value = String(rounded);
     applyZoom();
+    queueCenterAtlas();
+  }
+
+  function worldPointFromEvent(event) {
+    const rect = els.canvas.getBoundingClientRect();
+    const x = ((event.clientX - rect.left) / rect.width) * els.canvas.width;
+    const y = ((event.clientY - rect.top) / rect.height) * els.canvas.height;
+    return { x, y };
   }
 
   function canvasPointFromEvent(event) {
-    const rect = els.canvas.getBoundingClientRect();
-    const x = ((event.clientX - rect.left) / rect.width) * state.atlasSize;
-    const y = ((event.clientY - rect.top) / rect.height) * state.atlasSize;
-    return { x, y };
+    const worldPoint = worldPointFromEvent(event);
+    const origin = atlasOrigin();
+    return { x: worldPoint.x - origin.x, y: worldPoint.y - origin.y };
   }
 
   function hitTestPlacement(point) {
@@ -665,15 +840,19 @@
         rawPreserved: false,
       };
     }
+    const pixelInfo = analyzePixels(pixelSource.pixels);
 
     return {
       id: options.id || uid("asset"),
       name,
+      externalPath: options.externalPath || options.path || name,
       url: dataUrl,
       dataUrl,
       image,
       pixels: pixelSource.pixels,
       rawPreserved: pixelSource.rawPreserved,
+      hasAlpha: pixelInfo.hasAlpha,
+      hasHiddenRgb: pixelInfo.hasHiddenRgb,
       width,
       height,
       defaultScale: Number(options.defaultScale) || 1,
@@ -686,7 +865,9 @@
   async function loadImageFile(file) {
     try {
       const dataUrl = await readFileAsDataUrl(file);
-      return createAssetFromDataUrl(dataUrl, file.name);
+      return createAssetFromDataUrl(dataUrl, file.name, {
+        externalPath: file.webkitRelativePath || file.name,
+      });
     } catch {
       throw new Error(`${file.name} を読み込めませんでした。`);
     }
@@ -733,18 +914,23 @@
 
     const existing = getPlacementForAsset(assetId);
     const size = paddedSize(asset, existing ? existing.scale : asset.defaultScale);
-    const position = findFreePosition(size.width, size.height, preferredPoint, existing ? existing.id : null);
+    const position = findPlacementPosition(size.width, size.height, preferredPoint, existing ? existing.id : null);
     if (!position) {
       setStatus(`${asset.name} を置ける空き領域がありません。縮小倍率か最終サイズを変更してください。`);
       return null;
     }
 
     if (existing) {
+      if (existing.locked) {
+        setSelected("placement", existing.id);
+        setStatus(`${asset.name} のスロットは固定されています。`);
+        return existing;
+      }
       existing.x = position.x;
       existing.y = position.y;
       clampPlacement(existing);
       setSelected("placement", existing.id);
-      setStatus(`${asset.name} を ${existing.x}, ${existing.y} に移動しました。`);
+      setStatus(isPlacementExportable(existing) ? `${asset.name} を ${existing.x}, ${existing.y} に移動しました。` : `${asset.name} を退避スペースに移動しました。`);
       pushHistory();
       return existing;
     }
@@ -757,11 +943,12 @@
       scale: asset.defaultScale,
       width: size.width,
       height: size.height,
+      locked: false,
     };
     clampPlacement(placement);
     state.placements.push(placement);
     setSelected("placement", placement.id);
-    setStatus(`${asset.name} を ${placement.x}, ${placement.y} に配置しました。`);
+    setStatus(isPlacementExportable(placement) ? `${asset.name} を ${placement.x}, ${placement.y} に配置しました。` : `${asset.name} を退避スペースに配置しました。`);
     pushHistory();
     return placement;
   }
@@ -787,6 +974,11 @@
 
     const existingPlacement = getPlacementForAsset(assetId);
     if (existingPlacement && existingPlacement.id !== placement.id) {
+      if (existingPlacement.locked) {
+        setSelected("placement", existingPlacement.id);
+        setStatus(`${asset.name} は固定スロットで使用中です。`);
+        return null;
+      }
       state.placements = state.placements.filter((item) => item.id !== existingPlacement.id);
     }
 
@@ -852,6 +1044,7 @@
         scale: asset.defaultScale,
         width: size.width,
         height: size.height,
+        locked: false,
       });
       placedCount += 1;
     });
@@ -909,41 +1102,108 @@
   }
 
   function renderCanvas() {
-    ctx.clearRect(0, 0, state.atlasSize, state.atlasSize);
+    const origin = atlasOrigin();
+    const world = workspaceSize();
+    ctx.clearRect(0, 0, world, world);
+    drawWorkspaceGrid();
+
+    ctx.save();
+    ctx.translate(origin.x, origin.y);
     ctx.fillStyle = "#273949";
     ctx.fillRect(0, 0, state.atlasSize, state.atlasSize);
+    ctx.restore();
 
-    drawGrid();
-    if (!state.placements.length) drawEmptyHint();
+    const collisionIds = getCollisionIds({ exportOnly: true });
+    const previewActive = state.placements.length && (state.viewMode !== "normal" || state.mipLevel !== 1);
+    const placementsToDraw = previewActive ? state.placements.filter((placement) => !isPlacementExportable(placement)) : state.placements;
 
-    const collisionIds = getCollisionIds();
-
-    state.placements.forEach((placement) => {
+    ctx.save();
+    ctx.translate(origin.x, origin.y);
+    if (previewActive) {
+      drawPreviewPixels(ctx);
+    }
+    placementsToDraw.forEach((placement) => {
       const asset = getAsset(placement.assetId);
       if (!asset) return;
+      drawPlacementImage(ctx, placement);
+    });
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(origin.x, origin.y);
+    drawGrid();
+    ctx.restore();
+    drawAtlasFrame();
+
+    if (!state.placements.length) drawEmptyHint();
+
+    ctx.save();
+    ctx.translate(origin.x, origin.y);
+    state.placements.forEach((placement) => {
       const rect = placementRect(placement);
       ctx.save();
-      drawPlacementImage(ctx, placement);
-      ctx.lineWidth = 8;
-      ctx.strokeStyle = collisionIds.has(placement.id) ? "#e25469" : "rgba(255, 255, 255, 0.78)";
+      ctx.lineWidth = placement.locked ? 10 : 8;
+      ctx.strokeStyle = collisionIds.has(placement.id)
+        ? "#e25469"
+        : !isPlacementExportable(placement)
+          ? "#f0b44d"
+          : placement.locked
+            ? "#80c6d0"
+            : "rgba(255, 255, 255, 0.78)";
+      if (placement.locked) ctx.setLineDash([22, 14]);
       ctx.strokeRect(rect.x + 4, rect.y + 4, rect.width - 8, rect.height - 8);
       ctx.restore();
     });
 
-    if (state.selected?.type === "placement") {
-      const placement = getPlacement(state.selected.id);
-      if (placement) {
-        const rect = placementRect(placement);
+    selectedPlacements().forEach((placement) => {
+      const rect = placementRect(placement);
+      ctx.save();
+      ctx.lineWidth = placement.id === state.selected?.id ? 12 : 8;
+      ctx.strokeStyle = placement.id === state.selected?.id ? "#f0b44d" : "#ffe0a1";
+      ctx.setLineDash([28, 16]);
+      ctx.strokeRect(rect.x + 6, rect.y + 6, rect.width - 12, rect.height - 12);
+      ctx.restore();
+    });
+
+    if (state.selectedPlacementIds.length > 1) {
+      const rect = selectionBounds();
+      if (rect) {
         ctx.save();
-        ctx.lineWidth = 12;
-        ctx.strokeStyle = "#f0b44d";
-        ctx.setLineDash([28, 16]);
-        ctx.strokeRect(rect.x + 6, rect.y + 6, rect.width - 12, rect.height - 12);
+        ctx.lineWidth = 6;
+        ctx.strokeStyle = "rgba(240, 180, 77, 0.82)";
+        ctx.setLineDash([12, 10]);
+        ctx.strokeRect(rect.x + 3, rect.y + 3, rect.width - 6, rect.height - 6);
         ctx.restore();
       }
     }
+    ctx.restore();
 
     updateStats(collisionIds);
+  }
+
+  function drawWorkspaceGrid() {
+    const world = workspaceSize();
+    const origin = atlasOrigin();
+    ctx.save();
+    ctx.fillStyle = "#eef3f6";
+    ctx.fillRect(0, 0, world, world);
+    ctx.strokeStyle = "rgba(39, 57, 73, 0.08)";
+    ctx.lineWidth = 1;
+    const firstX = origin.x % SNAP;
+    const firstY = origin.y % SNAP;
+    for (let x = firstX; x <= world; x += SNAP) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, world);
+      ctx.stroke();
+    }
+    for (let y = firstY; y <= world; y += SNAP) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(world, y);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   function drawGrid() {
@@ -966,8 +1226,22 @@
     ctx.restore();
   }
 
-  function drawEmptyHint() {
+  function drawAtlasFrame() {
+    const origin = atlasOrigin();
     ctx.save();
+    ctx.lineWidth = 8;
+    ctx.strokeStyle = "#162534";
+    ctx.strokeRect(origin.x + 4, origin.y + 4, state.atlasSize - 8, state.atlasSize - 8);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "rgba(255,255,255,0.7)";
+    ctx.strokeRect(origin.x + 1, origin.y + 1, state.atlasSize - 2, state.atlasSize - 2);
+    ctx.restore();
+  }
+
+  function drawEmptyHint() {
+    const origin = atlasOrigin();
+    ctx.save();
+    ctx.translate(origin.x, origin.y);
     const fontSize = state.atlasSize >= 2048 ? 96 : 52;
     ctx.fillStyle = "rgba(255,255,255,0.88)";
     ctx.font = `700 ${fontSize}px "Yu Gothic UI", sans-serif`;
@@ -982,14 +1256,20 @@
   function updateStats(collisionIds = getCollisionIds()) {
     const total = state.assets.length;
     const placed = state.placements.length;
-    const usedArea = state.placements.reduce((sum, placement) => {
+    const exportPlacements = exportablePlacements();
+    const exportCount = exportPlacements.length;
+    const stagedCount = placed - exportCount;
+    const usedArea = exportPlacements.reduce((sum, placement) => {
       const rect = placementRect(placement);
       return sum + rect.width * rect.height;
     }, 0);
     const percent = total ? ((usedArea / (state.atlasSize * state.atlasSize)) * 100).toFixed(1) : "0.0";
-    els.stageStats.textContent = `${placed} / ${total} 配置・${percent}% 使用${collisionIds.size ? `・重なり ${collisionIds.size}` : ""}`;
+    const placementLabel = stagedCount ? `${exportCount} / ${total} 出力・退避 ${stagedCount}` : `${placed} / ${total} 配置`;
+    els.stageStats.textContent = `${placementLabel}・${percent}% 使用${state.selectedPlacementIds.length > 1 ? `・選択 ${state.selectedPlacementIds.length}` : ""}${collisionIds.size ? `・重なり ${collisionIds.size}` : ""}`;
     els.atlasLabel.textContent = `${state.atlasSize} x ${state.atlasSize}`;
-    els.atlasMeta.textContent = `${SNAP}px グリッド / 透明PNG出力`;
+    const modeLabel = state.viewMode === "alpha" ? "Alpha" : state.viewMode === "hiddenRgb" ? "透明RGB" : "通常";
+    const mipLabel = state.mipLevel === 1 ? "原寸" : `Mip 1/${state.mipLevel}`;
+    els.atlasMeta.textContent = `${SNAP}px グリッド / ${modeLabel} / ${mipLabel} / 周囲に退避可`;
   }
 
   function renderAssetList() {
@@ -1011,7 +1291,7 @@
       item.draggable = true;
       item.tabIndex = 0;
       if (state.selected?.type === "asset" && state.selected.id === asset.id) item.classList.add("selected");
-      if (state.selected?.type === "placement" && placement?.id === state.selected.id) item.classList.add("selected");
+      if (placement && isPlacementSelected(placement.id)) item.classList.add("selected");
 
       const image = document.createElement("img");
       image.src = asset.url;
@@ -1033,8 +1313,9 @@
       potBadge.className = `badge ${asset.powerOfTwo ? "ok" : "warn"}`;
       potBadge.textContent = asset.powerOfTwo ? "2のべき乗" : "要確認";
       const placedBadge = document.createElement("span");
-      placedBadge.className = `badge ${placement ? "ok" : ""}`;
-      placedBadge.textContent = placement ? "配置済み" : "未配置";
+      const placedExportable = placement && isPlacementExportable(placement);
+      placedBadge.className = `badge ${placement ? (placedExportable ? "ok" : "warn") : ""}`;
+      placedBadge.textContent = placement ? (placedExportable ? "出力対象" : "退避中") : "未配置";
       const alphaBadge = document.createElement("span");
       alphaBadge.className = `badge ${asset.rawPreserved ? "ok" : ""}`;
       alphaBadge.textContent = asset.rawPreserved ? "透明RGB保持" : "通常RGBA";
@@ -1043,9 +1324,9 @@
       meta.append(name, size, badges);
       item.append(image, meta);
 
-      item.addEventListener("click", () => {
+      item.addEventListener("click", (event) => {
         if (placement) {
-          setSelected("placement", placement.id);
+          setSelected("placement", placement.id, { toggle: event.shiftKey || event.ctrlKey || event.metaKey });
         } else {
           setSelected("asset", asset.id);
         }
@@ -1093,16 +1374,17 @@
     return row;
   }
 
-  function createScaleSelect(value, onChange) {
+  function createScaleSelect(value, onChange, options = {}) {
     const select = document.createElement("select");
-    const options = SCALE_OPTIONS.some((scale) => sameScale(scale, value)) ? SCALE_OPTIONS : [value, ...SCALE_OPTIONS];
-    options.forEach((scale) => {
+    const scaleOptions = SCALE_OPTIONS.some((scale) => sameScale(scale, value)) ? SCALE_OPTIONS : [value, ...SCALE_OPTIONS];
+    scaleOptions.forEach((scale) => {
       const option = document.createElement("option");
       option.value = String(scale);
       option.textContent = `${formatScale(scale)} (${scale})`;
       if (sameScale(scale, value)) option.selected = true;
       select.append(option);
     });
+    select.disabled = Boolean(options.disabled);
     select.addEventListener("change", () => onChange(Number(select.value)));
     return select;
   }
@@ -1111,8 +1393,9 @@
     const input = document.createElement("input");
     input.type = "number";
     input.step = String(options.step ?? SNAP);
-    input.min = String(options.min ?? 0);
+    if (options.min !== null) input.min = String(options.min ?? 0);
     if (options.max !== undefined) input.max = String(options.max);
+    input.disabled = Boolean(options.disabled);
     input.value = String(value);
     input.addEventListener("change", () => onChange(Number(input.value)));
     return input;
@@ -1225,14 +1508,15 @@
     if (!asset) return;
     const rect = placementRect(placement);
     const content = placementContentRect(placement);
-    const collisions = getCollisionIds();
+    const collisions = getCollisionIds({ exportOnly: true });
+    const exportable = isPlacementExportable(placement);
 
     const title = document.createElement("div");
     title.className = "inspectorTitle";
     const name = document.createElement("strong");
     name.textContent = asset.name;
     const subtitle = document.createElement("span");
-    subtitle.textContent = "アトラス上の配置";
+    subtitle.textContent = exportable ? "アトラス上の配置" : "退避スペース";
     title.append(name, subtitle);
 
     const grid = document.createElement("div");
@@ -1242,23 +1526,38 @@
     grid.append(createReadout("配置サイズ", `${rect.width} x ${rect.height}`));
     grid.append(createReadout("画像領域", `${content.width} x ${content.height}`));
     grid.append(createReadout("状態", collisions.has(placement.id) ? "ほかの画像と重なっています。" : "重なりはありません。"));
+    grid.append(createReadout("出力", exportable ? "PNG/JSONに含めます。" : "アトラス外のためPNG/JSONには含めません。"));
+
+    const lockInput = document.createElement("input");
+    lockInput.type = "checkbox";
+    lockInput.checked = Boolean(placement.locked);
+    lockInput.addEventListener("change", () => {
+      placement.locked = lockInput.checked;
+      renderAll();
+      setSelected("placement", placement.id);
+      pushHistory();
+      setStatus(placement.locked ? "スロットを固定しました。" : "スロット固定を解除しました。");
+    });
+    grid.append(createControlRow("固定", lockInput));
 
     const pair = document.createElement("div");
     pair.className = "pair";
     const xInput = createNumberInput(placement.x, (value) => {
+      if (placement.locked) return;
       placement.x = value;
       clampPlacement(placement);
       renderAll();
       setSelected("placement", placement.id);
       pushHistory();
-    });
+    }, { disabled: placement.locked, min: -workspaceMargin(), max: state.atlasSize + workspaceMargin() });
     const yInput = createNumberInput(placement.y, (value) => {
+      if (placement.locked) return;
       placement.y = value;
       clampPlacement(placement);
       renderAll();
       setSelected("placement", placement.id);
       pushHistory();
-    });
+    }, { disabled: placement.locked, min: -workspaceMargin(), max: state.atlasSize + workspaceMargin() });
     pair.append(createControlRow("X", xInput), createControlRow("Y", yInput));
     grid.append(pair);
 
@@ -1280,12 +1579,13 @@
       createControlRow(
         "縮小倍率",
         createScaleSelect(placement.scale, (scale) => {
+          if (placement.locked) return;
           setPlacementScale(placement, scale);
           clampPlacement(placement);
           renderAll();
           setSelected("placement", placement.id);
           pushHistory();
-        }),
+        }, { disabled: placement.locked }),
       ),
     );
 
@@ -1327,6 +1627,138 @@
     renderAssetList();
     renderInspector();
     renderCanvas();
+    renderValidation();
+  }
+
+  function validationItems() {
+    const items = [];
+    const collisionIds = getCollisionIds({ exportOnly: true });
+
+    if (!state.assets.length) {
+      items.push({ level: "warn", title: "画像なし", detail: "画像を追加すると検証が始まります。" });
+      return items;
+    }
+
+    if (!state.placements.length) {
+      items.push({ level: "warn", title: "未配置", detail: "まだアトラス上に配置された画像がありません。" });
+    }
+
+    state.assets.forEach((asset) => {
+      if (!asset.powerOfTwo) {
+        items.push({ level: "warn", title: `${asset.name}: 2のべき乗ではありません`, detail: `${asset.width} x ${asset.height}` });
+      }
+      if (asset.hasAlpha && !asset.rawPreserved) {
+        items.push({ level: "warn", title: `${asset.name}: 透明RGB保持なし`, detail: "PNG以外、または通常デコードのため透明部RGB保持は保証されません。" });
+      }
+      if (asset.hasHiddenRgb && asset.rawPreserved) {
+        items.push({ level: "ok", title: `${asset.name}: 透明RGB保持`, detail: "α=0ピクセル内のRGBを保持しています。" });
+      }
+      if (assetPadding(asset) > 0 && assetBleed(asset) === 0) {
+        items.push({ level: "warn", title: `${asset.name}: bleedなし`, detail: "mipmapでにじみが出る場合はbleedを2px以上にします。" });
+      }
+      if (assetBleed(asset) > 0 && assetBleed(asset) < 2) {
+        items.push({ level: "warn", title: `${asset.name}: bleedが小さい`, detail: "mipmap向けには2px以上が目安です。" });
+      }
+      if (state.projectMode === "external" && !asset.externalPath) {
+        items.push({ level: "error", title: `${asset.name}: 外部参照名なし`, detail: "外部参照保存には画像ファイル名が必要です。" });
+      }
+    });
+
+    state.placements.forEach((placement) => {
+      const asset = getAsset(placement.assetId);
+      const rect = placementRect(placement);
+      if (!isPlacementExportable(placement)) {
+        items.push({ level: "warn", title: `${asset?.name || "配置"}: 退避中`, detail: "アトラス外にあるためPNG/JSON出力から外れます。" });
+      }
+      if (collisionIds.has(placement.id)) {
+        items.push({ level: "error", title: `${asset?.name || "配置"}: 重なり`, detail: "ほかの配置と矩形が重なっています。" });
+      }
+      if (placement.locked) {
+        items.push({ level: "ok", title: `${asset?.name || "配置"}: スロット固定`, detail: "位置と枠サイズを固定しています。" });
+      }
+    });
+
+    if (!items.some((item) => item.level === "error" || item.level === "warn")) {
+      items.push({ level: "ok", title: "問題なし", detail: "現在の配置に大きな警告はありません。" });
+    }
+
+    return items;
+  }
+
+  function renderValidation() {
+    if (!els.validationList) return;
+    els.validationList.innerHTML = "";
+    validationItems().forEach((item) => {
+      const row = document.createElement("div");
+      row.className = `validationItem ${item.level}`;
+      const title = document.createElement("strong");
+      title.textContent = item.title;
+      const detail = document.createElement("span");
+      detail.textContent = item.detail;
+      row.append(title, detail);
+      els.validationList.append(row);
+    });
+  }
+
+  function movePlacementTo(placement, x, y) {
+    if (placement.locked) return false;
+    const beforeX = placement.x;
+    const beforeY = placement.y;
+    placement.x = x;
+    placement.y = y;
+    clampPlacement(placement);
+    return beforeX !== placement.x || beforeY !== placement.y;
+  }
+
+  function alignSelected(axis) {
+    const placements = selectedPlacements();
+    if (placements.length < 2) {
+      setStatus("整列するには2つ以上の配置を選択してください。");
+      return;
+    }
+    const rects = placements.map((placement) => ({ placement, rect: placementRect(placement) }));
+    const target = axis === "x" ? Math.min(...rects.map((item) => item.rect.x)) : Math.min(...rects.map((item) => item.rect.y));
+    let changed = false;
+    rects.forEach(({ placement }) => {
+      if (axis === "x") changed = movePlacementTo(placement, target, placement.y) || changed;
+      else changed = movePlacementTo(placement, placement.x, target) || changed;
+    });
+    if (changed) {
+      renderAll();
+      pushHistory();
+      setStatus(axis === "x" ? "左揃えしました。" : "上揃えしました。");
+    }
+  }
+
+  function distributeSelected(axis) {
+    const placements = selectedPlacements();
+    if (placements.length < 3) {
+      setStatus("分布するには3つ以上の配置を選択してください。");
+      return;
+    }
+
+    const items = placements
+      .map((placement) => ({ placement, rect: placementRect(placement) }))
+      .sort((a, b) => (axis === "x" ? a.rect.x - b.rect.x : a.rect.y - b.rect.y));
+    const first = items[0].rect;
+    const last = items[items.length - 1].rect;
+    const totalSize = items.reduce((sum, item) => sum + (axis === "x" ? item.rect.width : item.rect.height), 0);
+    const span = axis === "x" ? last.x + last.width - first.x : last.y + last.height - first.y;
+    const gap = (span - totalSize) / (items.length - 1);
+
+    let cursor = axis === "x" ? first.x : first.y;
+    let changed = false;
+    items.forEach(({ placement, rect }) => {
+      if (axis === "x") changed = movePlacementTo(placement, snapValue(cursor), placement.y) || changed;
+      else changed = movePlacementTo(placement, placement.x, snapValue(cursor)) || changed;
+      cursor += (axis === "x" ? rect.width : rect.height) + gap;
+    });
+
+    if (changed) {
+      renderAll();
+      pushHistory();
+      setStatus(axis === "x" ? "横方向に分布しました。" : "縦方向に分布しました。");
+    }
   }
 
   function copyAtlasPixel(pixels, atlasWidth, fromX, fromY, toX, toY) {
@@ -1417,8 +1849,87 @@
 
   function buildAtlasPixels() {
     const pixels = new Uint8Array(state.atlasSize * state.atlasSize * 4);
-    state.placements.forEach((placement) => drawPlacementPixels(pixels, placement));
+    exportablePlacements().forEach((placement) => drawPlacementPixels(pixels, placement));
     return pixels;
+  }
+
+  function downsamplePixels(source, width, height, factor) {
+    if (factor === 1) return { pixels: source, width, height };
+    const nextWidth = Math.max(1, Math.floor(width / factor));
+    const nextHeight = Math.max(1, Math.floor(height / factor));
+    const next = new Uint8Array(nextWidth * nextHeight * 4);
+
+    for (let y = 0; y < nextHeight; y += 1) {
+      for (let x = 0; x < nextWidth; x += 1) {
+        const sum = [0, 0, 0, 0];
+        let count = 0;
+        for (let oy = 0; oy < factor; oy += 1) {
+          for (let ox = 0; ox < factor; ox += 1) {
+            const sx = x * factor + ox;
+            const sy = y * factor + oy;
+            if (sx >= width || sy >= height) continue;
+            const offset = (sy * width + sx) * 4;
+            sum[0] += source[offset];
+            sum[1] += source[offset + 1];
+            sum[2] += source[offset + 2];
+            sum[3] += source[offset + 3];
+            count += 1;
+          }
+        }
+        const dst = (y * nextWidth + x) * 4;
+        next[dst] = Math.round(sum[0] / count);
+        next[dst + 1] = Math.round(sum[1] / count);
+        next[dst + 2] = Math.round(sum[2] / count);
+        next[dst + 3] = Math.round(sum[3] / count);
+      }
+    }
+
+    return { pixels: next, width: nextWidth, height: nextHeight };
+  }
+
+  function pixelsForViewMode(source) {
+    if (state.viewMode === "normal") return source;
+    const output = new Uint8ClampedArray(source.length);
+
+    for (let i = 0; i < source.length; i += 4) {
+      const alpha = source[i + 3];
+      if (state.viewMode === "alpha") {
+        output[i] = alpha;
+        output[i + 1] = alpha;
+        output[i + 2] = alpha;
+        output[i + 3] = 255;
+      } else if (state.viewMode === "hiddenRgb") {
+        if (alpha === 0 && (source[i] || source[i + 1] || source[i + 2])) {
+          output[i] = source[i];
+          output[i + 1] = source[i + 1];
+          output[i + 2] = source[i + 2];
+          output[i + 3] = 255;
+        } else {
+          const dim = Math.max(32, Math.round(alpha * 0.35));
+          output[i] = dim;
+          output[i + 1] = dim;
+          output[i + 2] = dim;
+          output[i + 3] = 255;
+        }
+      }
+    }
+
+    return output;
+  }
+
+  function drawPreviewPixels(targetCtx) {
+    const source = buildAtlasPixels();
+    const mip = downsamplePixels(source, state.atlasSize, state.atlasSize, state.mipLevel);
+    const viewPixels = pixelsForViewMode(mip.pixels);
+    const preview = document.createElement("canvas");
+    preview.width = mip.width;
+    preview.height = mip.height;
+    const previewCtx = preview.getContext("2d");
+    previewCtx.putImageData(new ImageData(new Uint8ClampedArray(viewPixels), mip.width, mip.height), 0, 0);
+    targetCtx.save();
+    targetCtx.imageSmoothingEnabled = false;
+    targetCtx.drawImage(preview, 0, 0, state.atlasSize, state.atlasSize);
+    targetCtx.restore();
   }
 
   function drawExportCanvas() {
@@ -1428,7 +1939,7 @@
     const exportCtx = exportCanvas.getContext("2d");
     exportCtx.clearRect(0, 0, state.atlasSize, state.atlasSize);
 
-    state.placements.forEach((placement) => {
+    exportablePlacements().forEach((placement) => {
       const asset = getAsset(placement.assetId);
       if (!asset) return;
       drawPlacementImage(exportCtx, placement);
@@ -1449,16 +1960,18 @@
   }
 
   async function exportPng() {
-    if (!state.placements.length) {
-      setStatus("PNG出力する配置がありません。");
+    const placements = exportablePlacements();
+    const stagedCount = state.placements.length - placements.length;
+    if (!placements.length) {
+      setStatus("PNG出力する配置がありません。退避中の画像はアトラス内へ移動してください。");
       return;
     }
-    const collisions = getCollisionIds();
+    const collisions = getCollisionIds({ exportOnly: true });
     try {
       const pixels = buildAtlasPixels();
       const pngBytes = await encodePngRgba(state.atlasSize, state.atlasSize, pixels);
       downloadBlob(new Blob([pngBytes], { type: "image/png" }), `atlas_${state.atlasSize}.png`);
-      setStatus(`PNGを書き出しました。透明ピクセル内のRGBも保持します。${collisions.size ? "重なりがあるため内容を確認してください。" : ""}`);
+      setStatus(`PNGを書き出しました。透明ピクセル内のRGBも保持します。${stagedCount ? `退避中の${stagedCount}件は除外しました。` : ""}${collisions.size ? "重なりがあるため内容を確認してください。" : ""}`);
     } catch {
       const canvas = drawExportCanvas();
       canvas.toBlob((blob) => {
@@ -1467,14 +1980,16 @@
           return;
         }
         downloadBlob(blob, `atlas_${state.atlasSize}.png`);
-        setStatus("PNGを書き出しました。このブラウザでは透明ピクセル内RGBの完全保持は保証されません。");
+        setStatus(`PNGを書き出しました。このブラウザでは透明ピクセル内RGBの完全保持は保証されません。${stagedCount ? `退避中の${stagedCount}件は除外しました。` : ""}`);
       }, "image/png");
     }
   }
 
   function exportJson() {
-    if (!state.placements.length) {
-      setStatus("JSON出力する配置がありません。");
+    const placements = exportablePlacements();
+    const stagedCount = state.placements.length - placements.length;
+    if (!placements.length) {
+      setStatus("JSON出力する配置がありません。退避中の画像はアトラス内へ移動してください。");
       return;
     }
     const payload = {
@@ -1484,7 +1999,7 @@
         snap: SNAP,
         exportedAt: new Date().toISOString(),
       },
-      images: state.placements.map((placement) => {
+      images: placements.map((placement) => {
         const asset = getAsset(placement.assetId);
         const rect = placementRect(placement);
         const content = placementContentRect(placement);
@@ -1500,9 +2015,9 @@
           contentHeight: content.height,
           scale: placement.scale,
           padding: assetPadding(asset),
-        bleed: assetBleed(asset),
-        alphaRgbPreserved: Boolean(asset.rawPreserved),
-        sourceWidth: asset.width,
+          bleed: assetBleed(asset),
+          alphaRgbPreserved: Boolean(asset.rawPreserved),
+          sourceWidth: asset.width,
           sourceHeight: asset.height,
           uv: {
             u0: content.x / state.atlasSize,
@@ -1521,15 +2036,19 @@
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     downloadBlob(blob, `atlas_${state.atlasSize}.json`);
-    setStatus("JSONを書き出しました。");
+    setStatus(`JSONを書き出しました。${stagedCount ? `退避中の${stagedCount}件は除外しました。` : ""}`);
   }
 
   function saveProject() {
-    const snapshot = makeSnapshot();
+    const embedImages = state.projectMode !== "external";
+    const snapshot = makeSnapshot({ embedImages });
     snapshot.savedAt = new Date().toISOString();
+    snapshot.note = embedImages
+      ? "Images are embedded as data URLs."
+      : "Images are externally referenced. Select the referenced image files when loading this project.";
     const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: "application/json" });
-    downloadBlob(blob, `atlas_project_${state.atlasSize}.json`);
-    setStatus("配置プロジェクトを書き出しました。");
+    downloadBlob(blob, embedImages ? `atlas_project_${state.atlasSize}.json` : `atlas_project_external_${state.atlasSize}.json`);
+    setStatus(embedImages ? "配置プロジェクトを書き出しました。" : "外部参照プロジェクトを書き出しました。");
   }
 
   function readTextFile(file) {
@@ -1546,6 +2065,14 @@
     try {
       const text = await readTextFile(file);
       const payload = JSON.parse(text);
+      const needsExternalAssets = (payload.assets || []).some((asset) => !asset.dataUrl && !asset.url);
+      if (needsExternalAssets) {
+        state.pendingExternalProject = payload;
+        els.loadProjectBtn.textContent = "参照画像選択";
+        setStatus("外部参照プロジェクトです。参照画像ファイルを選択してください。");
+        window.setTimeout(() => els.externalAssetInput.click(), 0);
+        return;
+      }
       await restoreSnapshot(payload);
       state.history = [makeSnapshot()];
       state.future = [];
@@ -1553,6 +2080,51 @@
       setStatus(`${file.name} を読み込みました。`);
     } catch (error) {
       setStatus(`プロジェクトを読み込めませんでした: ${error.message}`);
+    }
+  }
+
+  function referenceKey(value) {
+    return String(value || "")
+      .split(/[\\/]/)
+      .pop()
+      .toLowerCase();
+  }
+
+  async function loadExternalProjectAssets(fileList) {
+    if (!state.pendingExternalProject) return;
+    const files = Array.from(fileList || []).filter((file) => file.type.startsWith("image/"));
+    const fileMap = new Map();
+    files.forEach((file) => {
+      fileMap.set(referenceKey(file.name), file);
+      if (file.webkitRelativePath) fileMap.set(referenceKey(file.webkitRelativePath), file);
+    });
+
+    try {
+      const payload = JSON.parse(JSON.stringify(state.pendingExternalProject));
+      const missing = [];
+      for (const asset of payload.assets || []) {
+        if (asset.dataUrl || asset.url) continue;
+        const file = fileMap.get(referenceKey(asset.externalPath)) || fileMap.get(referenceKey(asset.name));
+        if (!file) {
+          missing.push(asset.externalPath || asset.name);
+          continue;
+        }
+        asset.dataUrl = await readFileAsDataUrl(file);
+        asset.name = asset.name || file.name;
+        asset.externalPath = file.webkitRelativePath || file.name;
+      }
+
+      if (missing.length) throw new Error(`参照画像が見つかりません: ${missing.join(", ")}`);
+
+      await restoreSnapshot(payload);
+      state.history = [makeSnapshot()];
+      state.future = [];
+      state.pendingExternalProject = null;
+      els.loadProjectBtn.textContent = "プロジェクト読込";
+      updateHistoryButtons();
+      setStatus("外部参照プロジェクトを読み込みました。");
+    } catch (error) {
+      setStatus(`外部参照プロジェクトを読み込めませんでした: ${error.message}`);
     }
   }
 
@@ -1596,18 +2168,46 @@
 
     els.atlasSizeSelect.addEventListener("change", () => setAtlasSize(Number(els.atlasSizeSelect.value)));
     els.zoomSelect.addEventListener("change", () => {
+      const center = viewportCenterWorldPoint();
       state.zoom = Number(els.zoomSelect.value) / 100;
       applyZoom();
+      window.requestAnimationFrame(() => scrollToWorldPoint(center));
+    });
+    els.viewModeSelect.addEventListener("change", () => {
+      state.viewMode = els.viewModeSelect.value;
+      renderCanvas();
+      renderValidation();
+    });
+    els.mipSelect.addEventListener("change", () => {
+      state.mipLevel = Number(els.mipSelect.value);
+      renderCanvas();
+      renderValidation();
+    });
+    els.projectModeSelect.addEventListener("change", () => {
+      state.projectMode = els.projectModeSelect.value;
+      renderValidation();
+      setStatus(state.projectMode === "external" ? "外部参照モードで保存します。" : "画像埋め込みモードで保存します。");
     });
     els.fitZoomBtn.addEventListener("click", fitZoomToViewport);
     els.undoBtn.addEventListener("click", undo);
     els.redoBtn.addEventListener("click", redo);
+    els.alignLeftBtn.addEventListener("click", () => alignSelected("x"));
+    els.alignTopBtn.addEventListener("click", () => alignSelected("y"));
+    els.distributeXBtn.addEventListener("click", () => distributeSelected("x"));
+    els.distributeYBtn.addEventListener("click", () => distributeSelected("y"));
     els.packBtn.addEventListener("click", autoPackUnplaced);
     els.saveProjectBtn.addEventListener("click", saveProject);
-    els.loadProjectBtn.addEventListener("click", () => els.projectInput.click());
+    els.loadProjectBtn.addEventListener("click", () => {
+      if (state.pendingExternalProject) els.externalAssetInput.click();
+      else els.projectInput.click();
+    });
     els.projectInput.addEventListener("change", () => {
       loadProjectFile(els.projectInput.files[0]);
       els.projectInput.value = "";
+    });
+    els.externalAssetInput.addEventListener("change", () => {
+      loadExternalProjectAssets(els.externalAssetInput.files);
+      els.externalAssetInput.value = "";
     });
     els.exportPngBtn.addEventListener("click", exportPng);
     els.exportJsonBtn.addEventListener("click", exportJson);
@@ -1631,14 +2231,30 @@
     els.canvas.addEventListener("drop", onCanvasDrop);
 
     els.canvas.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
       const point = canvasPointFromEvent(event);
       const placement = hitTestPlacement(point);
       if (!placement) {
         setSelected(null, null);
+        state.panDrag = {
+          startClientX: event.clientX,
+          startClientY: event.clientY,
+          startScrollLeft: els.stageViewport.scrollLeft,
+          startScrollTop: els.stageViewport.scrollTop,
+          moved: false,
+        };
+        els.canvasWrap.classList.add("panning");
+        els.canvas.setPointerCapture(event.pointerId);
+        event.preventDefault();
         return;
       }
       const rect = placementRect(placement);
-      setSelected("placement", placement.id);
+      setSelected("placement", placement.id, { toggle: event.shiftKey || event.ctrlKey || event.metaKey });
+      if (event.shiftKey || event.ctrlKey || event.metaKey) return;
+      if (placement.locked) {
+        setStatus("このスロットは固定されています。");
+        return;
+      }
       state.pointerDrag = {
         placementId: placement.id,
         offsetX: point.x - rect.x,
@@ -1646,10 +2262,20 @@
         startX: placement.x,
         startY: placement.y,
       };
+      els.canvasWrap.classList.add("dragging");
       els.canvas.setPointerCapture(event.pointerId);
+      event.preventDefault();
     });
 
     els.canvas.addEventListener("pointermove", (event) => {
+      if (state.panDrag) {
+        const dx = event.clientX - state.panDrag.startClientX;
+        const dy = event.clientY - state.panDrag.startClientY;
+        els.stageViewport.scrollLeft = state.panDrag.startScrollLeft - dx;
+        els.stageViewport.scrollTop = state.panDrag.startScrollTop - dy;
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) state.panDrag.moved = true;
+        return;
+      }
       if (!state.pointerDrag) return;
       const placement = getPlacement(state.pointerDrag.placementId);
       if (!placement) return;
@@ -1663,10 +2289,23 @@
     });
 
     els.canvas.addEventListener("pointerup", (event) => {
+      if (state.panDrag) {
+        const moved = state.panDrag.moved;
+        state.panDrag = null;
+        els.canvasWrap.classList.remove("panning");
+        try {
+          els.canvas.releasePointerCapture(event.pointerId);
+        } catch {
+          // The pointer may already be released by the browser.
+        }
+        if (moved) setStatus("視点を移動しました。");
+        return;
+      }
       if (!state.pointerDrag) return;
       const drag = state.pointerDrag;
       const placement = getPlacement(drag.placementId);
       state.pointerDrag = null;
+      els.canvasWrap.classList.remove("dragging");
       try {
         els.canvas.releasePointerCapture(event.pointerId);
       } catch {
@@ -1674,8 +2313,19 @@
       }
       if (placement) {
         setSelected("placement", placement.id);
-        setStatus(`配置を ${placement.x}, ${placement.y} に移動しました。`);
+        setStatus(isPlacementExportable(placement) ? `配置を ${placement.x}, ${placement.y} に移動しました。` : "配置を退避スペースに移動しました。");
         if (drag.startX !== placement.x || drag.startY !== placement.y) pushHistory();
+      }
+    });
+
+    els.canvas.addEventListener("pointercancel", (event) => {
+      state.panDrag = null;
+      state.pointerDrag = null;
+      els.canvasWrap.classList.remove("panning", "dragging");
+      try {
+        els.canvas.releasePointerCapture(event.pointerId);
+      } catch {
+        // The pointer may already be released by the browser.
       }
     });
 

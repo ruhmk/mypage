@@ -36,6 +36,33 @@
             </select>
           </label>
 
+          <label class="field compact">
+            <span>表示</span>
+            <select id="viewModeSelect">
+              <option value="normal" selected>通常</option>
+              <option value="alpha">Alpha</option>
+              <option value="hiddenRgb">透明RGB</option>
+            </select>
+          </label>
+
+          <label class="field compact">
+            <span>Mip</span>
+            <select id="mipSelect">
+              <option value="1" selected>原寸</option>
+              <option value="2">1/2</option>
+              <option value="4">1/4</option>
+              <option value="8">1/8</option>
+            </select>
+          </label>
+
+          <label class="field compact">
+            <span>保存</span>
+            <select id="projectModeSelect">
+              <option value="embed" selected>画像埋め込み</option>
+              <option value="external">外部参照</option>
+            </select>
+          </label>
+
           <button id="fitZoomBtn" type="button">表示に合わせる</button>
           <button id="undoBtn" type="button">Undo</button>
           <button id="redoBtn" type="button">Redo</button>
@@ -43,6 +70,7 @@
           <button id="saveProjectBtn" type="button">プロジェクト保存</button>
           <button id="loadProjectBtn" type="button">プロジェクト読込</button>
           <input id="projectInput" type="file" accept="application/json,.json" hidden />
+          <input id="externalAssetInput" type="file" accept="image/*" multiple hidden />
           <button id="exportPngBtn" type="button">PNG出力</button>
           <button id="exportJsonBtn" type="button">JSON出力</button>
         </div>
@@ -55,7 +83,13 @@
               <strong id="atlasLabel">2048 x 2048</strong>
               <span id="atlasMeta">128px グリッド / 透明PNG出力</span>
             </div>
-            <div class="stageStats" id="stageStats">0 / 0 配置</div>
+            <div class="stageActions" aria-label="選択配置操作">
+              <button id="alignLeftBtn" type="button">左揃え</button>
+              <button id="alignTopBtn" type="button">上揃え</button>
+              <button id="distributeXBtn" type="button">横分布</button>
+              <button id="distributeYBtn" type="button">縦分布</button>
+              <div class="stageStats" id="stageStats">0 / 0 配置</div>
+            </div>
           </div>
 
           <div id="stageViewport" class="stageViewport">
@@ -91,6 +125,16 @@
               </div>
             </div>
             <div id="inspector" class="inspector"></div>
+          </section>
+
+          <section class="validationPanel" aria-label="検証">
+            <div class="panelHeader simple">
+              <div>
+                <h2>検証</h2>
+                <p>配置、余白、透明RGB、出力設定を確認します。</p>
+              </div>
+            </div>
+            <div id="validationList" class="validationList"></div>
           </section>
         </aside>
       </main>
