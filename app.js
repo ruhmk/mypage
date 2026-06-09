@@ -23,6 +23,19 @@ const BRANCH_COLORS = [
   "#d14375",
   "#3f7f2d",
 ];
+const NODE_TYPES = {
+  idea: { label: "要点", icon: "●" },
+  task: { label: "タスク", icon: "✓" },
+  decision: { label: "決定", icon: "◆" },
+  risk: { label: "注意", icon: "!" },
+  question: { label: "問い", icon: "?" },
+};
+const RELATION_TYPES = {
+  normal: { label: "通常" },
+  note: { label: "補足" },
+  dependency: { label: "依存" },
+  risk: { label: "注意" },
+};
 
 const sampleTree = {
   id: "root",
@@ -84,6 +97,8 @@ const state = {
   isLayer3d: false,
   focusLayerDepth: 0,
   layerFilterDepth: 0,
+  focusNodeId: "",
+  dragGuide: { x: null, y: null },
   undoStack: [],
   redoStack: [],
   positions: new Map(),
@@ -116,6 +131,15 @@ const els = {
   markdownFileInput: document.getElementById("markdownFileInput"),
   nodeDetailTitle: document.getElementById("nodeDetailTitle"),
   nodeNoteInput: document.getElementById("nodeNoteInput"),
+  nodeTypeSelect: document.getElementById("nodeTypeSelect"),
+  relationTypeSelect: document.getElementById("relationTypeSelect"),
+  focusNodeButton: document.getElementById("focusNodeButton"),
+  jumpSourceButton: document.getElementById("jumpSourceButton"),
+  layerList: document.getElementById("layerList"),
+  nodeContextMenu: document.getElementById("nodeContextMenu"),
+  guideLayer: document.getElementById("guideLayer"),
+  guideVertical: document.getElementById("guideVertical"),
+  guideHorizontal: document.getElementById("guideHorizontal"),
   summaryOutput: document.getElementById("summaryOutput"),
 };
 
@@ -132,6 +156,8 @@ function normalizeNode(node) {
     id: node.id || makeId(),
     text: String(node.text || "新しいノード"),
     memo: String(node.memo || ""),
+    type: normalizeNodeType(node.type),
+    relationType: normalizeRelationType(node.relationType),
     layer: normalizeLayer(node.layer),
     parallelOf: typeof node.parallelOf === "string" ? node.parallelOf : "",
     offset: normalizeOffset(node.offset),
@@ -147,6 +173,14 @@ function normalizeLayer(layer) {
 
 function getNodeLayer(node) {
   return normalizeLayer(node?.layer);
+}
+
+function normalizeNodeType(type) {
+  return Object.prototype.hasOwnProperty.call(NODE_TYPES, type) ? type : "idea";
+}
+
+function normalizeRelationType(type) {
+  return Object.prototype.hasOwnProperty.call(RELATION_TYPES, type) ? type : "normal";
 }
 
 function normalizeOffset(offset) {
@@ -289,6 +323,8 @@ function restoreSnapshot(snapshot) {
   state.isLayer3d = false;
   state.layerFilterDepth = 0;
   state.focusLayerDepth = 0;
+  state.focusNodeId = "";
+  state.dragGuide = { x: null, y: null };
   document.body.classList.remove("layer-3d");
   els.viewport.classList.remove("is-layer-3d");
   ensureSelectedNodeVisible();
@@ -437,7 +473,7 @@ function placeNode(node, x, y, depth, branchIndex, parent) {
   });
   state.visibleIds.add(node.id);
   if (parent) {
-    state.edgeList.push({ from: parent.id, to: node.id, color });
+    state.edgeList.push({ from: parent.id, to: node.id, color, relationType: normalizeRelationType(node.relationType) });
   }
 
   const children = getLayoutChildren(node, depth);
@@ -462,7 +498,7 @@ function placeNode(node, x, y, depth, branchIndex, parent) {
 }
 
 function estimateNodeHeight(node, width, depth) {
-  const actionWidth = 104;
+  const actionWidth = 136;
   const textWidth = Math.max(64, width - actionWidth);
   const lineCapacity = Math.max(7, Math.floor(textWidth / 8));
   const lineCount = Math.max(1, Math.ceil([...node.text].length / lineCapacity));
@@ -551,6 +587,7 @@ function render() {
   const previousEdges = new Set(state.edgeList.map(edgeKey));
   layoutTree();
   clampFocusLayerDepth();
+  ensureFocusNodeVisible();
   state.renderedIds.clear();
   els.nodeLayer.textContent = "";
   els.floorLayer.textContent = "";
@@ -578,6 +615,9 @@ function render() {
     const className = edgeClass(edge, matches, hasSearch) + (previousEdges.has(edgeKey(edge)) ? "" : " is-entering");
     path.setAttribute("class", className);
     path.setAttribute("pathLength", "1");
+    path.dataset.from = edge.from;
+    path.dataset.to = edge.to;
+    path.dataset.relation = edge.relationType || "normal";
     path.style.setProperty("--branch", edge.color);
     edgeFragment.appendChild(path);
   });
@@ -590,6 +630,7 @@ function render() {
     const nodeEl = document.createElement("article");
     nodeEl.className = nodeClass(node, pos, matches, hasSearch);
     nodeEl.dataset.id = node.id;
+    nodeEl.dataset.type = normalizeNodeType(node.type);
     nodeEl.style.left = `${pos.x}px`;
     nodeEl.style.top = `${pos.y}px`;
     nodeEl.style.setProperty("--branch", pos.color);
@@ -603,6 +644,14 @@ function render() {
     title.textContent = node.text;
     title.setAttribute("role", "textbox");
     title.setAttribute("aria-label", "Node text");
+
+    const content = document.createElement("div");
+    content.className = "node-content";
+    const badge = document.createElement("span");
+    badge.className = "node-type-badge";
+    badge.title = NODE_TYPES[normalizeNodeType(node.type)].label;
+    badge.textContent = NODE_TYPES[normalizeNodeType(node.type)].icon;
+    content.append(badge, title);
 
     const actions = document.createElement("div");
     actions.className = "node-actions";
@@ -620,7 +669,7 @@ function render() {
     }
 
     actions.append(addChildButton, deleteButton, toggle);
-    nodeEl.append(title, actions);
+    nodeEl.append(content, actions);
     fragment.appendChild(nodeEl);
   });
 
@@ -631,6 +680,8 @@ function render() {
   updateTransform();
   updateLabels();
   updateLayerControls();
+  updateLayerPanel();
+  updateAlignmentGuides();
   saveTree();
   clearFlashAfterAnimation();
 }
@@ -733,12 +784,13 @@ function makeNodeButton(className, label, title) {
 }
 
 function nodeClass(node, pos, matches, hasSearch) {
-  const classes = ["mind-node"];
+  const classes = ["mind-node", `type-${normalizeNodeType(node.type)}`];
   if (pos.depth === 0) classes.push("root");
   if (node.parallelOf) classes.push("is-layer-ghost");
   if (state.isLayer3d) {
     classes.push(pos.layer === state.focusLayerDepth ? "is-layer-focused" : "is-layer-dimmed");
   }
+  if (isNodeFocusMuted(node.id)) classes.push("is-focus-muted");
   if (node.id === state.selectedId) classes.push("is-selected");
   if (node.id === state.flashId) classes.push("is-new");
   if (node.id === state.removingId) classes.push("is-removing");
@@ -759,7 +811,7 @@ function clearFlashAfterAnimation() {
 }
 
 function edgeClass(edge, matches, hasSearch) {
-  const classes = ["edge-path"];
+  const classes = ["edge-path", `relation-${normalizeRelationType(edge.relationType)}`];
   if (isLayerConnectorEdge(edge)) classes.push("is-layer-connector");
   if (state.isLayer3d) {
     const fromLayer = state.positions.get(edge.from)?.layer;
@@ -767,6 +819,7 @@ function edgeClass(edge, matches, hasSearch) {
     const touchesFocusedLayer = fromLayer === state.focusLayerDepth || toLayer === state.focusLayerDepth;
     classes.push(touchesFocusedLayer ? "is-layer-focused" : "is-layer-dimmed");
   }
+  if (isEdgeFocusMuted(edge)) classes.push("is-focus-muted");
   if (edge.from === state.selectedId || edge.to === state.selectedId) classes.push("is-selected");
   if (hasSearch) {
     const from = findNode(edge.from)?.node;
@@ -779,6 +832,39 @@ function edgeClass(edge, matches, hasSearch) {
     if (!relatedToMatch) classes.push("is-muted");
   }
   return classes.join(" ");
+}
+
+function getFocusScopeIds() {
+  if (!state.focusNodeId) return null;
+  const found = findNode(state.focusNodeId);
+  if (!found) {
+    state.focusNodeId = "";
+    return null;
+  }
+
+  const ids = new Set(getNodePath(state.focusNodeId));
+  walkSubtree(found.node, (node) => ids.add(node.id));
+  return ids;
+}
+
+function getNodePath(id, node = state.tree, path = []) {
+  const nextPath = [...path, node.id];
+  if (node.id === id) return nextPath;
+  for (const child of node.children) {
+    const result = getNodePath(id, child, nextPath);
+    if (result.length) return result;
+  }
+  return [];
+}
+
+function isNodeFocusMuted(id) {
+  const scope = getFocusScopeIds();
+  return Boolean(scope && !scope.has(id));
+}
+
+function isEdgeFocusMuted(edge) {
+  const scope = getFocusScopeIds();
+  return Boolean(scope && (!scope.has(edge.from) || !scope.has(edge.to)));
 }
 
 function getSearchMatches() {
@@ -811,6 +897,12 @@ function bindRenderedEvents() {
       event.stopPropagation();
       selectNode(id);
       startNodeDrag(event, id);
+    });
+
+    nodeEl.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      showNodeContextMenu(event, id);
     });
 
     title.addEventListener("focus", () => {
@@ -859,6 +951,124 @@ function bindRenderedEvents() {
       deleteSelected();
     });
   });
+}
+
+function showNodeContextMenu(event, id) {
+  const found = findNode(id);
+  if (!found || !els.nodeContextMenu) return;
+  selectNode(id);
+
+  els.nodeContextMenu.textContent = "";
+
+  appendContextSection([
+    {
+      label: "子ノードを追加",
+      detail: "+",
+      action: () => addChild(),
+    },
+    {
+      label: "下層に追加",
+      detail: "3D",
+      action: () => addLowerLayerFromContext(id),
+    },
+    {
+      label: state.focusNodeId === id ? "フォーカス解除" : "フォーカス",
+      detail: "◎",
+      action: () => toggleFocusSelected(),
+    },
+    {
+      label: "元ノードへ",
+      detail: "↖",
+      disabled: !found.node.parallelOf || !findNode(found.node.parallelOf),
+      action: () => jumpToSourceNode(id),
+    },
+  ]);
+
+  appendContextSection(
+    Object.entries(NODE_TYPES).map(([type, info]) => ({
+      label: `種類: ${info.label}`,
+      detail: normalizeNodeType(found.node.type) === type ? "✓" : "",
+      action: () => {
+        state.selectedId = id;
+        setSelectedNodeType(type);
+      },
+    })),
+  );
+
+  if (found.parent) {
+    appendContextSection(
+      Object.entries(RELATION_TYPES).map(([type, info]) => ({
+        label: `線: ${info.label}`,
+        detail: normalizeRelationType(found.node.relationType) === type ? "✓" : "",
+        action: () => {
+          state.selectedId = id;
+          setSelectedRelationType(type);
+        },
+      })),
+    );
+  }
+
+  appendContextSection([
+    {
+      label: "削除",
+      detail: "×",
+      danger: true,
+      disabled: id === state.tree.id,
+      action: () => {
+        state.selectedId = id;
+        deleteSelected();
+      },
+    },
+  ]);
+
+  positionContextMenu(event.clientX, event.clientY);
+}
+
+function appendContextSection(items) {
+  const section = document.createElement("div");
+  section.className = "context-menu-section";
+  items.forEach((item) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    if (item.danger) button.classList.add("is-danger");
+    button.disabled = Boolean(item.disabled);
+    const label = document.createElement("span");
+    label.textContent = item.label;
+    const detail = document.createElement("span");
+    detail.textContent = item.detail || "";
+    button.append(label, detail);
+    button.addEventListener("click", () => {
+      hideNodeContextMenu();
+      item.action();
+    });
+    section.appendChild(button);
+  });
+  els.nodeContextMenu.appendChild(section);
+}
+
+function positionContextMenu(clientX, clientY) {
+  if (!els.nodeContextMenu) return;
+  els.nodeContextMenu.hidden = false;
+  const rect = els.nodeContextMenu.getBoundingClientRect();
+  const x = Math.min(clientX, window.innerWidth - rect.width - 8);
+  const y = Math.min(clientY, window.innerHeight - rect.height - 8);
+  els.nodeContextMenu.style.left = `${Math.max(8, x)}px`;
+  els.nodeContextMenu.style.top = `${Math.max(8, y)}px`;
+}
+
+function hideNodeContextMenu() {
+  if (!els.nodeContextMenu) return;
+  els.nodeContextMenu.hidden = true;
+}
+
+function addLowerLayerFromContext(id) {
+  state.selectedId = id;
+  if (!state.isLayer3d) {
+    setLayer3dMode(true);
+    window.setTimeout(addLowerLayerNode, 0);
+    return;
+  }
+  addLowerLayerNode();
 }
 
 function startNodeDrag(event, id) {
@@ -911,6 +1121,8 @@ function finishNodeDrag() {
   }
   activeNodeDrag = null;
   state.isDraggingNode = false;
+  state.dragGuide = { x: null, y: null };
+  updateAlignmentGuides();
   els.viewport.classList.remove("is-node-dragging");
 }
 
@@ -941,8 +1153,11 @@ function applySubtreeDragOffsets(id, originalOffsets, dx, dy, startPosition = nu
   const baseY = Number.isFinite(startPosition?.baseY) ? startPosition.baseY : (startPosition?.y || 0) - dragOriginal.y;
   const startX = Number.isFinite(startPosition?.x) ? startPosition.x : baseX + dragOriginal.x;
   const startY = Number.isFinite(startPosition?.y) ? startPosition.y : baseY + dragOriginal.y;
-  const targetX = snapValue(startX + dx);
-  const targetY = snapValue(startY + dy);
+  const excludeIds = collectDragSubtreeIds(found.node);
+  const alignedTarget = getAlignmentSnap(id, snapValue(startX + dx), snapValue(startY + dy), excludeIds);
+  const targetX = alignedTarget.x;
+  const targetY = alignedTarget.y;
+  state.dragGuide = { x: alignedTarget.guideX, y: alignedTarget.guideY };
   const appliedDx = targetX - baseX - dragOriginal.x;
   const appliedDy = targetY - baseY - dragOriginal.y;
 
@@ -979,8 +1194,9 @@ function paintSelection() {
     nodeEl.classList.toggle("is-selected", nodeEl.dataset.id === state.selectedId);
   });
   document.querySelectorAll(".edge-path").forEach((path, index) => {
-    const edge = state.edgeList[index];
-    path.classList.toggle("is-selected", edge && (edge.from === state.selectedId || edge.to === state.selectedId));
+    const from = path.dataset.from;
+    const to = path.dataset.to;
+    path.classList.toggle("is-selected", from === state.selectedId || to === state.selectedId);
   });
 }
 
@@ -990,8 +1206,9 @@ function updateLabels() {
   const visibleCount = state.layerFilterDepth === null ? state.visibleIds.size : state.renderedIds.size;
   const layerText =
     state.layerFilterDepth === null || state.layerFilterDepth === 0 ? "" : ` / 階層 ${state.layerFilterDepth}のみ`;
+  const focusText = state.focusNodeId ? " / フォーカス中" : "";
   els.selectionLabel.textContent = selectedText;
-  els.statusText.textContent = `${state.mapName}${layerText} / ${visibleCount}件を表示中。編集内容は自動保存されます。`;
+  els.statusText.textContent = `${state.mapName}${layerText}${focusText} / ${visibleCount}件を表示中。編集内容は自動保存されます。`;
   updateNodeDetailPanel(found?.node);
 }
 
@@ -999,9 +1216,152 @@ function updateNodeDetailPanel(node) {
   if (!els.nodeDetailTitle || !els.nodeNoteInput) return;
   els.nodeDetailTitle.textContent = node ? node.text : "未選択";
   els.nodeNoteInput.disabled = !node;
+  if (els.nodeTypeSelect) {
+    els.nodeTypeSelect.disabled = !node;
+    if (node && document.activeElement !== els.nodeTypeSelect) {
+      els.nodeTypeSelect.value = normalizeNodeType(node.type);
+    }
+  }
+  if (els.relationTypeSelect) {
+    els.relationTypeSelect.disabled = !node || node.id === state.tree.id;
+    if (node && document.activeElement !== els.relationTypeSelect) {
+      els.relationTypeSelect.value = normalizeRelationType(node.relationType);
+    }
+  }
+  if (els.focusNodeButton) {
+    els.focusNodeButton.disabled = !node;
+    els.focusNodeButton.textContent = node && state.focusNodeId === node.id ? "解除" : "フォーカス";
+  }
+  if (els.jumpSourceButton) {
+    const sourceExists = Boolean(node?.parallelOf && findNode(node.parallelOf));
+    els.jumpSourceButton.disabled = !sourceExists;
+  }
   if (document.activeElement !== els.nodeNoteInput) {
     els.nodeNoteInput.value = node?.memo || "";
   }
+}
+
+function updateLayerPanel() {
+  if (!els.layerList) return;
+  const stats = getLayerStats();
+  els.layerList.textContent = "";
+
+  stats.forEach((item) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "layer-item";
+    const isActive = state.isLayer3d
+      ? item.layer === state.focusLayerDepth
+      : item.layer === state.layerFilterDepth;
+    if (isActive) button.classList.add("is-active");
+
+    const label = document.createElement("strong");
+    label.textContent = item.layer === 0 ? "通常階層" : `階層 ${item.layer}`;
+    const count = document.createElement("span");
+    count.textContent = item.ghostCount ? `${item.count}件 / ゴースト${item.ghostCount}` : `${item.count}件`;
+    button.append(label, count);
+    button.addEventListener("click", () => activateLayerFromPanel(item.layer));
+    els.layerList.appendChild(button);
+  });
+}
+
+function getLayerStats() {
+  const stats = new Map();
+  walk(state.tree, (node) => {
+    const layer = getNodeLayer(node);
+    if (!stats.has(layer)) stats.set(layer, { layer, count: 0, ghostCount: 0 });
+    const item = stats.get(layer);
+    item.count += 1;
+    if (node.parallelOf) item.ghostCount += 1;
+  });
+  return [...stats.values()].sort((a, b) => a.layer - b.layer);
+}
+
+function activateLayerFromPanel(layer) {
+  if (state.isLayer3d) {
+    state.focusLayerDepth = layer;
+    render();
+    return;
+  }
+
+  if (layer === 0) {
+    clearLayerFilter();
+    return;
+  }
+
+  state.layerFilterDepth = layer;
+  state.focusLayerDepth = layer;
+  state.isLayer3d = false;
+  document.body.classList.remove("layer-3d");
+  els.viewport.classList.remove("is-layer-3d");
+  ensureSelectedNodeVisible();
+  render();
+  requestAnimationFrame(fitToView);
+}
+
+function updateAlignmentGuides() {
+  if (!els.guideLayer || !els.guideVertical || !els.guideHorizontal) return;
+  const x = Number.isFinite(state.dragGuide.x) ? state.dragGuide.x : null;
+  const y = Number.isFinite(state.dragGuide.y) ? state.dragGuide.y : null;
+  els.guideLayer.classList.toggle("has-x", x !== null);
+  els.guideLayer.classList.toggle("has-y", y !== null);
+  if (x !== null) els.guideVertical.style.left = `${x}px`;
+  if (y !== null) els.guideHorizontal.style.top = `${y}px`;
+}
+
+function setSelectedNodeType(type) {
+  const found = findNode(state.selectedId);
+  if (!found) return;
+  const nextType = normalizeNodeType(type);
+  if (normalizeNodeType(found.node.type) === nextType) return;
+  pushHistory();
+  found.node.type = nextType;
+  render();
+}
+
+function setSelectedRelationType(type) {
+  const found = findNode(state.selectedId);
+  if (!found || !found.parent) return;
+  const nextType = normalizeRelationType(type);
+  if (normalizeRelationType(found.node.relationType) === nextType) return;
+  pushHistory();
+  found.node.relationType = nextType;
+  render();
+}
+
+function toggleFocusSelected() {
+  const found = findNode(state.selectedId);
+  if (!found) return;
+  state.focusNodeId = state.focusNodeId === found.node.id ? "" : found.node.id;
+  render();
+}
+
+function jumpToSourceNode(id = state.selectedId) {
+  const found = findNode(id);
+  const sourceId = found?.node.parallelOf;
+  const source = sourceId ? findNode(sourceId) : null;
+  if (!source) return;
+
+  const sourceLayer = getNodeLayer(source.node);
+  if (state.isLayer3d) {
+    state.focusLayerDepth = sourceLayer;
+  } else if (state.layerFilterDepth !== sourceLayer) {
+    state.layerFilterDepth = sourceLayer;
+    state.focusLayerDepth = sourceLayer;
+  }
+
+  state.selectedId = source.node.id;
+  render();
+  requestAnimationFrame(() => centerNode(source.node.id));
+}
+
+function centerNode(id) {
+  const pos = state.positions.get(id);
+  if (!pos) return;
+  const rect = els.viewport.getBoundingClientRect();
+  state.pan.x = rect.width / 2 - pos.x * state.zoom;
+  state.pan.y = rect.height / 2 - pos.y * state.zoom;
+  updateTransform();
 }
 
 function updateTransform() {
@@ -1055,6 +1415,43 @@ function clamp(value, min, max) {
 function snapValue(value, step = state.snapStep) {
   const snapStep = clamp(Math.round(Number(step) || DEFAULT_SNAP_STEP), 8, 96);
   return Math.round(value / snapStep) * snapStep;
+}
+
+function collectDragSubtreeIds(node) {
+  const ids = new Set();
+  walkDragSubtree(node, (item) => ids.add(item.id));
+  return ids;
+}
+
+function getAlignmentSnap(id, x, y, excludeIds) {
+  const sourcePos = state.positions.get(id);
+  const tolerance = clamp(18 / state.zoom, 10, 30);
+  let guideX = null;
+  let guideY = null;
+  let bestDx = tolerance + 1;
+  let bestDy = tolerance + 1;
+
+  state.positions.forEach((pos, nodeId) => {
+    if (excludeIds.has(nodeId)) return;
+    if (!shouldRenderLayer(pos.layer)) return;
+    if (sourcePos && pos.layer !== sourcePos.layer) return;
+
+    const dx = Math.abs(pos.x - x);
+    if (dx <= tolerance && dx < bestDx) {
+      bestDx = dx;
+      x = pos.x;
+      guideX = pos.x;
+    }
+
+    const dy = Math.abs(pos.y - y);
+    if (dy <= tolerance && dy < bestDy) {
+      bestDy = dy;
+      y = pos.y;
+      guideY = pos.y;
+    }
+  });
+
+  return { x, y, guideX, guideY };
 }
 
 function updateSnapStepValue() {
@@ -1406,6 +1803,8 @@ function collectNodeMetadata(node, path = []) {
     [key]: {
       collapsed: Boolean(node.collapsed),
       memo: node.memo || "",
+      type: normalizeNodeType(node.type),
+      relationType: normalizeRelationType(node.relationType),
       layer: getNodeLayer(node),
       parallelOf: node.parallelOf || "",
       offset: normalizeOffset(node.offset),
@@ -1422,6 +1821,8 @@ function applyNodeMetadata(node, metadata, path = []) {
   if (item) {
     node.collapsed = Boolean(item.collapsed);
     node.memo = String(item.memo || "");
+    node.type = normalizeNodeType(item.type);
+    node.relationType = normalizeRelationType(item.relationType);
     node.layer = normalizeLayer(item.layer);
     node.parallelOf = typeof item.parallelOf === "string" ? item.parallelOf : "";
     node.offset = normalizeOffset(item.offset);
@@ -1487,6 +1888,8 @@ function setActiveMap(map, shouldFit = true, resetHistory = true) {
   state.isLayer3d = false;
   state.layerFilterDepth = 0;
   state.focusLayerDepth = 0;
+  state.focusNodeId = "";
+  state.dragGuide = { x: null, y: null };
   document.body.classList.remove("layer-3d");
   els.viewport.classList.remove("is-layer-3d");
   if (resetHistory) {
@@ -1685,12 +2088,23 @@ function drawPngEdges(ctx, bounds) {
     const endY = to.y - (isConnector ? to.height / 2 : 0) - bounds.minY;
     const curve = isConnector ? Math.abs(endY - startY) / 2 : Math.max(82, Math.abs(endX - startX) * 0.42);
     const direction = to.x >= from.x ? 1 : -1;
+    const className = edgeClass(edge, matches, hasSearch);
+    const relationType = normalizeRelationType(edge.relationType);
+    const isMuted = className.includes("is-muted") || className.includes("is-focus-muted");
     ctx.save();
-    ctx.globalAlpha = edgeClass(edge, matches, hasSearch).includes("is-muted") ? 0.18 : isConnector ? 0.58 : 0.72;
-    ctx.strokeStyle = edge.color;
-    ctx.lineWidth = isConnector ? 2 : 2.4;
+    ctx.globalAlpha = isMuted ? 0.12 : isConnector ? 0.58 : 0.72;
+    ctx.strokeStyle = relationType === "risk" ? "#f59e0b" : edge.color;
+    ctx.lineWidth = relationType === "risk" ? 3 : isConnector ? 2 : 2.4;
     ctx.lineCap = "round";
-    if (isConnector) ctx.setLineDash([8, 7]);
+    if (isConnector) {
+      ctx.setLineDash([8, 7]);
+    } else if (relationType === "note") {
+      ctx.setLineDash([4, 6]);
+    } else if (relationType === "dependency") {
+      ctx.setLineDash([12, 6, 3, 6]);
+    } else if (relationType === "risk") {
+      ctx.setLineDash([7, 5]);
+    }
     ctx.beginPath();
     ctx.moveTo(startX, startY);
     if (isConnector) {
@@ -1712,7 +2126,7 @@ function drawPngNodes(ctx, bounds, palette) {
     if (!pos) return;
     if (!shouldRenderLayer(pos.layer)) return;
     const className = nodeClass(node, pos, matches, hasSearch);
-    const isMuted = className.includes("is-muted");
+    const isMuted = className.includes("is-muted") || className.includes("is-focus-muted");
     const isMatch = className.includes("is-match");
     ctx.save();
     ctx.globalAlpha = isMuted ? 0.18 : 1;
@@ -1766,16 +2180,34 @@ function drawPngNode(ctx, node, pos, bounds, palette, isMatch) {
     ctx.setLineDash([]);
   }
 
+  drawPngNodeTypeBadge(ctx, node, x, y, pos, palette);
   drawPngNodeText(ctx, node.text, x, y, pos, palette);
   drawPngNodeActions(ctx, node, x, y, pos, palette);
+}
+
+function drawPngNodeTypeBadge(ctx, node, x, y, pos, palette) {
+  const type = normalizeNodeType(node.type);
+  const badgeX = x + 14;
+  const badgeY = y + pos.height / 2 - 12;
+  roundedRectPath(ctx, badgeX, badgeY, 24, 24, 7);
+  ctx.fillStyle = getPngNodeTypeFill(type, pos.color, palette);
+  ctx.fill();
+  ctx.strokeStyle = mixColors(pos.color, palette.line, 0.32);
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.fillStyle = palette.ink;
+  ctx.font = '800 12px "Segoe UI", "Yu Gothic UI", sans-serif';
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(NODE_TYPES[type].icon, badgeX + 12, badgeY + 12);
 }
 
 function drawPngNodeText(ctx, text, x, y, pos, palette) {
   const isRoot = pos.depth === 0;
   const fontSize = isRoot ? 17 : 14;
   const lineHeight = isRoot ? 22 : 19;
-  const textX = x + 14;
-  const textWidth = Math.max(64, pos.width - 120);
+  const textX = x + 46;
+  const textWidth = Math.max(64, pos.width - 152);
   const lines = wrapCanvasText(ctx, text, textWidth, fontSize, isRoot);
   const maxLines = Math.max(1, Math.floor((pos.height - 20) / lineHeight));
   const visibleLines = lines.slice(0, maxLines);
@@ -1787,11 +2219,26 @@ function drawPngNodeText(ctx, text, x, y, pos, palette) {
 
   ctx.fillStyle = palette.ink;
   ctx.font = `${isRoot ? "700 " : ""}${fontSize}px "Segoe UI", "Yu Gothic UI", "Hiragino Sans", sans-serif`;
+  ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
   visibleLines.forEach((line) => {
     ctx.fillText(line, textX, textY);
     textY += lineHeight;
   });
+}
+
+function getPngNodeTypeFill(type, branch, palette) {
+  const typeColor =
+    type === "task"
+      ? "#0e9f6e"
+      : type === "decision"
+        ? "#7c3aed"
+        : type === "risk"
+          ? "#f59e0b"
+          : type === "question"
+            ? "#008a9a"
+            : branch;
+  return mixColors(typeColor, palette.surface, type === "idea" ? 0.76 : 0.58);
 }
 
 function wrapCanvasText(ctx, text, maxWidth, fontSize, isRoot) {
@@ -1929,6 +2376,8 @@ function wireControls() {
       state.isLayer3d = false;
       state.layerFilterDepth = 0;
       state.focusLayerDepth = 0;
+      state.focusNodeId = "";
+      state.dragGuide = { x: null, y: null };
       document.body.classList.remove("layer-3d");
       els.viewport.classList.remove("is-layer-3d");
       render();
@@ -1954,6 +2403,22 @@ function wireControls() {
     }
     found.node.memo = els.nodeNoteInput.value;
     saveTree();
+  });
+
+  els.nodeTypeSelect.addEventListener("change", () => {
+    setSelectedNodeType(els.nodeTypeSelect.value);
+  });
+
+  els.relationTypeSelect.addEventListener("change", () => {
+    setSelectedRelationType(els.relationTypeSelect.value);
+  });
+
+  els.focusNodeButton.addEventListener("click", () => {
+    toggleFocusSelected();
+  });
+
+  els.jumpSourceButton.addEventListener("click", () => {
+    jumpToSourceNode();
   });
 
   els.mapSelect.addEventListener("change", () => {
@@ -2003,6 +2468,10 @@ function wireControls() {
 
   document.getElementById("optimizeLayoutButton").addEventListener("click", optimizeLayout);
   document.getElementById("fitButton").addEventListener("click", fitToView);
+
+  document.getElementById("showAllLayersButton").addEventListener("click", () => {
+    setLayer3dMode(true);
+  });
 
   document.getElementById("exportJsonButton").addEventListener("click", () => {
     els.exportOutput.value = JSON.stringify({ tree: state.tree, settings: currentSettings() }, null, 2);
@@ -2109,10 +2578,24 @@ function wireControls() {
     const root = document.documentElement;
     root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
   });
+
+  document.addEventListener("pointerdown", (event) => {
+    if (els.nodeContextMenu?.hidden) return;
+    if (els.nodeContextMenu.contains(event.target)) return;
+    hideNodeContextMenu();
+  });
+
+  window.addEventListener("blur", hideNodeContextMenu);
 }
 
 function wireKeyboardShortcuts() {
   document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && els.nodeContextMenu && !els.nodeContextMenu.hidden) {
+      event.preventDefault();
+      hideNodeContextMenu();
+      return;
+    }
+
     if (event.key === "Escape" && state.isLayer3d) {
       event.preventDefault();
       setLayer3dMode(false);
@@ -2178,6 +2661,8 @@ function addLowerLayerNode() {
   const layer = getNodeLayer(found.node) + 1;
   const child = normalizeNode({
     text: found.node.text,
+    type: normalizeNodeType(found.node.type),
+    relationType: "note",
     layer,
     parallelOf: found.node.id,
     offset: { x: 0, y: 0 },
@@ -2218,6 +2703,14 @@ function ensureSelectedNodeVisible() {
   const found = findNode(state.selectedId);
   if (!found || !shouldRenderLayer(getNodeLayer(found.node))) {
     state.selectedId = state.tree.id;
+  }
+}
+
+function ensureFocusNodeVisible() {
+  if (!state.focusNodeId) return;
+  const found = findNode(state.focusNodeId);
+  if (!found || !shouldRenderLayer(getNodeLayer(found.node))) {
+    state.focusNodeId = "";
   }
 }
 

@@ -245,6 +245,38 @@ h2 {
   overflow-wrap: anywhere;
 }
 
+.layer-list {
+  display: grid;
+  gap: 8px;
+}
+
+.layer-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 10px;
+  text-align: left;
+}
+
+.layer-item.is-active {
+  border-color: var(--focus);
+  background: color-mix(in srgb, var(--focus), var(--surface) 84%);
+}
+
+.layer-item strong,
+.layer-item span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.layer-item span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 #nodeNoteInput {
   min-height: 120px;
   resize: vertical;
@@ -411,10 +443,57 @@ body.map-maximized .canvas-viewport {
   height: 100%;
 }
 
+.floor-layer {
+  z-index: 0;
+}
+
+.edge-layer {
+  z-index: 1;
+}
+
+.node-layer {
+  z-index: 3;
+}
+
 .floor-layer,
 .edge-layer {
   overflow: visible;
   pointer-events: none;
+}
+
+.guide-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.alignment-guide {
+  position: absolute;
+  display: none;
+  background: color-mix(in srgb, var(--focus), transparent 18%);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--focus), transparent 24%);
+}
+
+.alignment-guide.vertical {
+  top: 0;
+  width: 2px;
+  height: 100%;
+  transform: translateX(-1px);
+}
+
+.alignment-guide.horizontal {
+  left: 0;
+  width: 100%;
+  height: 2px;
+  transform: translateY(-1px);
+}
+
+.guide-layer.has-x .alignment-guide.vertical,
+.guide-layer.has-y .alignment-guide.horizontal {
+  display: block;
 }
 
 .floor-plate {
@@ -489,6 +568,11 @@ body.map-maximized .canvas-viewport {
   outline: 3px solid color-mix(in srgb, var(--branch), transparent 55%);
 }
 
+.mind-node.is-focus-muted {
+  opacity: 0.16;
+  filter: saturate(0.55);
+}
+
 .mind-node.is-entering {
   animation: node-enter var(--motion-speed) var(--motion-ease) both;
 }
@@ -545,7 +629,50 @@ body.layer-3d .mind-node.is-layer-focused {
     var(--shadow);
 }
 
+.node-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.node-type-badge {
+  display: grid;
+  flex: 0 0 24px;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid color-mix(in srgb, var(--branch), var(--line) 32%);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--branch), var(--surface) 76%);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.mind-node.type-task .node-type-badge {
+  background: color-mix(in srgb, #0e9f6e, var(--surface) 62%);
+}
+
+.mind-node.type-decision .node-type-badge {
+  background: color-mix(in srgb, #7c3aed, var(--surface) 60%);
+}
+
+.mind-node.type-risk {
+  border-color: color-mix(in srgb, #f59e0b, var(--line) 28%);
+}
+
+.mind-node.type-risk .node-type-badge {
+  background: color-mix(in srgb, #f59e0b, var(--surface) 54%);
+}
+
+.mind-node.type-question .node-type-badge {
+  background: color-mix(in srgb, #008a9a, var(--surface) 58%);
+}
+
 .node-title {
+  flex: 1 1 auto;
   min-width: 0;
   outline: none;
   color: inherit;
@@ -655,9 +782,28 @@ body.layer-3d .mind-node.is-layer-focused {
 
 .edge-path.is-layer-connector {
   stroke-width: 2;
-  stroke-dasharray: 8 7;
+  stroke-dasharray: 0.065 0.055;
   opacity: 0.58;
   filter: drop-shadow(0 2px 6px rgba(124, 192, 255, 0.28));
+}
+
+.edge-path.relation-note {
+  stroke-width: 2;
+  stroke-dasharray: 0.035 0.035;
+}
+
+.edge-path.relation-dependency {
+  stroke-dasharray: 0.09 0.035 0.02 0.035;
+}
+
+.edge-path.relation-risk {
+  stroke: #f59e0b;
+  stroke-width: 3;
+  stroke-dasharray: 0.055 0.035;
+}
+
+.edge-path.is-layer-connector {
+  stroke-dasharray: 0.065 0.055;
 }
 
 .edge-path.is-layer-connector.is-layer-dimmed {
@@ -669,9 +815,58 @@ body.layer-3d .mind-node.is-layer-focused {
   opacity: 0.18;
 }
 
+.edge-path.is-focus-muted {
+  opacity: 0.12;
+}
+
 .edge-path.is-selected {
   stroke-width: 4;
   opacity: 0.95;
+}
+
+.context-menu {
+  position: fixed;
+  z-index: 60;
+  min-width: 220px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface), transparent 3%);
+  box-shadow: var(--shadow);
+}
+
+.context-menu[hidden] {
+  display: none;
+}
+
+.context-menu-section {
+  display: grid;
+  gap: 4px;
+  padding: 4px 0;
+}
+
+.context-menu-section + .context-menu-section {
+  border-top: 1px solid var(--line);
+}
+
+.context-menu button {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 32px;
+  padding: 0 9px;
+  border-color: transparent;
+  background: transparent;
+  text-align: left;
+}
+
+.context-menu button:hover {
+  background: var(--surface-soft);
+  transform: none;
+}
+
+.context-menu button.is-danger {
+  color: var(--danger);
 }
 
 @keyframes node-enter {

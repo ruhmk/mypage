@@ -48,7 +48,38 @@
         <section class="panel">
           <h2>ノード詳細</h2>
           <p class="selected-node-name" id="nodeDetailTitle">未選択</p>
+          <div class="button-row">
+            <button id="focusNodeButton" type="button">フォーカス</button>
+            <button id="jumpSourceButton" type="button">元へ</button>
+          </div>
+          <label class="field">
+            <span>種類</span>
+            <select id="nodeTypeSelect" aria-label="ノード種別">
+              <option value="idea">要点</option>
+              <option value="task">タスク</option>
+              <option value="decision">決定</option>
+              <option value="risk">注意</option>
+              <option value="question">問い</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>関係線</span>
+            <select id="relationTypeSelect" aria-label="関係線タイプ">
+              <option value="normal">通常</option>
+              <option value="note">補足</option>
+              <option value="dependency">依存</option>
+              <option value="risk">注意</option>
+            </select>
+          </label>
           <textarea id="nodeNoteInput" placeholder="このノードのメモ" aria-label="Node memo"></textarea>
+        </section>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <h2>階層</h2>
+            <button id="showAllLayersButton" type="button">全階層</button>
+          </div>
+          <div id="layerList" class="layer-list" aria-label="階層一覧"></div>
         </section>
 
         <section class="panel">
@@ -127,11 +158,17 @@
           <div id="canvasWorld" class="canvas-world">
             <svg id="floorLayer" class="floor-layer" aria-hidden="true"></svg>
             <svg id="edgeLayer" class="edge-layer" aria-hidden="true"></svg>
+            <div id="guideLayer" class="guide-layer" aria-hidden="true">
+              <span id="guideVertical" class="alignment-guide vertical"></span>
+              <span id="guideHorizontal" class="alignment-guide horizontal"></span>
+            </div>
             <div id="nodeLayer" class="node-layer"></div>
           </div>
         </div>
       </section>
     </main>
+
+    <div id="nodeContextMenu" class="context-menu" hidden></div>
 
     <script src="./app.js"></script>
   </body>
