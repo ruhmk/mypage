@@ -239,19 +239,22 @@ h2 {
 
 .source-dot.family,
 .event-card.family,
-.day-chip.family {
+.day-chip.family,
+.timeline-event.family {
   --source: var(--family);
 }
 
 .source-dot.personal,
 .event-card.personal,
-.day-chip.personal {
+.day-chip.personal,
+.timeline-event.personal {
   --source: var(--personal);
 }
 
 .source-dot.work,
 .event-card.work,
-.day-chip.work {
+.day-chip.work,
+.timeline-event.work {
   --source: var(--work);
 }
 
@@ -396,6 +399,90 @@ h2 {
 .event-list {
   display: grid;
   gap: 10px;
+}
+
+.timeline-all-day {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+
+.timeline-all-day-label {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-align: right;
+  padding-top: 10px;
+}
+
+.timeline-all-day-list {
+  display: grid;
+  gap: 7px;
+}
+
+.day-timeline {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  gap: 8px;
+  min-width: 0;
+}
+
+.timeline-hours {
+  position: relative;
+}
+
+.timeline-hour {
+  position: absolute;
+  right: 0;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-align: right;
+  transform: translateY(-0.45em);
+}
+
+.timeline-stage {
+  position: relative;
+  min-width: 0;
+  border-left: 1px solid var(--line);
+  background:
+    linear-gradient(90deg, rgba(15, 118, 110, 0.04), transparent 52%),
+    rgba(255, 255, 255, 0.54);
+}
+
+.timeline-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px solid rgba(216, 209, 196, 0.85);
+}
+
+.timeline-event {
+  position: absolute;
+  z-index: 1;
+  overflow: hidden;
+  border-left: 5px solid var(--source);
+  border-radius: 7px;
+  background: #fff;
+  box-shadow: 0 1px 0 rgba(31, 35, 40, 0.08), 0 4px 14px rgba(31, 35, 40, 0.08);
+  padding: 5px 7px 6px;
+}
+
+.timeline-event-time {
+  color: var(--muted);
+  font-size: 0.67rem;
+  font-weight: 900;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.timeline-event-title {
+  margin-top: 2px;
+  font-size: 0.82rem;
+  font-weight: 900;
+  line-height: 1.18;
+  overflow-wrap: anywhere;
 }
 
 .event-card {
@@ -739,6 +826,30 @@ h2 {
 
   .event-list {
     gap: 7px;
+  }
+
+  .day-timeline,
+  .timeline-all-day {
+    grid-template-columns: 42px minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .timeline-hour,
+  .timeline-all-day-label {
+    font-size: 0.64rem;
+  }
+
+  .timeline-event {
+    border-left-width: 4px;
+    padding: 4px 5px;
+  }
+
+  .timeline-event-time {
+    font-size: 0.62rem;
+  }
+
+  .timeline-event-title {
+    font-size: 0.76rem;
   }
 
   .event-card {

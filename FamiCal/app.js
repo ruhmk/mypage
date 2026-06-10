@@ -131,7 +131,7 @@ function renderCalendarGrid() {
 
 function renderSelectedEvents() {
   const events = getEventsForDay(state.selectedDate);
-  renderEventList(selectedEventList, events, "予定なし");
+  renderDayTimeline(selectedEventList, events, state.selectedDate);
 }
 
 function renderEventList(target, events, emptyText) {
@@ -175,6 +175,251 @@ function renderEventList(target, events, emptyText) {
 
     target.append(card);
   });
+}
+
+function renderDayTimeline(target, events, date) {
+  target.replaceChildren();
+
+  if (events.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "empty-state";
+    empty.textContent = "予定なし";
+    target.append(empty);
+    return;
+  }
+
+  const dayStart = stripTime(date);
+  const dayEnd = addDays(dayStart, 1);
+  const allDayEvents = events.filter((item) => item.allDay);
+  const timedEvents = events
+    .filter((item) => !item.allDay)
+    .map((item) => getTimelineEvent(item, dayStart, dayEnd))
+    .filter(Boolean)
+    .sort((left, right) => left.startMinute - right.startMinute);
+
+  if (allDayEvents.length > 0) {
+    const allDayGroup = document.createElement("div");
+    allDayGroup.className = "timeline-all-day";
+    const label = document.createElement("div");
+    label.className = "timeline-all-day-label";
+    label.textContent = "終日";
+    const list = document.createElement("div");
+    list.className = "timeline-all-day-list";
+    allDayEvents.forEach((item) => {
+      list.append(createCompactEventCard(item));
+    });
+    allDayGroup.append(label, list);
+    target.append(allDayGroup);
+  }
+
+  if (timedEvents.length === 0) {
+    return;
+  }
+
+  const baseHourHeight = 46;
+  const range = getTimelineRange(timedEvents);
+  const laidOutEvents = layoutTimelineEvents(timedEvents);
+  let hourBands = buildTimelineHourBands(range, baseHourHeight);
+  const shell = document.createElement("div");
+  shell.className = "day-timeline";
+
+  const hours = document.createElement("div");
+  hours.className = "timeline-hours";
+
+  const stage = document.createElement("div");
+  stage.className = "timeline-stage";
+
+  shell.append(hours, stage);
+  target.append(shell);
+
+  const blocks = renderTimelineLayout(hours, stage, range, hourBands, laidOutEvents);
+  const measuredBands = fitTimelineBandsToContent(range, hourBands, laidOutEvents, blocks);
+  if (measuredBands.changed) {
+    hourBands = measuredBands.hourBands;
+    renderTimelineLayout(hours, stage, range, hourBands, laidOutEvents);
+  }
+}
+
+function createCompactEventCard(event) {
+  const card = document.createElement("article");
+  card.className = `event-card ${event.source}`;
+  const title = document.createElement("p");
+  title.className = "event-title";
+  title.textContent = event.title;
+  card.append(title);
+  return card;
+}
+
+function getTimelineEvent(event, dayStart, dayEnd) {
+  const rawStart = new Date(event.start);
+  const rawEnd = new Date(event.end);
+  if (Number.isNaN(rawStart.getTime()) || Number.isNaN(rawEnd.getTime())) {
+    return null;
+  }
+
+  const start = rawStart < dayStart ? dayStart : rawStart;
+  const end = rawEnd > dayEnd ? dayEnd : rawEnd;
+  if (end <= start) {
+    return null;
+  }
+
+  return {
+    event,
+    start,
+    end,
+    startMinute: Math.max(0, Math.round((start - dayStart) / 60000)),
+    endMinute: Math.min(1440, Math.round((end - dayStart) / 60000))
+  };
+}
+
+function getTimelineRange(items) {
+  const firstMinute = Math.min(...items.map((item) => item.startMinute));
+  const lastMinute = Math.max(...items.map((item) => item.endMinute));
+  const startHour = Math.max(0, Math.min(6, Math.floor(firstMinute / 60)));
+  const endHour = Math.min(24, Math.max(22, Math.ceil(lastMinute / 60)));
+  return { startHour, endHour };
+}
+
+function layoutTimelineEvents(items) {
+  const lanes = [];
+  const laidOut = items.map((item) => {
+    const laneIndex = lanes.findIndex((laneEnd) => laneEnd <= item.startMinute);
+    const lane = laneIndex >= 0 ? laneIndex : lanes.length;
+    lanes[lane] = item.endMinute;
+    return { ...item, lane };
+  });
+  const laneCount = Math.max(1, lanes.length);
+  return laidOut.map((item) => ({
+    ...item,
+    laneCount
+  }));
+}
+
+function renderTimelineLayout(hours, stage, range, hourBands, items) {
+  hours.replaceChildren();
+  stage.replaceChildren();
+  hours.style.height = `${hourBands.totalHeight}px`;
+  stage.style.height = `${hourBands.totalHeight}px`;
+
+  hourBands.items.forEach((band) => {
+    const label = document.createElement("div");
+    label.className = "timeline-hour";
+    label.style.top = `${band.top}px`;
+    label.textContent = `${String(band.hour).padStart(2, "0")}:00`;
+    hours.append(label);
+
+    const line = document.createElement("div");
+    line.className = "timeline-line";
+    line.style.top = `${band.top}px`;
+    stage.append(line);
+  });
+
+  const endLine = document.createElement("div");
+  endLine.className = "timeline-line";
+  endLine.style.top = `${hourBands.totalHeight}px`;
+  stage.append(endLine);
+
+  return items.map((item) => {
+    const block = createTimelineEventBlock(item, range, hourBands);
+    stage.append(block);
+    return block;
+  });
+}
+
+function buildTimelineHourBands(range, baseHourHeight) {
+  const bands = Array.from({ length: range.endHour - range.startHour }, (_, index) => ({
+    hour: range.startHour + index,
+    height: baseHourHeight,
+    top: 0
+  }));
+
+  return finalizeTimelineHourBands(bands);
+}
+
+function finalizeTimelineHourBands(bands) {
+  let top = 0;
+  bands.forEach((band) => {
+    band.top = top;
+    top += band.height;
+  });
+
+  return {
+    items: bands,
+    totalHeight: top
+  };
+}
+
+function fitTimelineBandsToContent(range, hourBands, items, blocks) {
+  let changed = false;
+  const bands = hourBands.items.map((band) => ({
+    hour: band.hour,
+    height: band.height,
+    top: 0
+  }));
+
+  items.forEach((item, index) => {
+    const block = blocks[index];
+    if (!block) {
+      return;
+    }
+
+    const currentHeight = getTimelineY(item.endMinute, range, hourBands) - getTimelineY(item.startMinute, range, hourBands);
+    const requiredHeight = Math.ceil(block.scrollHeight + 1);
+    if (requiredHeight <= currentHeight + 1) {
+      return;
+    }
+
+    const hour = Math.min(range.endHour - 1, Math.max(range.startHour, Math.floor(item.startMinute / 60)));
+    const band = bands[hour - range.startHour];
+    const minutesInBand = Math.max(1, Math.min(item.endMinute, (hour + 1) * 60) - Math.max(item.startMinute, hour * 60));
+    const neededBandHeight = Math.ceil((requiredHeight * 60) / minutesInBand);
+    if (neededBandHeight > band.height) {
+      band.height = neededBandHeight;
+      changed = true;
+    }
+  });
+
+  return {
+    changed,
+    hourBands: changed ? finalizeTimelineHourBands(bands) : hourBands
+  };
+}
+
+function getTimelineY(minute, range, hourBands) {
+  const startMinute = range.startHour * 60;
+  const endMinute = range.endHour * 60;
+  const clamped = Math.min(endMinute, Math.max(startMinute, minute));
+  if (clamped >= endMinute) {
+    return hourBands.totalHeight;
+  }
+
+  const hour = Math.floor(clamped / 60);
+  const band = hourBands.items[hour - range.startHour];
+  return band.top + ((clamped - hour * 60) / 60) * band.height;
+}
+
+function createTimelineEventBlock(item, range, hourBands) {
+  const event = item.event;
+  const block = document.createElement("article");
+  const top = getTimelineY(item.startMinute, range, hourBands);
+  const height = getTimelineY(item.endMinute, range, hourBands) - top;
+  const laneWidth = 100 / item.laneCount;
+  block.className = `timeline-event ${event.source}`;
+  block.style.top = `${top}px`;
+  block.style.height = `${height}px`;
+  block.style.left = `calc(8px + ${item.lane * laneWidth}%)`;
+  block.style.width = `calc(${laneWidth}% - 12px)`;
+
+  const time = document.createElement("div");
+  time.className = "timeline-event-time";
+  time.textContent = `${formatTime(item.start)}-${formatTime(item.end)}`;
+
+  const title = document.createElement("div");
+  title.className = "timeline-event-title";
+  title.textContent = event.title;
+
+  block.append(time, title);
+  return block;
 }
 
 function getVisibleEvents() {
