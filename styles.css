@@ -895,11 +895,7 @@ body.layer-3d .mind-node.is-layer-focused {
   display: block;
   height: 3px;
   border-radius: 999px;
-  background: repeating-linear-gradient(
-    90deg,
-    var(--branch) 0 14px,
-    transparent 14px 22px
-  );
+  background: var(--branch);
   box-shadow: 0 0 12px color-mix(in srgb, var(--branch), transparent 54%);
   opacity: 0.62;
   transform-origin: 0 50%;
@@ -908,6 +904,14 @@ body.layer-3d .mind-node.is-layer-focused {
     opacity var(--motion-speed) var(--motion-ease),
     height var(--motion-speed) var(--motion-ease),
     filter var(--motion-speed) var(--motion-ease);
+}
+
+.edge-3d-line.is-layer-connector {
+  background: repeating-linear-gradient(
+    90deg,
+    var(--branch) 0 14px,
+    transparent 14px 22px
+  );
 }
 
 .edge-3d-line.relation-risk {

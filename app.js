@@ -604,7 +604,7 @@ function applyLayerDepthStyle(element, axisY) {
   element.style.transformOrigin = "center";
 }
 
-function make3dConnectorEdge(edge, from, to, matches, hasSearch, previousEdges) {
+function make3dEdge(edge, from, to, matches, hasSearch, previousEdges) {
   const start = connectorPoint(from, to, 1);
   const end = connectorPoint(to, from, 1);
   const dx = end.x - start.x;
@@ -680,8 +680,8 @@ function render() {
     const to = state.positions.get(edge.to);
     if (!from || !to) return;
     const isConnector = isLayerConnectorEdge(edge);
-    if (state.isLayer3d && isConnector) {
-      edge3dFragment.appendChild(make3dConnectorEdge(edge, from, to, matches, hasSearch, previousEdges));
+    if (state.isLayer3d) {
+      edge3dFragment.appendChild(make3dEdge(edge, from, to, matches, hasSearch, previousEdges));
       return;
     }
 
