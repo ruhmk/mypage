@@ -10,7 +10,9 @@
   --accent-strong: #0b5f59;
   --family: #d9485f;
   --personal: #2f77b4;
-  --work: #7c5c2e;
+  --work: #4a9fcb;
+  --work-soft: #eaf7ff;
+  --work-line: #bfe4f5;
   --shadow: 0 18px 48px rgba(31, 35, 40, 0.11);
 }
 
@@ -467,6 +469,16 @@ h2 {
   background: #fff;
   box-shadow: 0 1px 0 rgba(31, 35, 40, 0.08), 0 4px 14px rgba(31, 35, 40, 0.08);
   padding: 5px 7px 6px;
+}
+
+.event-card.work,
+.timeline-event.work {
+  background: var(--work-soft);
+}
+
+.day-chip.work {
+  border-color: var(--work-line);
+  background: var(--work-soft);
 }
 
 .timeline-event-time {
