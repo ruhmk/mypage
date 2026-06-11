@@ -1,4 +1,4 @@
-window.FAMILY_CALENDAR_UPDATED_AT = "2026-06-11T01:58:52.843Z";
+window.FAMILY_CALENDAR_UPDATED_AT = "2026-06-11T05:23:58.654Z";
 window.FAMILY_CALENDAR_EVENTS = [
   {
     "id": "work-AT7GkMoKYuYlL_plV4",
@@ -334,6 +334,15 @@ window.FAMILY_CALENDAR_EVENTS = [
     "allDay": false
   },
   {
+    "id": "personal-nWQLv0kZlF-ep1hSAY",
+    "title": "休み",
+    "start": "2026-06-12T01:00:00.000Z",
+    "end": "2026-06-12T02:00:00.000Z",
+    "source": "personal",
+    "note": "",
+    "allDay": false
+  },
+  {
     "id": "work-r7FMDfOVWWbGbHkYqo",
     "title": "仕事",
     "start": "2026-06-12T01:20:00.000Z",
@@ -375,6 +384,15 @@ window.FAMILY_CALENDAR_EVENTS = [
     "start": "2026-06-12T07:00:00.000Z",
     "end": "2026-06-12T07:30:00.000Z",
     "source": "work",
+    "note": "",
+    "allDay": false
+  },
+  {
+    "id": "personal-XZk6D278H-PYfPb5WG",
+    "title": "18:30イメージア",
+    "start": "2026-06-13T09:00:00.000Z",
+    "end": "2026-06-13T10:00:00.000Z",
+    "source": "personal",
     "note": "",
     "allDay": false
   },
