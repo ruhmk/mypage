@@ -13,6 +13,8 @@ const COLLISION_GAP = 18;
 const PNG_EXPORT_PADDING = 160;
 const PNG_EXPORT_MAX_SIDE = 16384;
 const PNG_EXPORT_MAX_PIXELS = 90000000;
+const LAYER_Y_AXIS_GAP = 500;
+const VIEW_PERSPECTIVE = 4200;
 const BRANCH_COLORS = [
   "#2f80ed",
   "#e24a68",
@@ -95,6 +97,7 @@ const state = {
   removingId: null,
   isDraggingNode: false,
   isLayer3d: false,
+  view3d: { yaw: -8, pitch: 58 },
   focusLayerDepth: 0,
   layerFilterDepth: 0,
   focusNodeId: "",
@@ -114,8 +117,10 @@ let viewBeforeMapMaximize = null;
 const els = {
   viewport: document.getElementById("canvasViewport"),
   world: document.getElementById("canvasWorld"),
+  view: document.getElementById("canvasView"),
   floorLayer: document.getElementById("floorLayer"),
   edgeLayer: document.getElementById("edgeLayer"),
+  edge3dLayer: document.getElementById("edge3dLayer"),
   nodeLayer: document.getElementById("nodeLayer"),
   outlineInput: document.getElementById("outlineInput"),
   exportOutput: document.getElementById("exportOutput"),
@@ -412,7 +417,10 @@ function layoutTree() {
   placeNode(state.tree, WORLD.cx, WORLD.cy - rootSpan / 2 + rootSpan / 2, 0, 0, null);
   resolveLayoutCollisions();
   alignParallelLayerNodes();
-  if (state.isLayer3d) applyLayerProjection();
+  if (state.isLayer3d) {
+    clampFocusLayerDepth();
+    applyLayerProjection();
+  }
 }
 
 function alignParallelLayerNodes() {
@@ -448,9 +456,12 @@ function alignParallelLayerNodes() {
 
 function applyLayerProjection() {
   state.positions.forEach((pos) => {
-    pos.x -= pos.layer * 122;
-    pos.y += pos.layer * 118;
+    pos.layerAxisY = getLayerAxisY(pos.layer);
   });
+}
+
+function getLayerAxisY(layer) {
+  return -normalizeLayer(layer) * LAYER_Y_AXIS_GAP;
 }
 
 function placeNode(node, x, y, depth, branchIndex, parent) {
@@ -571,11 +582,68 @@ function pathForEdge(from, to) {
 
 function pathForLayerConnector(from, to) {
   const startX = from.x;
-  const startY = from.y + from.height / 2;
+  const direction = to.y >= from.y ? 1 : -1;
+  const startY = from.y + (from.height / 2) * direction;
   const endX = to.x;
-  const endY = to.y - to.height / 2;
+  const endY = to.y - (to.height / 2) * direction;
   const midY = (startY + endY) / 2;
   return `M ${startX} ${startY} C ${startX} ${midY}, ${endX} ${midY}, ${endX} ${endY}`;
+}
+
+function getConnectorAxisY(from, to) {
+  return ((from?.layerAxisY || 0) + (to?.layerAxisY || 0)) / 2;
+}
+
+function applyLayerDepthStyle(element, axisY) {
+  if (!state.isLayer3d) {
+    element.style.transform = "";
+    return;
+  }
+  element.style.transform = `translateZ(${axisY}px)`;
+  element.style.transformBox = "fill-box";
+  element.style.transformOrigin = "center";
+}
+
+function make3dConnectorEdge(edge, from, to, matches, hasSearch, previousEdges) {
+  const start = connectorPoint(from, to, 1);
+  const end = connectorPoint(to, from, 1);
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const dz = end.z - start.z;
+  const length = Math.max(1, Math.hypot(dx, dy, dz));
+  const xyLength = Math.hypot(dx, dy);
+  const theta = xyLength < 0.001 ? 0 : (Math.atan2(dy, dx) * 180) / Math.PI;
+  const phi = (-Math.asin(clamp(dz / length, -1, 1)) * 180) / Math.PI;
+  const line = document.createElement("span");
+  const className =
+    edgeClass(edge, matches, hasSearch).replace("edge-path", "edge-3d-line") +
+    (previousEdges.has(edgeKey(edge)) ? "" : " is-entering");
+  line.className = className;
+  line.dataset.from = edge.from;
+  line.dataset.to = edge.to;
+  line.dataset.relation = edge.relationType || "normal";
+  line.style.width = `${length}px`;
+  line.style.setProperty("--branch", edge.color);
+  line.style.transform = `translate3d(${start.x}px, ${start.y}px, ${start.z}px) rotateZ(${theta}deg) rotateY(${phi}deg)`;
+  return line;
+}
+
+function connectorPoint(pos, toward, sign) {
+  const x = pos.x;
+  const y = pos.y;
+  const z = pos.layerAxisY || 0;
+  const dx = (toward?.x || x) - x;
+  const dy = (toward?.y || y) - y;
+  const dz = (toward?.layerAxisY || 0) - z;
+  const length = Math.hypot(dx, dy, dz);
+  if (length < 0.001) return { x, y, z };
+
+  const inset = Math.min(42, Math.max(24, Math.min(pos.width, pos.height) * 0.42));
+  return {
+    x: x + (dx / length) * inset * sign,
+    y: y + (dy / length) * inset * sign,
+    z: z + (dz / length) * inset * sign,
+  };
 }
 
 function edgeKey(edge) {
@@ -592,12 +660,13 @@ function render() {
   els.nodeLayer.textContent = "";
   els.floorLayer.textContent = "";
   els.edgeLayer.textContent = "";
-  els.floorLayer.setAttribute("viewBox", `0 0 ${WORLD.width} ${WORLD.height}`);
+  els.edge3dLayer.textContent = "";
   els.edgeLayer.setAttribute("viewBox", `0 0 ${WORLD.width} ${WORLD.height}`);
 
   const fragment = document.createDocumentFragment();
   const floorFragment = document.createDocumentFragment();
   const edgeFragment = document.createDocumentFragment();
+  const edge3dFragment = document.createDocumentFragment();
   const matches = getSearchMatches();
   const hasSearch = state.search.trim().length > 0;
 
@@ -610,8 +679,14 @@ function render() {
     const from = state.positions.get(edge.from);
     const to = state.positions.get(edge.to);
     if (!from || !to) return;
+    const isConnector = isLayerConnectorEdge(edge);
+    if (state.isLayer3d && isConnector) {
+      edge3dFragment.appendChild(make3dConnectorEdge(edge, from, to, matches, hasSearch, previousEdges));
+      return;
+    }
+
     const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    path.setAttribute("d", isLayerConnectorEdge(edge) ? pathForLayerConnector(from, to) : pathForEdge(from, to));
+    path.setAttribute("d", isConnector ? pathForLayerConnector(from, to) : pathForEdge(from, to));
     const className = edgeClass(edge, matches, hasSearch) + (previousEdges.has(edgeKey(edge)) ? "" : " is-entering");
     path.setAttribute("class", className);
     path.setAttribute("pathLength", "1");
@@ -619,6 +694,7 @@ function render() {
     path.dataset.to = edge.to;
     path.dataset.relation = edge.relationType || "normal";
     path.style.setProperty("--branch", edge.color);
+    applyLayerDepthStyle(path, isConnector ? getConnectorAxisY(from, to) : from.layerAxisY || 0);
     edgeFragment.appendChild(path);
   });
 
@@ -635,6 +711,10 @@ function render() {
     nodeEl.style.top = `${pos.y}px`;
     nodeEl.style.setProperty("--branch", pos.color);
     nodeEl.style.setProperty("--node-width", `${pos.depth === 0 ? ROOT_WIDTH : NODE_WIDTH}px`);
+    nodeEl.style.setProperty("--layer-y", `${state.isLayer3d ? pos.layerAxisY || 0 : 0}px`);
+    if (state.isLayer3d) {
+      nodeEl.style.zIndex = String(100000 + Math.round(pos.layerAxisY || 0));
+    }
     applyNodeMotion(nodeEl, pos, previousPositions.get(node.id));
 
     const title = document.createElement("div");
@@ -675,6 +755,7 @@ function render() {
 
   els.floorLayer.appendChild(floorFragment);
   els.edgeLayer.appendChild(edgeFragment);
+  els.edge3dLayer.appendChild(edge3dFragment);
   els.nodeLayer.appendChild(fragment);
   bindRenderedEvents();
   updateTransform();
@@ -697,24 +778,21 @@ function renderLayerFloors(fragment) {
     const maxX = Math.max(...items.map((pos) => pos.x + pos.width / 2)) + paddingX;
     const minY = Math.min(...items.map((pos) => pos.y - pos.height / 2)) - paddingY;
     const maxY = Math.max(...items.map((pos) => pos.y + pos.height / 2)) + paddingY;
-    const skew = 72;
-    const plate = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
-    plate.setAttribute("points", `${minX},${minY} ${maxX},${minY} ${maxX + skew},${maxY} ${minX + skew},${maxY}`);
-    plate.setAttribute(
-      "class",
-      `floor-plate ${layer === state.focusLayerDepth ? "is-layer-focused" : "is-layer-dimmed"}`,
-    );
-    plate.style.fill = layer === state.focusLayerDepth ? "rgba(124,192,255,0.36)" : "rgba(167,179,196,0.34)";
-    plate.style.stroke = layer === state.focusLayerDepth ? "rgba(124,192,255,0.72)" : "rgba(167,179,196,0.38)";
-    fragment.appendChild(plate);
+    const plate = document.createElement("div");
+    plate.className = `floor-plate ${layer === state.focusLayerDepth ? "is-layer-focused" : "is-layer-dimmed"}`;
+    plate.style.left = `${minX}px`;
+    plate.style.top = `${minY}px`;
+    plate.style.width = `${Math.max(1, maxX - minX)}px`;
+    plate.style.height = `${Math.max(1, maxY - minY)}px`;
+    plate.style.zIndex = String(100000 + Math.round(getLayerAxisY(layer)));
+    applyLayerDepthStyle(plate, getLayerAxisY(layer));
 
-    const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
-    label.setAttribute("class", "floor-label");
-    label.setAttribute("x", minX + 28);
-    label.setAttribute("y", minY + 46);
-    label.style.opacity = layer === state.focusLayerDepth ? "0.8" : "0.24";
-    label.textContent = `階層 ${layer}`;
-    fragment.appendChild(label);
+    const label = document.createElement("span");
+    label.className = "floor-label";
+    const axisLabel = layer === state.focusLayerDepth ? "アクティブ" : layer < state.focusLayerDepth ? "Y+" : "Y-";
+    label.textContent = `階層 ${layer} / ${axisLabel}`;
+    plate.appendChild(label);
+    fragment.appendChild(plate);
   });
 }
 
@@ -893,6 +971,7 @@ function bindRenderedEvents() {
     let editRecorded = false;
 
     nodeEl.addEventListener("pointerdown", (event) => {
+      if (state.isLayer3d && event.altKey) return;
       if (event.button !== 0 || event.target.closest(".node-action")) return;
       event.stopPropagation();
       selectNode(id);
@@ -900,6 +979,10 @@ function bindRenderedEvents() {
     });
 
     nodeEl.addEventListener("contextmenu", (event) => {
+      if (state.isLayer3d && event.altKey) {
+        event.preventDefault();
+        return;
+      }
       event.preventDefault();
       event.stopPropagation();
       showNodeContextMenu(event, id);
@@ -930,6 +1013,11 @@ function bindRenderedEvents() {
     });
 
     toggle.addEventListener("click", (event) => {
+      if (state.isLayer3d && event.altKey) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
       event.stopPropagation();
       const found = findNode(id);
       if (!found || !found.node.children.length) return;
@@ -939,12 +1027,22 @@ function bindRenderedEvents() {
     });
 
     addChildButton.addEventListener("click", (event) => {
+      if (state.isLayer3d && event.altKey) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
       event.stopPropagation();
       state.selectedId = id;
       addChild();
     });
 
     deleteButton.addEventListener("click", (event) => {
+      if (state.isLayer3d && event.altKey) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
       event.stopPropagation();
       if (deleteButton.disabled) return;
       state.selectedId = id;
@@ -1193,10 +1291,10 @@ function paintSelection() {
   document.querySelectorAll(".mind-node").forEach((nodeEl) => {
     nodeEl.classList.toggle("is-selected", nodeEl.dataset.id === state.selectedId);
   });
-  document.querySelectorAll(".edge-path").forEach((path, index) => {
-    const from = path.dataset.from;
-    const to = path.dataset.to;
-    path.classList.toggle("is-selected", from === state.selectedId || to === state.selectedId);
+  document.querySelectorAll(".edge-path, .edge-3d-line").forEach((edgeEl) => {
+    const from = edgeEl.dataset.from;
+    const to = edgeEl.dataset.to;
+    edgeEl.classList.toggle("is-selected", from === state.selectedId || to === state.selectedId);
   });
 }
 
@@ -1365,8 +1463,15 @@ function centerNode(id) {
 }
 
 function updateTransform() {
-  const layerTilt = state.isLayer3d ? " skewX(-8deg) scaleY(0.84)" : "";
-  els.world.style.transform = `translate(${state.pan.x}px, ${state.pan.y}px) scale(${state.zoom})${layerTilt}`;
+  els.world.style.transform = `translate(${state.pan.x}px, ${state.pan.y}px) scale(${state.zoom})`;
+  const perspective = state.isLayer3d ? VIEW_PERSPECTIVE / Math.max(state.zoom, 0.0001) : VIEW_PERSPECTIVE;
+  els.world.style.setProperty("--view-perspective", `${perspective}px`);
+  if (els.view) {
+    const viewTransform = state.isLayer3d
+      ? `rotateX(${state.view3d.pitch}deg) rotateZ(${state.view3d.yaw}deg)`
+      : "none";
+    els.view.style.transform = viewTransform;
+  }
   document.getElementById("zoomResetButton").textContent = `${Math.round(state.zoom * 100)}%`;
 }
 
@@ -2082,10 +2187,11 @@ function drawPngEdges(ctx, bounds) {
     const isConnector = isLayerConnectorEdge(edge);
     const fromSide = isConnector ? 0 : to.x >= from.x ? from.width / 2 : -from.width / 2;
     const toSide = isConnector ? 0 : to.x >= from.x ? -to.width / 2 : to.width / 2;
+    const connectorDirection = isConnector && to.y < from.y ? -1 : 1;
     const startX = from.x + fromSide - bounds.minX;
     const endX = to.x + toSide - bounds.minX;
-    const startY = from.y + (isConnector ? from.height / 2 : 0) - bounds.minY;
-    const endY = to.y - (isConnector ? to.height / 2 : 0) - bounds.minY;
+    const startY = from.y + (isConnector ? (from.height / 2) * connectorDirection : 0) - bounds.minY;
+    const endY = to.y - (isConnector ? (to.height / 2) * connectorDirection : 0) - bounds.minY;
     const curve = isConnector ? Math.abs(endY - startY) / 2 : Math.max(82, Math.abs(endX - startX) * 0.42);
     const direction = to.x >= from.x ? 1 : -1;
     const className = edgeClass(edge, matches, hasSearch);
@@ -2726,7 +2832,7 @@ function updateLayerControls() {
   controls.hidden = !state.isLayer3d;
   view3dButton.hidden = state.isLayer3d;
   clearLayerButton.hidden = state.isLayer3d || state.layerFilterDepth === 0;
-  layerLabel.textContent = `階層 ${state.focusLayerDepth}`;
+  layerLabel.textContent = `アクティブ ${state.focusLayerDepth}`;
   layerUpButton.disabled = state.focusLayerDepth <= 0;
   layerDownButton.disabled = state.focusLayerDepth >= maxLayer;
 }
@@ -2771,12 +2877,12 @@ function setZoom(nextZoom) {
   updateTransform();
 }
 
-function setZoomAtPoint(nextZoom, clientX, clientY) {
+function setZoomAtPoint(nextZoom, clientX, clientY, options = {}) {
   const rect = els.viewport.getBoundingClientRect();
   const viewportX = clientX - rect.left;
   const viewportY = clientY - rect.top;
   const previousZoom = state.zoom;
-  const zoom = Math.min(1.8, Math.max(0.28, nextZoom));
+  const zoom = options.unbounded ? Math.max(0.0001, nextZoom) : Math.min(1.8, Math.max(0.28, nextZoom));
   if (zoom === previousZoom) return;
 
   const factor = zoom / previousZoom;
@@ -2794,28 +2900,70 @@ function centerRoot() {
 }
 
 function wirePanZoom() {
-  let panning = false;
+  let viewDrag = null;
   let last = { x: 0, y: 0 };
+  let suppressContextMenu = false;
 
   els.viewport.addEventListener("pointerdown", (event) => {
-    if (event.target.closest(".mind-node")) return;
-    panning = true;
+    const mayaMode = getMayaNavigationMode(event);
+    if (mayaMode) {
+      event.preventDefault();
+      hideNodeContextMenu();
+      suppressContextMenu = mayaMode === "zoom";
+      viewDrag = {
+        mode: mayaMode,
+        className:
+          mayaMode === "orbit" ? "is-orbiting" : mayaMode === "zoom" ? "is-zoom-dragging" : "is-maya-panning",
+      };
+      last = { x: event.clientX, y: event.clientY };
+      els.viewport.classList.add(viewDrag.className);
+      els.viewport.setPointerCapture(event.pointerId);
+      return;
+    }
+
+    if (event.target.closest(".mind-node") || event.button !== 0) return;
+    viewDrag = { mode: "pan", className: "is-panning" };
     last = { x: event.clientX, y: event.clientY };
-    els.viewport.classList.add("is-panning");
+    els.viewport.classList.add(viewDrag.className);
     els.viewport.setPointerCapture(event.pointerId);
   });
 
   els.viewport.addEventListener("pointermove", (event) => {
-    if (!panning) return;
-    state.pan.x += event.clientX - last.x;
-    state.pan.y += event.clientY - last.y;
+    if (!viewDrag) return;
+    event.preventDefault();
+    const dx = event.clientX - last.x;
+    const dy = event.clientY - last.y;
+
+    if (viewDrag.mode === "orbit") {
+      state.view3d.yaw -= dx * 0.22;
+      state.view3d.pitch -= dy * 0.18;
+      updateTransform();
+    } else if (viewDrag.mode === "zoom") {
+      const factor = Math.exp(dx * 0.006);
+      setZoomAtPoint(state.zoom * factor, event.clientX, event.clientY, { unbounded: true });
+    } else {
+      state.pan.x += dx;
+      state.pan.y += dy;
+      updateTransform();
+    }
+
     last = { x: event.clientX, y: event.clientY };
-    updateTransform();
   });
 
-  els.viewport.addEventListener("pointerup", () => {
-    panning = false;
-    els.viewport.classList.remove("is-panning");
+  const finishViewDrag = () => {
+    if (!viewDrag) return;
+    els.viewport.classList.remove(viewDrag.className);
+    viewDrag = null;
+  };
+
+  els.viewport.addEventListener("pointerup", finishViewDrag);
+  els.viewport.addEventListener("pointercancel", finishViewDrag);
+
+  els.viewport.addEventListener("contextmenu", (event) => {
+    if (suppressContextMenu || (state.isLayer3d && event.altKey)) {
+      event.preventDefault();
+      suppressContextMenu = false;
+    }
   });
 
   els.viewport.addEventListener(
@@ -2827,6 +2975,21 @@ function wirePanZoom() {
     },
     { passive: false },
   );
+}
+
+function getMayaNavigationMode(event) {
+  if (!state.isLayer3d) return "";
+  const isAltNavigation = event.altKey;
+  const isUiTarget = Boolean(
+    event.target.closest(
+      ".mind-node, .node-action, .layer-3d-controls, .context-menu, .restore-map-button, button, input, textarea, select",
+    ),
+  );
+  if (!isAltNavigation && isUiTarget) return "";
+  if (event.button === 0) return "orbit";
+  if (event.button === 2) return "zoom";
+  if (event.button === 1) return "pan";
+  return "";
 }
 
 function init() {

@@ -148,7 +148,7 @@
         <div id="canvasViewport" class="canvas-viewport">
           <div id="layer3dControls" class="layer-3d-controls" hidden>
             <button id="layerUpButton" type="button">上</button>
-            <strong id="layerLevelLabel">階層 0</strong>
+            <strong id="layerLevelLabel">アクティブ 0</strong>
             <button id="layerDownButton" type="button">下</button>
             <button id="addLowerLayerButton" type="button">下層に追加</button>
             <button id="commitLayerButton" type="button">階層決定</button>
@@ -156,13 +156,16 @@
           </div>
           <button id="restoreMapButton" class="restore-map-button" type="button" hidden>戻す</button>
           <div id="canvasWorld" class="canvas-world">
-            <svg id="floorLayer" class="floor-layer" aria-hidden="true"></svg>
-            <svg id="edgeLayer" class="edge-layer" aria-hidden="true"></svg>
-            <div id="guideLayer" class="guide-layer" aria-hidden="true">
-              <span id="guideVertical" class="alignment-guide vertical"></span>
-              <span id="guideHorizontal" class="alignment-guide horizontal"></span>
+            <div id="canvasView" class="canvas-view">
+              <div id="floorLayer" class="floor-layer" aria-hidden="true"></div>
+              <svg id="edgeLayer" class="edge-layer" aria-hidden="true"></svg>
+              <div id="edge3dLayer" class="edge-3d-layer" aria-hidden="true"></div>
+              <div id="guideLayer" class="guide-layer" aria-hidden="true">
+                <span id="guideVertical" class="alignment-guide vertical"></span>
+                <span id="guideHorizontal" class="alignment-guide horizontal"></span>
+              </div>
+              <div id="nodeLayer" class="node-layer"></div>
             </div>
-            <div id="nodeLayer" class="node-layer"></div>
           </div>
         </div>
       </section>
