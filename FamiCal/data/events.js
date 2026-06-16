@@ -1,59 +1,5 @@
-window.FAMILY_CALENDAR_UPDATED_AT = "2026-06-15T11:37:04.232Z";
+window.FAMILY_CALENDAR_UPDATED_AT = "2026-06-16T05:04:26.855Z";
 window.FAMILY_CALENDAR_EVENTS = [
-  {
-    "id": "work-HFlrCopqAiWlZooIz2",
-    "title": "仕事",
-    "start": "2026-06-08T01:20:00.000Z",
-    "end": "2026-06-08T01:30:00.000Z",
-    "source": "work",
-    "note": "",
-    "allDay": false
-  },
-  {
-    "id": "work-sJpsLeDfCfKQdqlx19",
-    "title": "仕事",
-    "start": "2026-06-08T02:30:00.000Z",
-    "end": "2026-06-08T03:00:00.000Z",
-    "source": "work",
-    "note": "",
-    "allDay": false
-  },
-  {
-    "id": "work-bxEpmlurr1gZk4bzYS",
-    "title": "仕事",
-    "start": "2026-06-08T07:00:00.000Z",
-    "end": "2026-06-08T07:30:00.000Z",
-    "source": "work",
-    "note": "",
-    "allDay": false
-  },
-  {
-    "id": "work-zI_BpVgdl_V6ckXCyC",
-    "title": "仕事",
-    "start": "2026-06-08T08:00:00.000Z",
-    "end": "2026-06-08T09:00:00.000Z",
-    "source": "work",
-    "note": "",
-    "allDay": false
-  },
-  {
-    "id": "work-4buu8N-mI2ynq5sosB",
-    "title": "仕事",
-    "start": "2026-06-08T08:30:00.000Z",
-    "end": "2026-06-08T09:00:00.000Z",
-    "source": "work",
-    "note": "",
-    "allDay": false
-  },
-  {
-    "id": "work--QhYbeGJxD71O51lJ7",
-    "title": "仕事",
-    "start": "2026-06-08T09:30:00.000Z",
-    "end": "2026-06-08T10:00:00.000Z",
-    "source": "work",
-    "note": "",
-    "allDay": false
-  },
   {
     "id": "work-NP0VovUDaxTvLs-iu-",
     "title": "仕事",
@@ -325,19 +271,19 @@ window.FAMILY_CALENDAR_EVENTS = [
     "allDay": false
   },
   {
-    "id": "work-BAZBDM-ZzM6CoaQeDr",
+    "id": "work-YSxpKiEZZUFsVKaCHm",
     "title": "仕事",
-    "start": "2026-06-15T10:00:00.000Z",
-    "end": "2026-06-15T10:30:00.000Z",
+    "start": "2026-06-16T01:15:00.000Z",
+    "end": "2026-06-16T01:45:00.000Z",
     "source": "work",
     "note": "",
     "allDay": false
   },
   {
-    "id": "work-YSxpKiEZZUFsVKaCHm",
+    "id": "work-VQEA8GsQ9QXx-hdP1R",
     "title": "仕事",
-    "start": "2026-06-16T01:15:00.000Z",
-    "end": "2026-06-16T01:45:00.000Z",
+    "start": "2026-06-16T02:00:00.000Z",
+    "end": "2026-06-16T02:30:00.000Z",
     "source": "work",
     "note": "",
     "allDay": false
