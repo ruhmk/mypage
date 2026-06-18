@@ -4,10 +4,13 @@ const appConfig = window.FAMILY_CALENDAR_CONFIG || {};
 const fetchGoogleButton = document.querySelector("#fetchGoogleButton");
 const publishGitHubButton = document.querySelector("#publishGitHubButton");
 const downloadEventsButton = document.querySelector("#downloadEventsButton");
+const directPublishLink = document.querySelector("#directPublishLink");
 const adminStatus = document.querySelector("#adminStatus");
 const adminPreview = document.querySelector("#adminPreview");
 
 let latestEvents = [];
+
+setupDirectPublishLink();
 
 fetchGoogleButton.addEventListener("click", () => {
   fetchGoogleEvents();
@@ -20,6 +23,29 @@ publishGitHubButton.addEventListener("click", () => {
 downloadEventsButton.addEventListener("click", () => {
   downloadEventsJs(latestEvents);
 });
+
+function setupDirectPublishLink() {
+  if (!directPublishLink) {
+    return;
+  }
+
+  if (!appConfig.googleSyncUrl) {
+    directPublishLink.removeAttribute("href");
+    directPublishLink.setAttribute("aria-disabled", "true");
+    directPublishLink.title = "data/config.js に Apps Script のURLを入れてください。";
+    return;
+  }
+
+  const setFreshUrl = () => {
+    const url = new URL(appConfig.googleSyncUrl);
+    url.searchParams.set("action", "publish");
+    url.searchParams.set("t", String(Date.now()));
+    directPublishLink.href = url.toString();
+  };
+
+  setFreshUrl();
+  directPublishLink.addEventListener("click", setFreshUrl);
+}
 
 function fetchGoogleEvents() {
   if (!appConfig.googleSyncUrl) {

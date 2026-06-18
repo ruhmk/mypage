@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>家族カレンダー更新</title>
-    <link rel="stylesheet" href="./styles.css?v=20260611-1">
+    <link rel="stylesheet" href="./styles.css?v=20260618-1">
   </head>
   <body>
     <div class="app-shell admin-shell">
@@ -30,6 +30,7 @@
           <p class="admin-copy" id="adminStatus">取得した予定を、GitHub Pagesの data/events.js へ反映できます。</p>
           <div class="dialog-actions">
             <button class="primary-button" id="publishGitHubButton" type="button">GitHubに反映</button>
+            <a class="secondary-button" id="directPublishLink" href="#" target="_blank" rel="noreferrer">直接更新を開く</a>
             <button class="secondary-button" id="downloadEventsButton" type="button" disabled>events.jsを保存</button>
           </div>
         </section>
@@ -47,6 +48,6 @@
     </div>
 
     <script src="./data/config.js?v=20260604-1"></script>
-    <script src="./admin.js?v=20260604-1" defer></script>
+    <script src="./admin.js?v=20260618-1" defer></script>
   </body>
 </html>
