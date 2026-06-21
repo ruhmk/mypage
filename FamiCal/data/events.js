@@ -1,4 +1,4 @@
-window.FAMILY_CALENDAR_UPDATED_AT = "2026-06-20T00:40:26.281Z";
+window.FAMILY_CALENDAR_UPDATED_AT = "2026-06-21T00:40:25.945Z";
 window.FAMILY_CALENDAR_EVENTS = [
   {
     "id": "work-dFyOOyc9Lo6_fxC588",
@@ -1832,6 +1832,24 @@ window.FAMILY_CALENDAR_EVENTS = [
     "title": "仕事",
     "start": "2026-08-20T09:00:00.000Z",
     "end": "2026-08-20T09:30:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": false
+  },
+  {
+    "id": "work-zvVjkMkjm_S1gI_j2A",
+    "title": "仕事",
+    "start": "2026-08-21T01:20:00.000Z",
+    "end": "2026-08-21T01:30:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": false
+  },
+  {
+    "id": "work-Q-gjOD_ylNLJ2WFYdV",
+    "title": "仕事",
+    "start": "2026-08-21T07:00:00.000Z",
+    "end": "2026-08-21T07:30:00.000Z",
     "source": "work",
     "note": "",
     "allDay": false
