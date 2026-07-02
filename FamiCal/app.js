@@ -8,6 +8,7 @@ const state = {
   viewDate: startOfMonth(new Date()),
   selectedDate: stripTime(new Date()),
   remoteEvents: [],
+  updatedAt: "",
   visibleSources: new Set(["family", "personal", "work"])
 };
 
@@ -57,6 +58,7 @@ function bootstrap() {
   state.remoteEvents = Array.isArray(window.FAMILY_CALENDAR_EVENTS)
     ? window.FAMILY_CALENDAR_EVENTS
     : fallbackEvents();
+  state.updatedAt = window.FAMILY_CALENDAR_UPDATED_AT || "";
 
   render();
 }
@@ -441,8 +443,9 @@ function getEventsForDay(date) {
 
 function renderImportStatus() {
   const googleCount = state.remoteEvents.length;
+  const updatedText = formatUpdatedDate(state.updatedAt);
   if (googleCount > 0) {
-    importStatus.textContent = `公開予定 ${googleCount}件を表示中`;
+    importStatus.textContent = `公開予定 ${googleCount}件を表示中${updatedText ? ` / ${updatedText}更新` : ""}`;
     return;
   }
   importStatus.textContent = "公開予定は未設定";
@@ -482,6 +485,20 @@ function formatTime(value) {
     minute: "2-digit",
     hour12: false
   }).format(new Date(value));
+}
+
+function formatUpdatedDate(value) {
+  const date = new Date(value);
+  if (!value || Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat("ja-JP", {
+    year: "2-digit",
+    month: "numeric",
+    day: "numeric",
+    timeZone: "Asia/Tokyo"
+  }).format(date);
 }
 
 function startOfMonth(date) {
