@@ -1274,7 +1274,7 @@
       const envelope = await encryptObject(delta, app.settings.syncPassword);
       const payload = bytesToBase64Url(utf8(JSON.stringify(envelope)));
       const sessionId = uid("qr").replace(/_/g, "");
-      const chunks = chunkString(payload, 700);
+      const chunks = chunkString(payload, 300);
       let index = 0;
       openModal(`
         <div class="modal-head">
@@ -1300,6 +1300,10 @@
           fallback.classList.add("hidden");
           canvas.classList.remove("hidden");
           await window.QRCode.toCanvas(canvas, frame, { width: 360, margin: 2, errorCorrectionLevel: "M" });
+        } else if (window.qrcode) {
+          fallback.classList.add("hidden");
+          canvas.classList.remove("hidden");
+          drawQrToCanvas(canvas, frame);
         } else {
           canvas.classList.add("hidden");
           fallback.classList.remove("hidden");
@@ -1324,6 +1328,34 @@
       await render();
     } catch (error) {
       toast(error.message || "QRを作れませんでした");
+    }
+  }
+
+  function drawQrToCanvas(canvas, text) {
+    const qr = window.qrcode(0, "M");
+    qr.addData(text);
+    qr.make();
+    const count = qr.getModuleCount();
+    const margin = 4;
+    const cssSize = 360;
+    const scale = Math.max(2, Math.floor(cssSize / (count + margin * 2)));
+    const size = (count + margin * 2) * scale;
+    const ratio = window.devicePixelRatio || 1;
+    canvas.width = size * ratio;
+    canvas.height = size * ratio;
+    canvas.style.width = `${size}px`;
+    canvas.style.height = `${size}px`;
+    const context = canvas.getContext("2d");
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, size, size);
+    context.fillStyle = "#05070c";
+    for (let y = 0; y < count; y += 1) {
+      for (let x = 0; x < count; x += 1) {
+        if (qr.isDark(y, x)) {
+          context.fillRect((x + margin) * scale, (y + margin) * scale, scale, scale);
+        }
+      }
     }
   }
 
