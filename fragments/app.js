@@ -440,7 +440,10 @@
       .filter((group) => group && isVisibleEntity(group))
       .map((group) => group.title || "グループ");
     els.inspector.innerHTML = `
-      <h2>カード</h2>
+      <div class="inspector-head">
+        <h2>カード</h2>
+        <button class="inspector-close" data-close-inspector type="button" aria-label="閉じる">×</button>
+      </div>
       <div class="form-grid">
         <div class="form-row">
           <label>タイトル</label>
@@ -467,12 +470,16 @@
       touchEntity("note", note.id);
       renderCards();
     });
+    $("[data-close-inspector]").addEventListener("click", clearSelection);
     $("#inspect-note-trash").addEventListener("click", () => moveToTrash("note", note.id));
   }
 
   function renderGroupInspector(group) {
     els.inspector.innerHTML = `
-      <h2>グループ</h2>
+      <div class="inspector-head">
+        <h2>グループ</h2>
+        <button class="inspector-close" data-close-inspector type="button" aria-label="閉じる">×</button>
+      </div>
       <div class="form-grid">
         <div class="form-row">
           <label>名前</label>
@@ -499,6 +506,7 @@
       touchEntity("group", group.id);
       renderGroups();
     });
+    $("[data-close-inspector]").addEventListener("click", clearSelection);
     $("#inspect-group-trash").addEventListener("click", () => moveToTrash("group", group.id));
   }
 
@@ -549,6 +557,11 @@
 
   function selectEntity(type, id) {
     app.selected = { type, id };
+    renderAll();
+  }
+
+  function clearSelection() {
+    app.selected = null;
     renderAll();
   }
 
@@ -645,6 +658,7 @@
 
   function onWorkspacePointerDown(event) {
     if (!isBackgroundTarget(event.target)) return;
+    if (app.selected) clearSelection();
     els.workspace.setPointerCapture(event.pointerId);
     app.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
     if (app.pointers.size === 1) {
@@ -1170,7 +1184,7 @@
         headers: githubHeaders(true),
         body: JSON.stringify(body)
       });
-      if (!response.ok) throw new Error(`GitHub ${response.status}`);
+      if (!response.ok) throw await makeGithubError(response);
       toast("GitHub同期しました");
     } catch (error) {
       toast(error.message || "GitHub同期に失敗しました");
@@ -1198,6 +1212,30 @@
     if (!response.ok) return "";
     const json = await response.json();
     return json.sha || "";
+  }
+
+  async function makeGithubError(response) {
+    let detail = "";
+    try {
+      const json = await response.json();
+      detail = json.message || "";
+    } catch {
+      detail = "";
+    }
+    if (response.status === 404) {
+      return new Error(
+        [
+          "GitHub 404: リポジトリが見つからないか、トークンに権限がありません。",
+          "GitHubユーザー/組織はメールアドレスではなく、リポジトリURLの名前を入れてください。",
+          "例: https://github.com/example/today-fragments なら example / today-fragments です。",
+          "ブランチ名と、トークンの Contents: Read and write も確認してください。"
+        ].join("\n")
+      );
+    }
+    if (response.status === 401 || response.status === 403) {
+      return new Error("GitHub認証に失敗しました。トークン、組織承認、Contents: Read and write 権限を確認してください。");
+    }
+    return new Error(`GitHub ${response.status}${detail ? `: ${detail}` : ""}`);
   }
 
   function githubApiUrl() {

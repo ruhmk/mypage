@@ -582,9 +582,42 @@ html.setup-mode .setup-screen {
   transform: translateX(14px);
 }
 
+.inspector-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
 .inspector h2 {
   margin: 0 0 12px;
   font-size: 16px;
+}
+
+.inspector-head h2 {
+  margin: 0;
+}
+
+.inspector-close {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text);
+  cursor: pointer;
+  transition:
+    background var(--fast),
+    transform var(--fast),
+    border-color var(--fast);
+}
+
+.inspector-close:hover {
+  transform: translateY(-1px);
+  border-color: rgba(103, 232, 249, 0.38);
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .button-row {
@@ -791,7 +824,9 @@ html.setup-mode .setup-screen {
     left: 10px;
     bottom: calc(88px + env(safe-area-inset-bottom));
     width: auto;
-    max-height: 42vh;
+    max-height: 34vh;
+    padding: 12px;
+    border-radius: 16px 16px 12px 12px;
   }
 
   .note-card {
