@@ -657,8 +657,8 @@
   }
 
   function onWorkspacePointerDown(event) {
+    if (app.selected && isInspectorDismissTarget(event.target)) clearSelection();
     if (!isBackgroundTarget(event.target)) return;
-    if (app.selected) clearSelection();
     els.workspace.setPointerCapture(event.pointerId);
     app.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
     if (app.pointers.size === 1) {
@@ -709,6 +709,18 @@
 
   function isBackgroundTarget(target) {
     return target === els.workspace || target === els.canvas || target === els.world || target.classList.contains("layer");
+  }
+
+  function isInspectorDismissTarget(target) {
+    if (!target) return false;
+    if (target.closest?.(".inspector, .composer, .toolbar, .topbar, .modal-root")) return false;
+    if (target.closest?.(".note-card")) return false;
+    if (target.closest?.(".group-node")) return isSmallViewport() && app.selected?.type === "note";
+    return isBackgroundTarget(target) || Boolean(target.closest?.(".world"));
+  }
+
+  function isSmallViewport() {
+    return window.matchMedia?.("(max-width: 760px)").matches || window.innerWidth <= 760;
   }
 
   function updateWorldTransform() {
@@ -1391,55 +1403,106 @@
       </div>
     `);
     $("#scan-start").addEventListener("click", startQrScan);
-    $("#scan-apply-paste").addEventListener("click", () => handleQrText($("#scan-paste").value.trim()));
+    $("#scan-apply-paste").addEventListener("click", () => handleQrText($("#scan-paste").value.trim(), { manual: true }));
     startQrScan();
   }
 
   async function startQrScan() {
     const status = $("#scan-status");
     const video = $("#scan-video");
-    if (!("BarcodeDetector" in window)) {
-      status.textContent = "このブラウザではカメラ読取が使えません。貼り付け取り込みを使ってください";
+    if (!navigator.mediaDevices?.getUserMedia) {
+      status.textContent = "このブラウザではカメラを開けません。貼り付け取り込みを使ってください";
       return;
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
       video.srcObject = stream;
       await video.play();
-      const detector = new BarcodeDetector({ formats: ["qr_code"] });
       status.textContent = "読み取り中";
-      const tick = async () => {
-        if (!video.srcObject) return;
-        try {
-          const codes = await detector.detect(video);
-          if (codes[0]?.rawValue) {
-            await handleQrText(codes[0].rawValue);
-          }
-        } catch (error) {
-          console.warn(error);
-        }
-        requestAnimationFrame(tick);
-      };
-      tick();
+      if (window.jsQR) {
+        scanWithJsQr(video, status);
+      } else if ("BarcodeDetector" in window) {
+        scanWithBarcodeDetector(video, status);
+      } else {
+        status.textContent = "QR読取ライブラリを読み込めませんでした。貼り付け取り込みを使ってください";
+      }
     } catch (error) {
       status.textContent = "カメラを開けませんでした。貼り付け取り込みを使ってください";
     }
   }
 
-  async function handleQrText(text) {
-    if (!text.startsWith("TFQR1.")) return;
+  function scanWithBarcodeDetector(video, status) {
+    const detector = new BarcodeDetector({ formats: ["qr_code"] });
+    let lastValue = "";
+    const tick = async () => {
+      if (!video.srcObject) return;
+      try {
+        const codes = await detector.detect(video);
+        const value = codes[0]?.rawValue || "";
+        if (value && value !== lastValue) {
+          lastValue = value;
+          await handleQrText(value);
+        }
+      } catch (error) {
+        status.textContent = "読み取り中に失敗しました。もう一度QRを画面に入れてください";
+      }
+      requestAnimationFrame(tick);
+    };
+    tick();
+  }
+
+  function scanWithJsQr(video, status) {
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    let lastValue = "";
+    const tick = async () => {
+      if (!video.srcObject) return;
+      if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video.videoWidth && video.videoHeight) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const image = context.getImageData(0, 0, canvas.width, canvas.height);
+        const code = window.jsQR(image.data, image.width, image.height, { inversionAttempts: "dontInvert" });
+        if (code?.data && code.data !== lastValue) {
+          lastValue = code.data;
+          await handleQrText(code.data);
+        }
+      }
+      requestAnimationFrame(tick);
+    };
+    status.textContent = "読み取り中";
+    tick();
+  }
+
+  async function handleQrText(text, options = {}) {
     const status = $("#scan-status");
+    const normalized = extractQrFrame(text);
+    if (!normalized) {
+      if (status) status.textContent = options.manual ? "QRの文字列ではありません。PC側のQR表示に出ている文字列を貼ってください" : "QRを読み取れませんでした";
+      return;
+    }
+    text = normalized;
     try {
       requirePassword();
-      const [, sessionId, indexText, totalText, chunk] = text.split(".");
+      const parts = text.split(".");
+      const [, sessionId, indexText, totalText, ...chunkParts] = parts;
+      const chunk = chunkParts.join(".");
       const index = Number(indexText);
       const total = Number(totalText);
       if (!sessionId || !index || !total || !chunk) throw new Error("QR形式が違います");
+      if (index < 1 || index > total) throw new Error("QRの番号が正しくありません");
       if (!app.qrParts.has(sessionId)) app.qrParts.set(sessionId, { total, chunks: new Map() });
       const session = app.qrParts.get(sessionId);
+      if (session.total !== total) throw new Error("別のQRセットが混ざっています");
       session.chunks.set(index, chunk);
       status.textContent = `${session.chunks.size} / ${session.total} 読み取り済み`;
+      toast(`${session.chunks.size} / ${session.total} 読み取り済み`);
       if (session.chunks.size !== session.total) return;
+      const missing = Array.from({ length: session.total }, (_, i) => i + 1).filter((part) => !session.chunks.has(part));
+      if (missing.length) {
+        status.textContent = `未読: ${missing.join(", ")}`;
+        return;
+      }
       const payload = Array.from({ length: session.total }, (_, i) => session.chunks.get(i + 1)).join("");
       const envelope = JSON.parse(decodeUtf8(base64UrlToBytes(payload)));
       const delta = await decryptObject(envelope, app.settings.syncPassword);
@@ -1454,6 +1517,13 @@
     } catch (error) {
       status.textContent = error.message || "取り込みに失敗しました";
     }
+  }
+
+  function extractQrFrame(text = "") {
+    const compact = String(text).trim();
+    if (!compact) return "";
+    const match = compact.match(/TFQR1\.[A-Za-z0-9]+(?:_[A-Za-z0-9]+)?\.\d+\.\d+\.[A-Za-z0-9_-]+/);
+    return match ? match[0] : "";
   }
 
   function mergeData(incoming, options = {}) {
