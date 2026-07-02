@@ -26,6 +26,23 @@ Google CloudでWebアプリ用OAuthクライアントを作り、GitHub Pagesの
 
 Driveの権限は `drive.file` を使います。アプリが作成/選択したファイルを扱うための権限です。
 
+画面の「Google OAuthクライアントID」には、Google Cloudで作ったWebアプリ用OAuthクライアントのClient IDを入れます。
+形は `xxxxxxxxxxxx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com` のような文字列です。Client Secretは使いません。
+
+最低限の設定:
+
+- Google Drive APIを有効化する
+- OAuth同意画面を設定する
+- スコープに `https://www.googleapis.com/auth/drive.file` を追加する
+- 外部アプリとして使う場合は、自分のGoogleアカウントをテストユーザーに追加する
+- OAuthクライアントの種類は「ウェブアプリケーション」にする
+- 承認済みJavaScript生成元にGitHub Pagesの origin を入れる
+
+例:
+
+- GitHub Pagesが `https://example.github.io/today-fragments/` の場合: `https://example.github.io`
+- ローカル確認用: `http://127.0.0.1:5177`
+
 ## GitHub設定
 
 スマホ側だけにGitHubトークンを保存します。公開リポジトリ内の同期ファイルを更新できる権限が必要です。
@@ -39,6 +56,25 @@ Driveの権限は `drive.file` を使います。アプリが作成/選択した
 - GitHubトークン
 
 初期値の同期ファイルパスは `daily-fragments-sync/data.enc.json` です。
+
+GitHubトークンはFine-grained personal access tokenを推奨します。
+
+最低限の設定:
+
+- Resource owner: GitHub Pagesを置くユーザー/組織
+- Repository access: 対象リポジトリだけ
+- Repository permissions: `Contents` を `Read and write`
+- Expiration: 任意
+
+画面の「GitHubユーザー/組織」はメールアドレスではなく、GitHub URL上の owner です。
+
+例:
+
+- リポジトリURLが `https://github.com/example/today-fragments` の場合
+- GitHubユーザー/組織: `example`
+- リポジトリ: `today-fragments`
+- ブランチ: `main`
+- 同期ファイル: `daily-fragments-sync/data.enc.json`
 
 ## GitHub Pagesへの配置
 

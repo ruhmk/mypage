@@ -144,6 +144,9 @@
   }
 
   function renderSetup() {
+    document.documentElement.classList.add("setup-mode");
+    document.documentElement.classList.remove("workspace-mode");
+    document.body.classList.remove("role-phone", "role-pc");
     els.workspace.classList.add("hidden");
     els.setup.classList.remove("hidden");
     els.setup.innerHTML = `
@@ -300,6 +303,8 @@
   }
 
   function startWorkspace() {
+    document.documentElement.classList.remove("setup-mode");
+    document.documentElement.classList.add("workspace-mode");
     els.setup.classList.add("hidden");
     els.workspace.classList.remove("hidden");
     document.body.classList.toggle("role-phone", app.settings.role === "phone");

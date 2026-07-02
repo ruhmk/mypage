@@ -1,4 +1,4 @@
-const CACHE_NAME = "today-fragments-v1";
+const CACHE_NAME = "today-fragments-v2";
 const CORE_ASSETS = [
   "./",
   "./index.html",

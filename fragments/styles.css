@@ -60,6 +60,20 @@ body.role-pc .hidden-pc {
   position: relative;
 }
 
+html.setup-mode,
+html.setup-mode body,
+html.setup-mode #app {
+  height: auto;
+  min-height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+html.setup-mode .app-shell {
+  min-height: 100dvh;
+  overflow: visible;
+}
+
 .setup-screen {
   height: 100%;
   min-height: 100%;
@@ -71,6 +85,13 @@ body.role-pc .hidden-pc {
     radial-gradient(circle at 16% 12%, rgba(103, 232, 249, 0.14), transparent 28%),
     radial-gradient(circle at 84% 18%, rgba(255, 122, 168, 0.1), transparent 30%),
     linear-gradient(145deg, #07090f, #111520 58%, #07090f);
+}
+
+html.setup-mode .setup-screen {
+  height: auto;
+  min-height: 100dvh;
+  overflow: visible;
+  padding-bottom: max(42px, env(safe-area-inset-bottom));
 }
 
 .setup-wrap {
