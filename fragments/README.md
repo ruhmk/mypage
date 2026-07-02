@@ -104,6 +104,7 @@ GitHubトークンはFine-grained personal access tokenを推奨します。
 - `app.js`
 - `manifest.webmanifest`
 - `service-worker.js`
+- `vendor/`
 - `icons/`
 
 ビルドは不要です。
@@ -123,6 +124,10 @@ GitHubトークンはFine-grained personal access tokenを推奨します。
 - PCでGitHub暗号化データを読み込み
 - PC編集差分のQR出力
 - スマホでQR取り込み
+
+QR画像の生成は `vendor/qrcode-generator.js`、スマホ側のQR読み取りは `vendor/jsQR.js` を同梱しています。外部CDNがブロックされてもQRの表示/読み取りができるようにするためです。
+
+iOSでPC差分を取り込む時は、「PCから取り込み」を開いた後に必ず「カメラ開始」ボタンを押してください。iOSでは画面を開いた流れで自動的にカメラを起動しようとすると拒否されることがあります。
 
 ## 使いながら調整したい候補
 

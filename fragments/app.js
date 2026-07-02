@@ -25,7 +25,8 @@
     pointers: new Map(),
     panStart: null,
     pinchStart: null,
-    qrParts: new Map()
+    qrParts: new Map(),
+    scanSession: 0
   };
 
   const $ = (selector, root = document) => root.querySelector(selector);
@@ -382,8 +383,9 @@
     $$(".group-node", els.groupLayer).forEach((node) => {
       const id = node.dataset.id;
       node.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
         event.stopPropagation();
-        selectEntity("group", id);
+        selectEntity("group", id, { render: false });
         const isResize = event.target.closest(".resize-handle");
         beginEntityDrag(event, isResize ? "resize-group" : "group", id);
       });
@@ -412,8 +414,9 @@
     $$(".note-card", els.cardLayer).forEach((node) => {
       const id = node.dataset.id;
       node.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
         event.stopPropagation();
-        selectEntity("note", id);
+        selectEntity("note", id, { render: false });
         beginEntityDrag(event, "note", id);
       });
     });
@@ -550,19 +553,34 @@
       deletedAt: ""
     };
     app.data.groups.push(group);
+    updateAllNoteGroups(true);
     selectEntity("group", group.id);
     touchEntity("group", group.id, { alreadyUpdated: true });
     renderAll();
   }
 
-  function selectEntity(type, id) {
+  function selectEntity(type, id, options = {}) {
     app.selected = { type, id };
+    if (options.render === false) {
+      updateSelectionClasses();
+      renderInspector();
+      return;
+    }
     renderAll();
   }
 
   function clearSelection() {
     app.selected = null;
     renderAll();
+  }
+
+  function updateSelectionClasses() {
+    $$(".note-card", els.cardLayer).forEach((node) => {
+      node.classList.toggle("selected", app.selected?.type === "note" && app.selected.id === node.dataset.id);
+    });
+    $$(".group-node", els.groupLayer).forEach((node) => {
+      node.classList.toggle("selected", app.selected?.type === "group" && app.selected.id === node.dataset.id);
+    });
   }
 
   function getSelectedEntity() {
@@ -575,7 +593,13 @@
     const group = type === "group" || type === "resize-group" ? findGroup(id) : null;
     const target = note || group;
     if (!target) return;
-    event.currentTarget.setPointerCapture(event.pointerId);
+    const node = event.currentTarget;
+    try {
+      node.setPointerCapture(event.pointerId);
+    } catch {
+      // Some mobile browsers are picky about pointer capture; window listeners still keep drag alive.
+    }
+    node.classList.add("dragging");
     const start = {
       pointerId: event.pointerId,
       type,
@@ -590,39 +614,42 @@
     };
     const onMove = (moveEvent) => {
       if (moveEvent.pointerId !== start.pointerId) return;
+      moveEvent.preventDefault();
       const dx = (moveEvent.clientX - start.sx) / app.view.zoom;
       const dy = (moveEvent.clientY - start.sy) / app.view.zoom;
       start.moved = Math.abs(dx) + Math.abs(dy) > 1;
       if (type === "resize-group") {
         group.w = Math.round(clamp(start.w + dx, 180, 1200));
         group.h = Math.round(clamp(start.h + dy, 140, 900));
+        node.style.width = `${group.w}px`;
+        node.style.height = `${group.h}px`;
       } else {
         target.x = Math.round(start.x + dx);
         target.y = Math.round(start.y + dy);
-      }
-      if (type === "note") {
-        updateNoteGroups(note);
-        renderCards();
-      } else {
-        updateAllNoteGroups();
-        renderGroups();
-        renderCards();
+        node.style.left = `${target.x}px`;
+        node.style.top = `${target.y}px`;
       }
     };
     const onUp = (upEvent) => {
       if (upEvent.pointerId !== start.pointerId) return;
-      event.currentTarget.removeEventListener("pointermove", onMove);
-      event.currentTarget.removeEventListener("pointerup", onUp);
-      event.currentTarget.removeEventListener("pointercancel", onUp);
+      window.removeEventListener("pointermove", onMove, true);
+      window.removeEventListener("pointerup", onUp, true);
+      window.removeEventListener("pointercancel", onUp, true);
+      node.classList.remove("dragging");
       if (start.moved) {
-        touchEntity(type === "note" ? "note" : "group", id);
-        if (type !== "note") updateAllNoteGroups(true);
+        if (type === "note") {
+          updateNoteGroups(note);
+          touchEntity("note", id);
+        } else {
+          touchEntity("group", id);
+          updateAllNoteGroups(true);
+        }
       }
       renderAll();
     };
-    event.currentTarget.addEventListener("pointermove", onMove);
-    event.currentTarget.addEventListener("pointerup", onUp);
-    event.currentTarget.addEventListener("pointercancel", onUp);
+    window.addEventListener("pointermove", onMove, true);
+    window.addEventListener("pointerup", onUp, true);
+    window.addEventListener("pointercancel", onUp, true);
   }
 
   function updateAllNoteGroups(markTouched = false) {
@@ -1391,8 +1418,8 @@
         <h2>PCから取り込み</h2>
         <button class="close-button" data-close type="button">×</button>
       </div>
-      <video id="scan-video" class="scan-video" playsinline muted></video>
-      <p id="scan-status" class="status-line">カメラを起動します</p>
+      <video id="scan-video" class="scan-video" autoplay playsinline webkit-playsinline muted></video>
+      <p id="scan-status" class="status-line">iOSでは「カメラ開始」を押して起動してください</p>
       <div class="form-row">
         <label>貼り付け取り込み</label>
         <textarea id="scan-paste" placeholder="QRの文字列"></textarea>
@@ -1404,38 +1431,86 @@
     `);
     $("#scan-start").addEventListener("click", startQrScan);
     $("#scan-apply-paste").addEventListener("click", () => handleQrText($("#scan-paste").value.trim(), { manual: true }));
-    startQrScan();
   }
 
   async function startQrScan() {
     const status = $("#scan-status");
     const video = $("#scan-video");
+    app.scanSession += 1;
+    const session = app.scanSession;
+    stopScanStream();
+    if (!window.isSecureContext && location.hostname !== "localhost" && location.hostname !== "127.0.0.1") {
+      status.textContent = "カメラはHTTPSで開いた時だけ使えます。GitHub Pagesのhttps URLで開いてください";
+      return;
+    }
     if (!navigator.mediaDevices?.getUserMedia) {
       status.textContent = "このブラウザではカメラを開けません。貼り付け取り込みを使ってください";
       return;
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      status.textContent = "カメラ確認中";
+      video.muted = true;
+      video.playsInline = true;
+      video.setAttribute("playsinline", "");
+      video.setAttribute("webkit-playsinline", "");
+      const stream = await openCameraStream();
+      if (session !== app.scanSession) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
       video.srcObject = stream;
-      await video.play();
+      await video.play().catch(() => {});
       status.textContent = "読み取り中";
       if (window.jsQR) {
-        scanWithJsQr(video, status);
+        scanWithJsQr(video, status, session);
       } else if ("BarcodeDetector" in window) {
-        scanWithBarcodeDetector(video, status);
+        scanWithBarcodeDetector(video, status, session);
       } else {
         status.textContent = "QR読取ライブラリを読み込めませんでした。貼り付け取り込みを使ってください";
       }
     } catch (error) {
-      status.textContent = "カメラを開けませんでした。貼り付け取り込みを使ってください";
+      status.textContent = cameraErrorMessage(error);
     }
   }
 
-  function scanWithBarcodeDetector(video, status) {
+  async function openCameraStream() {
+    const attempts = [
+      { video: { facingMode: { ideal: "environment" } }, audio: false },
+      { video: true, audio: false }
+    ];
+    let lastError = null;
+    for (const constraints of attempts) {
+      try {
+        return await navigator.mediaDevices.getUserMedia(constraints);
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError || new Error("camera unavailable");
+  }
+
+  function cameraErrorMessage(error) {
+    const name = error?.name || "";
+    if (name === "NotAllowedError" || name === "PermissionDeniedError") {
+      return "カメラ権限が許可されませんでした。Safari/ブラウザのサイト設定でカメラを許可してください";
+    }
+    if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+      return "利用できるカメラが見つかりませんでした";
+    }
+    if (name === "NotReadableError" || name === "TrackStartError") {
+      return "カメラを起動できませんでした。別アプリでカメラを使っていないか確認してください";
+    }
+    if (name === "SecurityError") {
+      return "カメラはHTTPSで開いた時だけ使えます。GitHub Pagesのhttps URLで開いてください";
+    }
+    return `カメラを開けませんでした${name ? `: ${name}` : ""}。貼り付け取り込みを使ってください`;
+  }
+
+  function scanWithBarcodeDetector(video, status, session) {
     const detector = new BarcodeDetector({ formats: ["qr_code"] });
     let lastValue = "";
     const tick = async () => {
-      if (!video.srcObject) return;
+      if (!video.srcObject || session !== app.scanSession) return;
       try {
         const codes = await detector.detect(video);
         const value = codes[0]?.rawValue || "";
@@ -1451,12 +1526,12 @@
     tick();
   }
 
-  function scanWithJsQr(video, status) {
+  function scanWithJsQr(video, status, session) {
     const canvas = document.createElement("canvas");
     const context = canvas.getContext("2d", { willReadFrequently: true });
     let lastValue = "";
     const tick = async () => {
-      if (!video.srcObject) return;
+      if (!video.srcObject || session !== app.scanSession) return;
       if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video.videoWidth && video.videoHeight) {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
