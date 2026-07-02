@@ -442,10 +442,10 @@ function getEventsForDay(date) {
 }
 
 function renderImportStatus() {
-  const googleCount = state.remoteEvents.length;
-  const updatedText = formatUpdatedDate(state.updatedAt);
-  if (googleCount > 0) {
-    importStatus.textContent = `公開予定 ${googleCount}件を表示中${updatedText ? ` / ${updatedText}更新` : ""}`;
+  const latestDateText = formatLatestEventDate(state.remoteEvents);
+  const updatedText = formatUpdatedDateTime(state.updatedAt);
+  if (latestDateText) {
+    importStatus.textContent = `${latestDateText}までの予定を表示中${updatedText ? `\u00a0\u00a0${updatedText}更新` : ""}`;
     return;
   }
   importStatus.textContent = "公開予定は未設定";
@@ -487,7 +487,44 @@ function formatTime(value) {
   }).format(new Date(value));
 }
 
-function formatUpdatedDate(value) {
+function formatLatestEventDate(events) {
+  const latestTime = events
+    .filter((event) => !isExcludedWorkEvent(event))
+    .map(getEventDisplayEndTime)
+    .filter((time) => Number.isFinite(time))
+    .reduce((latest, time) => Math.max(latest, time), -Infinity);
+
+  return Number.isFinite(latestTime) ? formatDateCompact(latestTime) : "";
+}
+
+function getEventDisplayEndTime(event) {
+  if (!event || !event.end) {
+    return NaN;
+  }
+
+  const end = new Date(event.end);
+  if (Number.isNaN(end.getTime())) {
+    return NaN;
+  }
+
+  if (event.allDay || isMidnight(end)) {
+    return end.getTime() - 1;
+  }
+
+  return end.getTime();
+}
+
+function isMidnight(date) {
+  return new Intl.DateTimeFormat("ja-JP", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+    hour12: false,
+    timeZone: "Asia/Tokyo"
+  }).format(date) === "00:00";
+}
+
+function formatUpdatedDateTime(value) {
   const date = new Date(value);
   if (!value || Number.isNaN(date.getTime())) {
     return "";
@@ -497,8 +534,21 @@ function formatUpdatedDate(value) {
     year: "2-digit",
     month: "numeric",
     day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+    hour12: false,
     timeZone: "Asia/Tokyo"
   }).format(date);
+}
+
+function formatDateCompact(value) {
+  return new Intl.DateTimeFormat("ja-JP", {
+    year: "2-digit",
+    month: "numeric",
+    day: "numeric",
+    timeZone: "Asia/Tokyo"
+  }).format(new Date(value));
 }
 
 function startOfMonth(date) {

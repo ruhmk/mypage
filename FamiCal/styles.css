@@ -753,13 +753,21 @@ a.secondary-button {
 
   .month-strip {
     position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "month filters"
+      "status status";
     align-items: center;
-    flex-direction: row;
-    flex-wrap: nowrap;
-    gap: 8px;
-    min-height: 46px;
-    padding: 8px 118px 8px 10px;
+    gap: 4px 8px;
+    min-height: 62px;
+    padding: 8px 10px 7px;
     background: rgba(255, 253, 248, 0.98);
+  }
+
+  .month-strip > div:first-child {
+    grid-area: month;
+    min-width: 0;
   }
 
   .month-kicker {
@@ -773,10 +781,9 @@ a.secondary-button {
   }
 
   .source-toggles {
-    position: absolute;
-    top: 50%;
-    right: 10px;
-    transform: translateY(-50%);
+    grid-area: filters;
+    position: static;
+    transform: none;
     margin-left: auto;
     justify-content: flex-end;
     gap: 6px;
@@ -790,7 +797,18 @@ a.secondary-button {
   }
 
   .import-status {
-    display: none;
+    grid-area: status;
+    display: block;
+    min-height: 16px;
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-weight: 800;
+    line-height: 1.25;
+    text-align: left;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
   }
 
   .weekday-row {
@@ -931,7 +949,7 @@ a.secondary-button {
   }
 
   .month-strip {
-    padding: 8px 118px 8px 10px;
+    padding: 8px 10px 7px;
   }
 
   .day-panel {
