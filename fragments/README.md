@@ -76,6 +76,25 @@ GitHubトークンはFine-grained personal access tokenを推奨します。
 - ブランチ: `main`
 - 同期ファイル: `daily-fragments-sync/data.enc.json`
 
+### GitHub 404が出たとき
+
+ほとんどの場合、次のどれかです。
+
+- 「GitHubユーザー/組織」にメールアドレスを入れている
+- リポジトリ名が違う
+- ブランチ名が違う
+- Fine-grained tokenで対象リポジトリを選んでいない
+- Fine-grained tokenの `Contents` が `Read and write` になっていない
+- 会社/組織リポジトリで、トークン利用が承認待ちになっている
+
+`kitagawa_manabu@qualiarts.jp` のようなメールアドレスではなく、GitHubのリポジトリURLに出てくる名前を入れます。
+
+例:
+
+- `https://github.com/qualiarts/today-fragments`
+- GitHubユーザー/組織: `qualiarts`
+- リポジトリ: `today-fragments`
+
 ## GitHub Pagesへの配置
 
 このフォルダのファイルをGitHub Pagesで公開するリポジトリへ置きます。
