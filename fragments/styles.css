@@ -61,8 +61,11 @@ body.role-pc .hidden-pc {
 }
 
 .setup-screen {
+  height: 100%;
   min-height: 100%;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   padding: 42px clamp(18px, 4vw, 54px);
   background:
     radial-gradient(circle at 16% 12%, rgba(103, 232, 249, 0.14), transparent 28%),
