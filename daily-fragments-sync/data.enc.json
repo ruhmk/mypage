@@ -1,0 +1,17 @@
+{
+  "app": "Today Fragments",
+  "version": 1,
+  "createdAt": "2026-07-02T11:28:24.204Z",
+  "kdf": {
+    "name": "PBKDF2",
+    "hash": "SHA-256",
+    "iterations": 250000,
+    "salt": "5B_aRzFjbU45ocbmMrjP1g"
+  },
+  "cipher": {
+    "name": "AES-GCM",
+    "iv": "P2sDE13Fv2T6VZdm",
+    "data": "t0GxcSBfEjG3m-lX06425j10QF3gjWP4Dj8tc8-62BSA0WKW8b9cbxHWf78kcp71AsSInMPNrK14DUHrTPmvpPz4TluRCveapEIYbp_ZkCJNVfFQsE1Xb8U2IabFrQe3RwxM6NRyfVdag0LMs-YTNQRwueGaOodYKMLxE7W0YLT5PWlCck4S657U2R9LK7hpOWLjxZNoIJJz6csuGSe24bCEsTi7O0Mgoe1MIxVLJsrbrZQ7dVu9g5NDVmpGs-BrEFzJnkaNGgJ6HVtSZEZ49H9XIaUsJlwH8rvN4NTUbeSXrGqiAR8NB7hDCAelxb1W_VCrKmPCCiDujJyPxG8bvqJ9iscJXzME6YGcUtPK4nfFeKl2_fwWZDsjb6NCUF_cVxBtCQnUIDNVKeoEWRwVGm3rul0A3FMNbBd3tC4_IR8nVIdl-Edg0j1PYh6x5p1Y3Xoq7eewJF2CYj6krLrzTPWbjD44Pz2FCdppZ5kI_AqLalgmwaJO7Q-wPrQ7dVsmuuU19OiYYm7WGv1GujV1DG2GYRdn1QwnksxQohom7IN7Gt5prZ17"
+  },
+  "compression": "gzip"
+}
