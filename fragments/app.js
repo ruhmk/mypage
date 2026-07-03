@@ -9,7 +9,10 @@
   const DRIVE_FILE = "today-fragments.json";
   const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
   const GROUP_COLORS = ["#67e8f9", "#ff7aa8", "#ffd166", "#8ff0c4", "#a78bfa"];
-  const APP_VERSION = "11";
+  const APP_VERSION = "12";
+  const NOTE_CARD_WIDTH = 210;
+  const NOTE_CARD_HEIGHT = 62;
+  const GROUP_FIT_PADDING = 52;
 
   const els = {};
   const loadedScripts = new Map();
@@ -28,7 +31,8 @@
     panStart: null,
     pinchStart: null,
     qrParts: new Map(),
-    scanSession: 0
+    scanSession: 0,
+    dragHoverGroupId: ""
   };
 
   const $ = (selector, root = document) => root.querySelector(selector);
@@ -374,8 +378,10 @@
     els.groupLayer.innerHTML = groups
       .map((group) => {
         const selected = app.selected?.type === "group" && app.selected.id === group.id;
+        const cardCount = getGroupNotes(group.id).length;
+        const radius = groupRadius(group, cardCount);
         return `
-          <article class="group-node ${selected ? "selected" : ""}" data-id="${group.id}" style="left:${group.x}px;top:${group.y}px;width:${group.w}px;height:${group.h}px;--group-color:${group.color}">
+          <article class="group-node ${selected ? "selected" : ""} ${cardCount ? "has-cards" : ""}" data-id="${group.id}" style="left:${group.x}px;top:${group.y}px;width:${group.w}px;height:${group.h}px;--group-color:${group.color};--group-radius:${radius}">
             <span class="group-label">${escapeHtml(group.title || "グループ")}</span>
             <span class="resize-handle" data-resize="${group.id}"></span>
           </article>
@@ -400,15 +406,10 @@
       .map((note) => {
         const selected = app.selected?.type === "note" && app.selected.id === note.id;
         const title = note.title || deriveTitle(note.body);
-        const groupCount = note.groupIds?.filter((id) => findGroup(id) && isVisibleEntity(findGroup(id))).length || 0;
+        const primaryGroup = getNotePrimaryGroup(note);
         return `
-          <article class="note-card ${selected ? "selected" : ""}" data-id="${note.id}" style="left:${note.x}px;top:${note.y}px">
+          <article class="note-card ${selected ? "selected" : ""} ${primaryGroup ? "grouped" : ""}" data-id="${note.id}" style="left:${note.x}px;top:${note.y}px;--card-color:${primaryGroup?.color || "#67e8f9"}">
             <h2 class="note-title">${escapeHtml(title || "無題")}</h2>
-            <p class="note-body">${escapeHtml(compactBody(note.body, 120))}</p>
-            <div class="note-meta">
-              <span>${escapeHtml(formatTime(note.createdAt))}</span>
-              <span>${groupCount ? `${groupCount}グループ` : "未分類"}</span>
-            </div>
           </article>
         `;
       })
@@ -510,6 +511,7 @@
       group.color = event.target.value;
       touchEntity("group", group.id);
       renderGroups();
+      renderCards();
     });
     $("[data-close-inspector]").addEventListener("click", clearSelection);
     $("#inspect-group-trash").addEventListener("click", () => moveToTrash("group", group.id));
@@ -590,6 +592,59 @@
     return app.selected.type === "note" ? findNote(app.selected.id) : findGroup(app.selected.id);
   }
 
+  function getGroupNotes(groupId) {
+    return app.data.notes.filter((note) => isVisibleEntity(note) && note.groupIds?.includes(groupId));
+  }
+
+  function getNotePrimaryGroup(note) {
+    return (note.groupIds || []).map((id) => findGroup(id)).find((group) => group && isVisibleEntity(group)) || null;
+  }
+
+  function noteBounds(note) {
+    return {
+      x: note.x,
+      y: note.y,
+      w: NOTE_CARD_WIDTH,
+      h: NOTE_CARD_HEIGHT
+    };
+  }
+
+  function noteCenter(note) {
+    const bounds = noteBounds(note);
+    return {
+      x: bounds.x + bounds.w / 2,
+      y: bounds.y + bounds.h / 2
+    };
+  }
+
+  function getContainingGroups(note) {
+    const center = noteCenter(note);
+    return app.data.groups
+      .filter((group) => isVisibleEntity(group))
+      .filter((group) => center.x >= group.x && center.x <= group.x + group.w && center.y >= group.y && center.y <= group.y + group.h)
+      .sort((a, b) => a.w * a.h - b.w * b.h);
+  }
+
+  function groupRadius(group, cardCount) {
+    const seed = hashNumber(`${group.id}:${cardCount}:${Math.round(group.w)}:${Math.round(group.h)}`);
+    const horizontal = group.w >= group.h ? 1 : -1;
+    const a = clamp(34 + (seed % 10) + cardCount * 2 + horizontal * 4, 28, 56);
+    const b = clamp(30 + ((seed >> 3) % 12) - horizontal * 2, 24, 52);
+    const c = clamp(38 + ((seed >> 5) % 10) + horizontal * 2, 28, 58);
+    const d = clamp(28 + ((seed >> 7) % 14) + cardCount, 24, 54);
+    const e = clamp(28 + ((seed >> 2) % 12), 24, 52);
+    const f = clamp(40 + ((seed >> 4) % 12) + horizontal * 2, 28, 58);
+    const g = clamp(30 + ((seed >> 6) % 10) + cardCount, 24, 54);
+    const h = clamp(38 + ((seed >> 8) % 12) - horizontal * 2, 28, 58);
+    return `${a}% ${b}% ${c}% ${d}% / ${e}% ${f}% ${g}% ${h}%`;
+  }
+
+  function hashNumber(value) {
+    return String(value)
+      .split("")
+      .reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) >>> 0, 2166136261);
+  }
+
   function beginEntityDrag(event, type, id) {
     const note = type === "note" ? findNote(id) : null;
     const group = type === "group" || type === "resize-group" ? findGroup(id) : null;
@@ -612,6 +667,7 @@
       y: target.y,
       w: target.w,
       h: target.h,
+      groupIds: note ? [...(note.groupIds || [])] : [],
       moved: false
     };
     const onMove = (moveEvent) => {
@@ -630,6 +686,7 @@
         target.y = Math.round(start.y + dy);
         node.style.left = `${target.x}px`;
         node.style.top = `${target.y}px`;
+        if (type === "note") updateDropHighlight(note);
       }
     };
     const onUp = (upEvent) => {
@@ -638,9 +695,11 @@
       window.removeEventListener("pointerup", onUp, true);
       window.removeEventListener("pointercancel", onUp, true);
       node.classList.remove("dragging");
+      clearDropHighlights();
       if (start.moved) {
         if (type === "note") {
           updateNoteGroups(note);
+          fitGroupsToCards([...start.groupIds, ...(note.groupIds || [])], { markTouched: true });
           touchEntity("note", id);
         } else {
           touchEntity("group", id);
@@ -662,15 +721,51 @@
   }
 
   function updateNoteGroups(note) {
-    const center = { x: note.x + 115, y: note.y + 57 };
-    const groupIds = app.data.groups
-      .filter((group) => isVisibleEntity(group))
-      .filter((group) => center.x >= group.x && center.x <= group.x + group.w && center.y >= group.y && center.y <= group.y + group.h)
-      .map((group) => group.id);
+    const groupIds = getContainingGroups(note).map((group) => group.id);
     const before = (note.groupIds || []).join("|");
     const after = groupIds.join("|");
     note.groupIds = groupIds;
     return before !== after;
+  }
+
+  function fitGroupsToCards(groupIds, options = {}) {
+    const ids = Array.from(new Set(groupIds.filter(Boolean)));
+    ids.forEach((id) => {
+      const group = findGroup(id);
+      if (!group || !isVisibleEntity(group)) return;
+      const notes = getGroupNotes(id);
+      if (!notes.length) return;
+      const bounds = notes.map(noteBounds);
+      const minX = Math.min(...bounds.map((bound) => bound.x));
+      const minY = Math.min(...bounds.map((bound) => bound.y));
+      const maxX = Math.max(...bounds.map((bound) => bound.x + bound.w));
+      const maxY = Math.max(...bounds.map((bound) => bound.y + bound.h));
+      const next = {
+        x: Math.round(minX - GROUP_FIT_PADDING),
+        y: Math.round(minY - GROUP_FIT_PADDING),
+        w: Math.round(clamp(maxX - minX + GROUP_FIT_PADDING * 2, 240, 1600)),
+        h: Math.round(clamp(maxY - minY + GROUP_FIT_PADDING * 2, 160, 1200))
+      };
+      const changed = group.x !== next.x || group.y !== next.y || group.w !== next.w || group.h !== next.h;
+      if (!changed) return;
+      Object.assign(group, next);
+      if (options.markTouched) touchEntity("group", id);
+    });
+  }
+
+  function updateDropHighlight(note) {
+    const hoverGroup = getContainingGroups(note)[0] || null;
+    const nextId = hoverGroup?.id || "";
+    if (app.dragHoverGroupId === nextId) return;
+    app.dragHoverGroupId = nextId;
+    $$(".group-node", els.groupLayer).forEach((node) => {
+      node.classList.toggle("drop-target", node.dataset.id === nextId);
+    });
+  }
+
+  function clearDropHighlights() {
+    app.dragHoverGroupId = "";
+    $$(".group-node", els.groupLayer).forEach((node) => node.classList.remove("drop-target"));
   }
 
   function onWheel(event) {
