@@ -9,17 +9,22 @@
   const DRIVE_FILE = "today-fragments.json";
   const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
   const GROUP_COLORS = ["#67e8f9", "#ff7aa8", "#ffd166", "#8ff0c4", "#a78bfa"];
-  const APP_VERSION = "12";
+  const APP_VERSION = "13";
   const NOTE_CARD_WIDTH = 210;
   const NOTE_CARD_HEIGHT = 62;
   const GROUP_FIT_PADDING = 52;
+  const CONNECTION_STYLES = ["solid", "dotted", "dashed", "wavy"];
+  const CONNECTION_KINDS = [
+    { id: "related", label: "関連", color: "#67e8f9" },
+    { id: "cause", label: "原因", color: "#ffd166" }
+  ];
 
   const els = {};
   const loadedScripts = new Map();
   const app = {
     data: null,
     settings: null,
-    dirty: { notes: {}, groups: {} },
+    dirty: { notes: {}, groups: {}, connections: {} },
     selected: null,
     view: { x: 0, y: 0, zoom: 1 },
     gl: null,
@@ -32,7 +37,11 @@
     pinchStart: null,
     qrParts: new Map(),
     scanSession: 0,
-    dragHoverGroupId: ""
+    dragHoverGroupId: "",
+    lastEntityTap: null,
+    entityTapCandidates: new Map(),
+    connectionDraft: null,
+    panelsCollapsed: false
   };
 
   const $ = (selector, root = document) => root.querySelector(selector);
@@ -60,6 +69,7 @@
     els.canvas = $("#gl-canvas");
     els.world = $("#world");
     els.groupLayer = $("#group-layer");
+    els.lineLayer = $("#line-layer");
     els.cardLayer = $("#card-layer");
     els.roleLabel = $("#role-label");
     els.syncStatus = $("#sync-status");
@@ -75,13 +85,14 @@
     els.phoneImport = $("#phone-import");
     els.trashOpen = $("#trash-open");
     els.settingsOpen = $("#settings-open");
+    els.panelToggle = $("#panel-toggle");
   }
 
   async function loadState() {
     const stored = await idbGet(STATE_KEY).catch(() => null);
     app.settings = mergeSettings(stored?.settings || {});
     app.data = normalizeData(stored?.data || createEmptyData());
-    app.dirty = stored?.dirty || { notes: {}, groups: {} };
+    app.dirty = { notes: {}, groups: {}, connections: {}, ...(stored?.dirty || {}) };
     if (!app.settings.deviceId) app.settings.deviceId = uid("device");
     if (!app.data.deviceId) app.data.deviceId = app.settings.deviceId;
   }
@@ -95,7 +106,8 @@
       updatedAt: timestamp,
       deviceId: "",
       notes: [],
-      groups: []
+      groups: [],
+      connections: []
     };
   }
 
@@ -104,6 +116,7 @@
     const merged = { ...base, ...data };
     merged.notes = Array.isArray(data.notes) ? data.notes : [];
     merged.groups = Array.isArray(data.groups) ? data.groups : [];
+    merged.connections = Array.isArray(data.connections) ? data.connections : [];
     merged.notes.forEach((note) => {
       note.groupIds = Array.isArray(note.groupIds) ? note.groupIds : [];
       note.x = Number.isFinite(note.x) ? note.x : 0;
@@ -121,7 +134,24 @@
       group.updatedAt ||= group.createdAt;
       group.color ||= GROUP_COLORS[0];
     });
+    merged.connections.forEach((connection) => {
+      connection.from = normalizeEndpoint(connection.from);
+      connection.to = normalizeEndpoint(connection.to);
+      connection.kind = CONNECTION_KINDS.some((kind) => kind.id === connection.kind) ? connection.kind : "related";
+      connection.style = CONNECTION_STYLES.includes(connection.style) ? connection.style : "solid";
+      connection.createdAt ||= nowIso();
+      connection.updatedAt ||= connection.createdAt;
+      connection.trashedAt ||= "";
+      connection.deletedAt ||= "";
+    });
     return merged;
+  }
+
+  function normalizeEndpoint(endpoint = {}) {
+    return {
+      type: endpoint.type === "group" ? "group" : "note",
+      id: endpoint.id || ""
+    };
   }
 
   function mergeSettings(settings) {
@@ -323,6 +353,7 @@
     }
     initWebGl();
     updateWorldTransform();
+    applyPanelState();
     renderAll();
     updateStatus();
   }
@@ -344,6 +375,10 @@
     els.phoneImport.addEventListener("click", openImportModal);
     els.trashOpen.addEventListener("click", openTrashModal);
     els.settingsOpen.addEventListener("click", openSettingsModal);
+    els.panelToggle.addEventListener("click", togglePanels);
+    els.workspace.addEventListener("contextmenu", (event) => {
+      if (event.target.closest?.(".note-card, .group-node, .connection-path, .line-layer")) event.preventDefault();
+    });
     els.workspace.addEventListener("wheel", onWheel, { passive: false });
     els.workspace.addEventListener("pointerdown", onWorkspacePointerDown);
     els.workspace.addEventListener("pointermove", onWorkspacePointerMove);
@@ -368,6 +403,7 @@
 
   function renderAll() {
     renderGroups();
+    renderConnections();
     renderCards();
     renderInspector();
     updateStatus();
@@ -391,9 +427,7 @@
     $$(".group-node", els.groupLayer).forEach((node) => {
       const id = node.dataset.id;
       node.addEventListener("pointerdown", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        selectEntity("group", id, { render: false });
+        if (!handleEntityPointerDown(event, "group", id)) return;
         const isResize = event.target.closest(".resize-handle");
         beginEntityDrag(event, isResize ? "resize-group" : "group", id);
       });
@@ -417,12 +451,81 @@
     $$(".note-card", els.cardLayer).forEach((node) => {
       const id = node.dataset.id;
       node.addEventListener("pointerdown", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        selectEntity("note", id, { render: false });
+        if (!handleEntityPointerDown(event, "note", id)) return;
         beginEntityDrag(event, "note", id);
       });
     });
+  }
+
+  function renderConnections() {
+    const connections = app.data.connections.filter((connection) => isVisibleEntity(connection) && resolveEndpoint(connection.from) && resolveEndpoint(connection.to));
+    els.lineLayer.innerHTML = `
+      <defs>
+        <marker id="arrow-related" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z"></path>
+        </marker>
+        <marker id="arrow-cause" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z"></path>
+        </marker>
+      </defs>
+      ${connections
+        .map((connection) => {
+          const kind = getConnectionKind(connection.kind);
+          const selected = app.selected?.type === "connection" && app.selected.id === connection.id;
+          const d = connectionPath(connection);
+          return `
+            <g class="connection-node ${selected ? "selected" : ""}" data-id="${connection.id}" style="--connection-color:${kind.color}">
+              <path class="connection-path connection-hit" d="${d}"></path>
+              <path class="connection-path connection-main ${connection.style}" d="${d}" marker-end="url(#arrow-${kind.id})"></path>
+              <path class="connection-path connection-flow ${connection.style}" d="${d}"></path>
+            </g>
+          `;
+        })
+        .join("")}
+    `;
+    $$(".connection-node", els.lineLayer).forEach((node) => {
+      const id = node.dataset.id;
+      node.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        event.stopPropagation();
+        selectEntity("connection", id);
+      });
+      node.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        cycleConnectionStyle(id);
+      });
+    });
+  }
+
+  function handleEntityPointerDown(event, type, id) {
+    if (event.button === 2) {
+      beginConnectionDrag(event, type, id);
+      return false;
+    }
+    if (app.connectionDraft) {
+      event.preventDefault();
+      event.stopPropagation();
+      completeConnectionDraft(type, id);
+      return false;
+    }
+    if (usesMobileEntityMode(event)) {
+      if (isSelectedEntity(type, id)) {
+        event.preventDefault();
+        event.stopPropagation();
+        selectEntity(type, id, { render: false });
+        return true;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      beginViewportInteraction(event, { type, id });
+      return false;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    selectEntity(type, id, { render: false });
+    return true;
   }
 
   function renderInspector() {
@@ -435,8 +538,10 @@
     els.inspector.classList.remove("empty");
     if (app.selected.type === "note") {
       renderNoteInspector(selected);
-    } else {
+    } else if (app.selected.type === "group") {
       renderGroupInspector(selected);
+    } else {
+      renderConnectionInspector(selected);
     }
   }
 
@@ -460,6 +565,7 @@
           <textarea id="inspect-note-body">${escapeHtml(note.body || "")}</textarea>
         </div>
         <div class="pill">${groupNames.length ? escapeHtml(groupNames.join(" / ")) : "未分類"}</div>
+        ${renderConnectionControls("note", note.id)}
         <div class="button-row">
           <button id="inspect-note-trash" class="danger-button" type="button">ゴミ箱へ</button>
         </div>
@@ -476,6 +582,7 @@
       touchEntity("note", note.id);
       renderCards();
     });
+    bindConnectionControls("note", note.id);
     $("[data-close-inspector]").addEventListener("click", clearSelection);
     $("#inspect-note-trash").addEventListener("click", () => moveToTrash("note", note.id));
   }
@@ -497,6 +604,7 @@
             ${GROUP_COLORS.map((color) => `<option value="${color}" ${group.color === color ? "selected" : ""}>${color}</option>`).join("")}
           </select>
         </div>
+        ${renderConnectionControls("group", group.id)}
         <div class="button-row">
           <button id="inspect-group-trash" class="danger-button" type="button">ゴミ箱へ</button>
         </div>
@@ -513,8 +621,77 @@
       renderGroups();
       renderCards();
     });
+    bindConnectionControls("group", group.id);
     $("[data-close-inspector]").addEventListener("click", clearSelection);
     $("#inspect-group-trash").addEventListener("click", () => moveToTrash("group", group.id));
+  }
+
+  function renderConnectionInspector(connection) {
+    const fromLabel = endpointLabel(connection.from);
+    const toLabel = endpointLabel(connection.to);
+    els.inspector.innerHTML = `
+      <div class="inspector-head">
+        <h2>線</h2>
+        <button class="inspector-close" data-close-inspector type="button" aria-label="閉じる">×</button>
+      </div>
+      <div class="form-grid">
+        <div class="pill">${escapeHtml(fromLabel)} → ${escapeHtml(toLabel)}</div>
+        <div class="field-split">
+          <div class="form-row">
+            <label>意味</label>
+            <select id="inspect-connection-kind">
+              ${CONNECTION_KINDS.map((kind) => `<option value="${kind.id}" ${connection.kind === kind.id ? "selected" : ""}>${kind.label}</option>`).join("")}
+            </select>
+          </div>
+          <div class="form-row">
+            <label>線種</label>
+            <select id="inspect-connection-style">
+              ${CONNECTION_STYLES.map((style) => `<option value="${style}" ${connection.style === style ? "selected" : ""}>${connectionStyleLabel(style)}</option>`).join("")}
+            </select>
+          </div>
+        </div>
+        <div class="button-row">
+          <button id="inspect-connection-trash" class="danger-button" type="button">削除</button>
+        </div>
+      </div>
+    `;
+    $("#inspect-connection-kind").addEventListener("change", (event) => {
+      connection.kind = event.target.value;
+      touchEntity("connection", connection.id);
+      renderConnections();
+    });
+    $("#inspect-connection-style").addEventListener("change", (event) => {
+      connection.style = event.target.value;
+      touchEntity("connection", connection.id);
+      renderConnections();
+    });
+    $("[data-close-inspector]").addEventListener("click", clearSelection);
+    $("#inspect-connection-trash").addEventListener("click", () => moveToTrash("connection", connection.id));
+  }
+
+  function renderConnectionControls(type, id) {
+    return `
+      <div class="field-split">
+        <div class="form-row">
+          <label>線の意味</label>
+          <select id="connection-kind">
+            ${CONNECTION_KINDS.map((kind) => `<option value="${kind.id}">${kind.label}</option>`).join("")}
+          </select>
+        </div>
+        <div class="form-row">
+          <label>接続</label>
+          <button id="connection-start" class="soft-button" type="button" data-type="${type}" data-id="${id}">接続開始</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function bindConnectionControls(type, id) {
+    $("#connection-start")?.addEventListener("click", () => {
+      app.connectionDraft = { type, id, kind: $("#connection-kind")?.value || "related" };
+      toast("接続先をタップしてください");
+      els.workspace.classList.add("connecting");
+    });
   }
 
   function createNote(body) {
@@ -575,6 +752,8 @@
 
   function clearSelection() {
     app.selected = null;
+    app.connectionDraft = null;
+    els.workspace.classList.remove("connecting");
     renderAll();
   }
 
@@ -585,11 +764,20 @@
     $$(".group-node", els.groupLayer).forEach((node) => {
       node.classList.toggle("selected", app.selected?.type === "group" && app.selected.id === node.dataset.id);
     });
+    $$(".connection-node", els.lineLayer).forEach((node) => {
+      node.classList.toggle("selected", app.selected?.type === "connection" && app.selected.id === node.dataset.id);
+    });
   }
 
   function getSelectedEntity() {
     if (!app.selected) return null;
-    return app.selected.type === "note" ? findNote(app.selected.id) : findGroup(app.selected.id);
+    if (app.selected.type === "note") return findNote(app.selected.id);
+    if (app.selected.type === "group") return findGroup(app.selected.id);
+    return findConnection(app.selected.id);
+  }
+
+  function isSelectedEntity(type, id) {
+    return app.selected?.type === type && app.selected.id === id;
   }
 
   function getGroupNotes(groupId) {
@@ -598,6 +786,184 @@
 
   function getNotePrimaryGroup(note) {
     return (note.groupIds || []).map((id) => findGroup(id)).find((group) => group && isVisibleEntity(group)) || null;
+  }
+
+  function getConnectionKind(kindId) {
+    return CONNECTION_KINDS.find((kind) => kind.id === kindId) || CONNECTION_KINDS[0];
+  }
+
+  function connectionStyleLabel(style) {
+    return {
+      solid: "実線",
+      dotted: "点線",
+      dashed: "破線",
+      wavy: "波線"
+    }[style] || "実線";
+  }
+
+  function endpointLabel(endpoint) {
+    const entity = resolveEndpoint(endpoint);
+    if (!entity) return "不明";
+    if (endpoint.type === "group") return entity.title || "グループ";
+    return entity.title || deriveTitle(entity.body) || "無題";
+  }
+
+  function resolveEndpoint(endpoint) {
+    if (!endpoint?.id) return null;
+    const entity = endpoint.type === "group" ? findGroup(endpoint.id) : findNote(endpoint.id);
+    return isVisibleEntity(entity) ? entity : null;
+  }
+
+  function endpointBounds(endpoint) {
+    const entity = resolveEndpoint(endpoint);
+    if (!entity) return null;
+    if (endpoint.type === "group") {
+      return { x: entity.x, y: entity.y, w: entity.w, h: entity.h };
+    }
+    return noteBounds(entity);
+  }
+
+  function connectionPath(connection) {
+    const fromBounds = endpointBounds(connection.from);
+    const toBounds = endpointBounds(connection.to);
+    if (!fromBounds || !toBounds) return "";
+    const fromCenter = rectCenter(fromBounds);
+    const toCenter = rectCenter(toBounds);
+    const from = edgePoint(fromBounds, toCenter);
+    const to = edgePoint(toBounds, fromCenter);
+    if (connection.style === "wavy") return wavyPath(from, to);
+    return `M ${from.x} ${from.y} L ${to.x} ${to.y}`;
+  }
+
+  function rectCenter(rect) {
+    return { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 };
+  }
+
+  function edgePoint(rect, toward) {
+    const center = rectCenter(rect);
+    const dx = toward.x - center.x;
+    const dy = toward.y - center.y;
+    const scale = 0.5 / Math.max(Math.abs(dx) / rect.w || 0.001, Math.abs(dy) / rect.h || 0.001);
+    return {
+      x: Math.round(center.x + dx * scale),
+      y: Math.round(center.y + dy * scale)
+    };
+  }
+
+  function wavyPath(from, to) {
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const length = Math.hypot(dx, dy) || 1;
+    const nx = -dy / length;
+    const ny = dx / length;
+    const steps = Math.max(8, Math.ceil(length / 18));
+    const points = [];
+    for (let i = 0; i <= steps; i += 1) {
+      const t = i / steps;
+      const wave = Math.sin(t * Math.PI * 2 * Math.max(2, Math.round(length / 68))) * 7;
+      points.push({
+        x: Math.round(from.x + dx * t + nx * wave),
+        y: Math.round(from.y + dy * t + ny * wave)
+      });
+    }
+    return points.map((point, index) => `${index ? "L" : "M"} ${point.x} ${point.y}`).join(" ");
+  }
+
+  function cycleConnectionStyle(id) {
+    const connection = findConnection(id);
+    if (!connection) return;
+    const index = CONNECTION_STYLES.indexOf(connection.style);
+    connection.style = CONNECTION_STYLES[(index + 1) % CONNECTION_STYLES.length];
+    touchEntity("connection", id);
+    selectEntity("connection", id);
+  }
+
+  function beginConnectionDrag(event, type, id) {
+    event.preventDefault();
+    event.stopPropagation();
+    const from = { type, id };
+    const fromBounds = endpointBounds(from);
+    if (!fromBounds) return;
+    const fromPoint = edgePoint(fromBounds, screenToWorld(event.clientX, event.clientY));
+    const draft = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    draft.classList.add("connection-path", "connection-draft");
+    els.lineLayer.appendChild(draft);
+    const draw = (clientX, clientY) => {
+      const to = screenToWorld(clientX, clientY);
+      draft.setAttribute("d", `M ${fromPoint.x} ${fromPoint.y} L ${Math.round(to.x)} ${Math.round(to.y)}`);
+    };
+    draw(event.clientX, event.clientY);
+    const onMove = (moveEvent) => {
+      if (moveEvent.pointerId !== event.pointerId) return;
+      moveEvent.preventDefault();
+      draw(moveEvent.clientX, moveEvent.clientY);
+    };
+    const onUp = (upEvent) => {
+      if (upEvent.pointerId !== event.pointerId) return;
+      window.removeEventListener("pointermove", onMove, true);
+      window.removeEventListener("pointerup", onUp, true);
+      window.removeEventListener("pointercancel", onUp, true);
+      draft.remove();
+      const target = entityFromPoint(upEvent.clientX, upEvent.clientY);
+      if (target) createConnection(from, target, "related");
+    };
+    window.addEventListener("pointermove", onMove, true);
+    window.addEventListener("pointerup", onUp, true);
+    window.addEventListener("pointercancel", onUp, true);
+  }
+
+  function entityFromPoint(x, y) {
+    const node = document.elementFromPoint(x, y)?.closest?.(".note-card, .group-node");
+    if (!node) return null;
+    return {
+      type: node.classList.contains("group-node") ? "group" : "note",
+      id: node.dataset.id
+    };
+  }
+
+  function completeConnectionDraft(type, id) {
+    const draft = app.connectionDraft;
+    if (!draft) return;
+    app.connectionDraft = null;
+    els.workspace.classList.remove("connecting");
+    createConnection({ type: draft.type, id: draft.id }, { type, id }, draft.kind || "related");
+  }
+
+  function createConnection(from, to, kind = "related") {
+    if (!from.id || !to.id || (from.type === to.type && from.id === to.id)) {
+      toast("同じ対象には接続できません");
+      return;
+    }
+    const existing = app.data.connections.find(
+      (connection) =>
+        isVisibleEntity(connection) &&
+        connection.kind === kind &&
+        connection.from.type === from.type &&
+        connection.from.id === from.id &&
+        connection.to.type === to.type &&
+        connection.to.id === to.id
+    );
+    if (existing) {
+      selectEntity("connection", existing.id);
+      toast("既に接続されています");
+      return;
+    }
+    const timestamp = nowIso();
+    const connection = {
+      id: uid("connection"),
+      from,
+      to,
+      kind,
+      style: "solid",
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      trashedAt: "",
+      deletedAt: ""
+    };
+    app.data.connections.push(connection);
+    touchEntity("connection", connection.id, { alreadyUpdated: true });
+    selectEntity("connection", connection.id);
+    toast("接続しました");
   }
 
   function noteBounds(note) {
@@ -681,12 +1047,14 @@
         group.h = Math.round(clamp(start.h + dy, 140, 900));
         node.style.width = `${group.w}px`;
         node.style.height = `${group.h}px`;
+        renderConnections();
       } else {
         target.x = Math.round(start.x + dx);
         target.y = Math.round(start.y + dy);
         node.style.left = `${target.x}px`;
         node.style.top = `${target.y}px`;
         if (type === "note") updateDropHighlight(note);
+        renderConnections();
       }
     };
     const onUp = (upEvent) => {
@@ -783,8 +1151,23 @@
   function onWorkspacePointerDown(event) {
     if (app.selected && isInspectorDismissTarget(event.target)) clearSelection();
     if (!isBackgroundTarget(event.target)) return;
-    els.workspace.setPointerCapture(event.pointerId);
+    beginViewportInteraction(event);
+  }
+
+  function beginViewportInteraction(event, tapTarget = null) {
+    try {
+      els.workspace.setPointerCapture(event.pointerId);
+    } catch {
+      // Pointer capture is not always available on mobile Safari.
+    }
     app.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (tapTarget) {
+      app.entityTapCandidates.set(event.pointerId, {
+        ...tapTarget,
+        x: event.clientX,
+        y: event.clientY
+      });
+    }
     if (app.pointers.size === 1) {
       app.panStart = { x: event.clientX, y: event.clientY, vx: app.view.x, vy: app.view.y };
     }
@@ -813,9 +1196,44 @@
   }
 
   function onWorkspacePointerUp(event) {
+    const tapTarget = app.entityTapCandidates.get(event.pointerId);
+    if (tapTarget && Math.hypot(event.clientX - tapTarget.x, event.clientY - tapTarget.y) < 10) {
+      handleEntityTap(tapTarget.type, tapTarget.id, event);
+    }
+    app.entityTapCandidates.delete(event.pointerId);
     app.pointers.delete(event.pointerId);
     if (app.pointers.size < 2) app.pinchStart = null;
     if (app.pointers.size === 0) app.panStart = null;
+  }
+
+  function handleEntityTap(type, id, event) {
+    const now = Date.now();
+    const last = app.lastEntityTap;
+    const isDoubleTap =
+      last &&
+      last.type === type &&
+      last.id === id &&
+      now - last.time < 360 &&
+      Math.hypot(event.clientX - last.x, event.clientY - last.y) < 28;
+    app.lastEntityTap = { type, id, time: now, x: event.clientX, y: event.clientY };
+    if (!isDoubleTap) return;
+    app.panelsCollapsed = false;
+    applyPanelState();
+    selectEntity(type, id);
+  }
+
+  function usesMobileEntityMode(event) {
+    return event.pointerType === "touch" || isSmallViewport();
+  }
+
+  function togglePanels() {
+    app.panelsCollapsed = !app.panelsCollapsed;
+    applyPanelState();
+  }
+
+  function applyPanelState() {
+    els.workspace.classList.toggle("panels-collapsed", app.panelsCollapsed);
+    els.panelToggle.textContent = app.panelsCollapsed ? "▥" : "▤";
   }
 
   function makePinchState() {
@@ -859,12 +1277,13 @@
   }
 
   function touchEntity(type, id, options = {}) {
-    const entity = type === "note" ? findNote(id) : findGroup(id);
+    const entity = findEntity(type, id);
     if (!entity) return;
     if (!options.alreadyUpdated) entity.updatedAt = nowIso();
     app.data.updatedAt = nowIso();
     if (app.settings.role === "pc") {
-      app.dirty[type === "note" ? "notes" : "groups"][id] = entity.updatedAt;
+      const bucket = type === "connection" ? "connections" : type === "note" ? "notes" : "groups";
+      app.dirty[bucket][id] = entity.updatedAt;
     }
     schedulePersist();
     if (app.settings.role === "phone") scheduleDriveSave();
@@ -872,10 +1291,13 @@
   }
 
   function moveToTrash(type, id) {
-    const entity = type === "note" ? findNote(id) : findGroup(id);
+    const entity = findEntity(type, id);
     if (!entity) return;
     entity.trashedAt = nowIso();
     entity.updatedAt = entity.trashedAt;
+    if (type === "note" || type === "group") {
+      trashConnectionsFor(type, id);
+    }
     if (type === "group") {
       app.data.notes.forEach((note) => {
         if (note.groupIds?.includes(id)) {
@@ -890,7 +1312,7 @@
   }
 
   function restoreEntity(type, id) {
-    const entity = type === "note" ? findNote(id) : findGroup(id);
+    const entity = findEntity(type, id);
     if (!entity) return;
     entity.trashedAt = "";
     entity.updatedAt = nowIso();
@@ -900,17 +1322,21 @@
   }
 
   function deleteForever(type, id) {
-    const entity = type === "note" ? findNote(id) : findGroup(id);
+    const entity = findEntity(type, id);
     if (!entity) return;
     entity.deletedAt = nowIso();
     entity.trashedAt = entity.trashedAt || entity.deletedAt;
     entity.updatedAt = entity.deletedAt;
-    if (type === "note") {
+    if (type === "connection") {
+      // Keep the deleted marker so future syncs can propagate the removal.
+    } else if (type === "note") {
       entity.title = "";
       entity.body = "";
       entity.groupIds = [];
+      trashConnectionsFor(type, id, true);
     } else {
       entity.title = "";
+      trashConnectionsFor(type, id, true);
       app.data.notes.forEach((note) => {
         if (note.groupIds?.includes(id)) {
           note.groupIds = note.groupIds.filter((groupId) => groupId !== id);
@@ -984,6 +1410,7 @@
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     const groups = app.data.groups.filter((group) => isVisibleEntity(group));
     const groupById = Object.fromEntries(groups.map((group) => [group.id, group]));
+    const connections = app.data.connections.filter((connection) => isVisibleEntity(connection));
     const md = notes
       .map((note) => {
         const names = (note.groupIds || []).map((id) => groupById[id]?.title).filter(Boolean);
@@ -1001,7 +1428,8 @@
         exportedAt: nowIso(),
         range,
         notes,
-        groups
+        groups,
+        connections
       },
       null,
       2
@@ -1464,7 +1892,7 @@
     try {
       requirePassword();
       const delta = buildDirtyDelta();
-      if (!delta.notes.length && !delta.groups.length) {
+      if (!delta.notes.length && !delta.groups.length && !delta.connections.length) {
         toast("未同期の変更はありません");
         return;
       }
@@ -1516,7 +1944,7 @@
         render();
       });
       $("#qr-clear").addEventListener("click", async () => {
-        app.dirty = { notes: {}, groups: {} };
+        app.dirty = { notes: {}, groups: {}, connections: {} };
         await persistState();
         closeModal();
         updateStatus();
@@ -1559,13 +1987,15 @@
   function buildDirtyDelta() {
     const noteIds = new Set(Object.keys(app.dirty.notes || {}));
     const groupIds = new Set(Object.keys(app.dirty.groups || {}));
+    const connectionIds = new Set(Object.keys(app.dirty.connections || {}));
     return {
       type: "today-fragments-delta",
       schemaVersion: 1,
       createdAt: nowIso(),
       fromDeviceId: app.settings.deviceId,
       notes: app.data.notes.filter((note) => noteIds.has(note.id)),
-      groups: app.data.groups.filter((group) => groupIds.has(group.id))
+      groups: app.data.groups.filter((group) => groupIds.has(group.id)),
+      connections: app.data.connections.filter((connection) => connectionIds.has(connection.id))
     };
   }
 
@@ -1806,6 +2236,7 @@
     const result = { changed: 0, created: 0, updated: 0 };
     const incomingNotes = Array.isArray(incoming.notes) ? incoming.notes : [];
     const incomingGroups = Array.isArray(incoming.groups) ? incoming.groups : [];
+    const incomingConnections = Array.isArray(incoming.connections) ? incoming.connections : [];
     incomingNotes.forEach((note) => {
       const existing = findNote(note.id);
       if (!existing) {
@@ -1834,6 +2265,21 @@
         result.updated += 1;
       }
     });
+    incomingConnections.forEach((connection) => {
+      const normalized = normalizeData({ notes: [], groups: [], connections: [connection] }).connections[0];
+      const existing = findConnection(connection.id);
+      if (!existing) {
+        app.data.connections.push(normalized);
+        result.changed += 1;
+        result.created += 1;
+        return;
+      }
+      if ((connection.updatedAt || "") > (existing.updatedAt || "")) {
+        Object.assign(existing, normalized);
+        result.changed += 1;
+        result.updated += 1;
+      }
+    });
     if (result.changed) {
       app.data.updatedAt = nowIso();
       updateAllNoteGroups();
@@ -1841,6 +2287,7 @@
     if (options.markDirty && app.settings.role === "pc") {
       incomingNotes.forEach((note) => (app.dirty.notes[note.id] = note.updatedAt || nowIso()));
       incomingGroups.forEach((group) => (app.dirty.groups[group.id] = group.updatedAt || nowIso()));
+      incomingConnections.forEach((connection) => (app.dirty.connections[connection.id] = connection.updatedAt || nowIso()));
     }
     return result;
   }
@@ -1933,6 +2380,20 @@
         return 1.0 - smoothstep(width, width + 1.0, line);
       }
 
+      float hash(vec2 p) {
+        return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+      }
+
+      float particleField(vec2 uv, float scale, float speed) {
+        vec2 p = uv * scale + vec2(u_time * speed, -u_time * speed * 0.64);
+        vec2 cell = floor(p);
+        vec2 local = fract(p) - 0.5;
+        float n = hash(cell);
+        vec2 drift = vec2(sin(u_time * 0.7 + n * 6.28), cos(u_time * 0.48 + n * 5.3)) * 0.18;
+        float dotShape = 1.0 - smoothstep(0.025, 0.075, length(local + drift));
+        return dotShape * smoothstep(0.58, 1.0, n);
+      }
+
       void main() {
         vec2 uv = gl_FragCoord.xy / u_resolution.xy;
         vec2 world = (gl_FragCoord.xy - u_view) / max(u_zoom, 0.001);
@@ -1947,6 +2408,8 @@
         color += vec3(0.24, 0.44, 0.36) * smoothstep(0.82, 0.08, distance(uv, vec2(0.52, 0.95))) * 0.24;
         color += vec3(0.12, 0.19, 0.28) * gridA;
         color += vec3(0.24, 0.37, 0.44) * gridB;
+        float particles = particleField(uv, 28.0, 0.016) + particleField(uv + 0.37, 46.0, -0.01) * 0.55;
+        color += vec3(0.42, 0.78, 0.86) * particles * 0.12;
         color *= smoothstep(0.86, 0.22, vignette);
         gl_FragColor = vec4(color, 1.0);
       }
@@ -2046,7 +2509,10 @@
   }
 
   function updateStatus() {
-    const pendingCount = Object.keys(app.dirty.notes || {}).length + Object.keys(app.dirty.groups || {}).length;
+    const pendingCount =
+      Object.keys(app.dirty.notes || {}).length +
+      Object.keys(app.dirty.groups || {}).length +
+      Object.keys(app.dirty.connections || {}).length;
     if (app.settings.role === "pc") {
       els.syncStatus.textContent = pendingCount ? `未同期 ${pendingCount}件` : "PCローカル保存";
       return;
@@ -2082,6 +2548,29 @@
 
   function findGroup(id) {
     return app.data.groups.find((group) => group.id === id);
+  }
+
+  function findConnection(id) {
+    return app.data.connections.find((connection) => connection.id === id);
+  }
+
+  function findEntity(type, id) {
+    if (type === "note") return findNote(id);
+    if (type === "group") return findGroup(id);
+    if (type === "connection") return findConnection(id);
+    return null;
+  }
+
+  function trashConnectionsFor(type, id, deleted = false) {
+    app.data.connections.forEach((connection) => {
+      const related = (connection.from.type === type && connection.from.id === id) || (connection.to.type === type && connection.to.id === id);
+      if (!related || connection.deletedAt) return;
+      const timestamp = nowIso();
+      connection.trashedAt = connection.trashedAt || timestamp;
+      if (deleted) connection.deletedAt = timestamp;
+      connection.updatedAt = timestamp;
+      touchEntity("connection", connection.id, { alreadyUpdated: true });
+    });
   }
 
   function isVisibleEntity(entity) {

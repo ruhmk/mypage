@@ -6,10 +6,10 @@
     <meta name="theme-color" content="#07090f" />
     <title>Today Fragments</title>
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=12" />
+    <link rel="stylesheet" href="styles.css?v=13" />
     <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <script src="vendor/qrcode-generator.js?v=12" defer></script>
-    <script src="vendor/jsQR.js?v=12" defer></script>
+    <script src="vendor/qrcode-generator.js?v=13" defer></script>
+    <script src="vendor/jsQR.js?v=13" defer></script>
   </head>
   <body>
     <noscript>Today Fragmentsを使うにはJavaScriptを有効にしてください。</noscript>
@@ -19,6 +19,7 @@
         <canvas id="gl-canvas" class="gl-canvas" aria-hidden="true"></canvas>
         <div id="world" class="world">
           <div id="group-layer" class="layer group-layer"></div>
+          <svg id="line-layer" class="layer line-layer" aria-label="接続線"></svg>
           <div id="card-layer" class="layer card-layer"></div>
         </div>
 
@@ -62,10 +63,11 @@
         </form>
 
         <aside id="inspector" class="inspector" aria-live="polite"></aside>
+        <button id="panel-toggle" class="panel-toggle" type="button" title="入力と詳細を開閉" aria-label="入力と詳細を開閉">▤</button>
       </section>
     </main>
 
     <div id="modal-root" class="modal-root" aria-live="polite"></div>
-    <script src="app.js?v=12" defer></script>
+    <script src="app.js?v=13" defer></script>
   </body>
 </html>

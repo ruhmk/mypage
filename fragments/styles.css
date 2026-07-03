@@ -274,6 +274,18 @@ html.setup-mode .setup-screen {
   touch-action: none;
 }
 
+.workspace.connecting .note-card,
+.workspace.connecting .group-node {
+  cursor: crosshair;
+}
+
+.workspace.connecting .note-card,
+.workspace.connecting .group-node {
+  box-shadow:
+    0 0 0 2px rgba(103, 232, 249, 0.1),
+    0 30px 90px rgba(0, 0, 0, 0.34);
+}
+
 .gl-canvas {
   position: absolute;
   inset: 0;
@@ -291,6 +303,124 @@ html.setup-mode .setup-screen {
 .layer {
   position: absolute;
   inset: 0;
+}
+
+.line-layer {
+  z-index: 4;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.group-layer {
+  z-index: 3;
+}
+
+.card-layer {
+  z-index: 5;
+}
+
+.connection-node {
+  color: var(--connection-color);
+}
+
+.connection-path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.connection-hit {
+  stroke: transparent;
+  stroke-width: 22;
+  pointer-events: stroke;
+}
+
+.connection-main {
+  stroke: color-mix(in srgb, var(--connection-color), white 16%);
+  stroke-width: 5.5;
+  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--connection-color), transparent 46%));
+  opacity: 0.78;
+}
+
+.connection-flow {
+  stroke: #ffffff;
+  stroke-width: 2.4;
+  stroke-dasharray: 14 22;
+  animation: line-flow 1.2s linear infinite;
+  opacity: 0.82;
+  pointer-events: none;
+}
+
+.connection-main.dotted {
+  stroke-dasharray: 1 12;
+}
+
+.connection-main.dashed {
+  stroke-dasharray: 20 14;
+}
+
+.connection-main.wavy {
+  stroke-dasharray: none;
+}
+
+.connection-flow.dotted {
+  stroke-dasharray: 2 16;
+}
+
+.connection-flow.dashed {
+  stroke-dasharray: 22 18;
+}
+
+.connection-flow.wavy {
+  stroke-dasharray: 8 18;
+}
+
+.connection-node:hover .connection-main,
+.connection-node.selected .connection-main {
+  opacity: 1;
+  stroke-width: 7;
+  filter: drop-shadow(0 0 20px color-mix(in srgb, var(--connection-color), transparent 28%));
+}
+
+.connection-node:hover .connection-flow,
+.connection-node.selected .connection-flow {
+  opacity: 1;
+  stroke-width: 3.4;
+}
+
+.connection-draft {
+  stroke: rgba(238, 244, 255, 0.82);
+  stroke-width: 4;
+  stroke-dasharray: 12 12;
+  animation: line-flow 0.8s linear infinite;
+  pointer-events: none;
+}
+
+#arrow-related path {
+  fill: #67e8f9;
+}
+
+#arrow-cause path {
+  fill: #ffd166;
+}
+
+@keyframes line-flow {
+  to {
+    stroke-dashoffset: -72;
+  }
+}
+
+@keyframes float-soft {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  50% {
+    translate: 0 -2px;
+  }
 }
 
 .topbar {
@@ -367,6 +497,22 @@ html.setup-mode .setup-screen {
   min-height: 52px;
   padding: 6px;
   border-radius: 14px;
+}
+
+.panel-toggle {
+  position: absolute;
+  z-index: 34;
+  right: 18px;
+  bottom: max(18px, env(safe-area-inset-bottom));
+  display: none;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(10, 14, 23, 0.78);
+  color: var(--text);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 14px 42px rgba(0, 0, 0, 0.34);
 }
 
 .icon-button,
@@ -451,6 +597,7 @@ html.setup-mode .setup-screen {
   user-select: none;
   -webkit-user-select: none;
   transition:
+    translate var(--fast),
     left 180ms ease,
     top 180ms ease,
     width 180ms ease,
@@ -460,6 +607,7 @@ html.setup-mode .setup-screen {
     border-color var(--fast),
     box-shadow var(--fast),
     opacity var(--fast);
+  animation: float-soft 5.8s ease-in-out infinite;
 }
 
 .group-node.selected {
@@ -527,11 +675,13 @@ html.setup-mode .setup-screen {
   user-select: none;
   -webkit-user-select: none;
   transition:
+    translate var(--fast),
     transform var(--fast),
     background var(--fast),
     border-color var(--fast),
     box-shadow var(--fast),
     opacity var(--fast);
+  animation: float-soft 4.8s ease-in-out infinite;
 }
 
 .note-card.grouped {
@@ -548,6 +698,8 @@ html.setup-mode .setup-screen {
 .group-node.dragging {
   cursor: grabbing;
   transition: none;
+  animation: none;
+  translate: 0 -5px;
 }
 
 .note-card:hover {
@@ -874,6 +1026,23 @@ html.setup-mode .setup-screen {
     max-height: 34vh;
     padding: 12px;
     border-radius: 16px 16px 12px 12px;
+  }
+
+  .panel-toggle {
+    display: grid;
+    place-items: center;
+  }
+
+  .workspace.panels-collapsed .composer,
+  .workspace.panels-collapsed .inspector {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(18px);
+  }
+
+  .workspace.panels-collapsed .panel-toggle {
+    border-color: rgba(103, 232, 249, 0.42);
+    background: rgba(103, 232, 249, 0.16);
   }
 
   .note-card {
