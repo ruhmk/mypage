@@ -9,7 +9,7 @@
   const DRIVE_FILE = "today-fragments.json";
   const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
   const GROUP_COLORS = ["#67e8f9", "#ff7aa8", "#ffd166", "#8ff0c4", "#a78bfa"];
-  const APP_VERSION = "13";
+  const APP_VERSION = "14";
   const NOTE_CARD_WIDTH = 210;
   const NOTE_CARD_HEIGHT = 62;
   const GROUP_FIT_PADDING = 52;
@@ -416,8 +416,11 @@
         const selected = app.selected?.type === "group" && app.selected.id === group.id;
         const cardCount = getGroupNotes(group.id).length;
         const radius = groupRadius(group, cardCount);
+        const seed = hashNumber(group.id);
+        const delay = -(seed % 4200);
+        const rotate = ((seed % 9) - 4) * 0.26;
         return `
-          <article class="group-node ${selected ? "selected" : ""} ${cardCount ? "has-cards" : ""}" data-id="${group.id}" style="left:${group.x}px;top:${group.y}px;width:${group.w}px;height:${group.h}px;--group-color:${group.color};--group-radius:${radius}">
+          <article class="group-node ${selected ? "selected" : ""} ${cardCount ? "has-cards" : ""}" data-id="${group.id}" style="left:${group.x}px;top:${group.y}px;width:${group.w}px;height:${group.h}px;--group-color:${group.color};--group-radius:${radius};--float-delay:${delay}ms;--float-rotate:${rotate}deg">
             <span class="group-label">${escapeHtml(group.title || "グループ")}</span>
             <span class="resize-handle" data-resize="${group.id}"></span>
           </article>
@@ -441,8 +444,11 @@
         const selected = app.selected?.type === "note" && app.selected.id === note.id;
         const title = note.title || deriveTitle(note.body);
         const primaryGroup = getNotePrimaryGroup(note);
+        const seed = hashNumber(note.id);
+        const delay = -(seed % 3600);
+        const rotate = ((seed % 11) - 5) * 0.32;
         return `
-          <article class="note-card ${selected ? "selected" : ""} ${primaryGroup ? "grouped" : ""}" data-id="${note.id}" style="left:${note.x}px;top:${note.y}px;--card-color:${primaryGroup?.color || "#67e8f9"}">
+          <article class="note-card ${selected ? "selected" : ""} ${primaryGroup ? "grouped" : ""}" data-id="${note.id}" style="left:${note.x}px;top:${note.y}px;--card-color:${primaryGroup?.color || "#67e8f9"};--float-delay:${delay}ms;--float-rotate:${rotate}deg">
             <h2 class="note-title">${escapeHtml(title || "無題")}</h2>
           </article>
         `;
@@ -460,24 +466,20 @@
   function renderConnections() {
     const connections = app.data.connections.filter((connection) => isVisibleEntity(connection) && resolveEndpoint(connection.from) && resolveEndpoint(connection.to));
     els.lineLayer.innerHTML = `
-      <defs>
-        <marker id="arrow-related" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-          <path d="M 0 0 L 10 5 L 0 10 z"></path>
-        </marker>
-        <marker id="arrow-cause" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-          <path d="M 0 0 L 10 5 L 0 10 z"></path>
-        </marker>
-      </defs>
       ${connections
         .map((connection) => {
           const kind = getConnectionKind(connection.kind);
           const selected = app.selected?.type === "connection" && app.selected.id === connection.id;
           const d = connectionPath(connection);
+          const points = connectionPoints(connection);
+          if (!points) return "";
           return `
             <g class="connection-node ${selected ? "selected" : ""}" data-id="${connection.id}" style="--connection-color:${kind.color}">
               <path class="connection-path connection-hit" d="${d}"></path>
-              <path class="connection-path connection-main ${connection.style}" d="${d}" marker-end="url(#arrow-${kind.id})"></path>
+              <path class="connection-path connection-main ${connection.style}" d="${d}"></path>
               <path class="connection-path connection-flow ${connection.style}" d="${d}"></path>
+              <circle class="connection-point start" cx="${points.from.x}" cy="${points.from.y}" r="5"></circle>
+              <circle class="connection-point end" cx="${points.to.x}" cy="${points.to.y}" r="6.5"></circle>
             </g>
           `;
         })
@@ -824,15 +826,22 @@
   }
 
   function connectionPath(connection) {
+    const points = connectionPoints(connection);
+    if (!points) return "";
+    if (connection.style === "wavy") return wavyPath(points.from, points.to);
+    const controls = curvedControls(points.from, points.to);
+    return `M ${points.from.x} ${points.from.y} C ${controls.c1.x} ${controls.c1.y}, ${controls.c2.x} ${controls.c2.y}, ${points.to.x} ${points.to.y}`;
+  }
+
+  function connectionPoints(connection) {
     const fromBounds = endpointBounds(connection.from);
     const toBounds = endpointBounds(connection.to);
-    if (!fromBounds || !toBounds) return "";
+    if (!fromBounds || !toBounds) return null;
     const fromCenter = rectCenter(fromBounds);
     const toCenter = rectCenter(toBounds);
     const from = edgePoint(fromBounds, toCenter);
     const to = edgePoint(toBounds, fromCenter);
-    if (connection.style === "wavy") return wavyPath(from, to);
-    return `M ${from.x} ${from.y} L ${to.x} ${to.y}`;
+    return { from, to };
   }
 
   function rectCenter(rect) {
@@ -850,20 +859,59 @@
     };
   }
 
-  function wavyPath(from, to) {
+  function curvedControls(from, to) {
     const dx = to.x - from.x;
     const dy = to.y - from.y;
     const length = Math.hypot(dx, dy) || 1;
     const nx = -dy / length;
     const ny = dx / length;
+    const bend = clamp(length * 0.18, 28, 120);
+    return {
+      c1: {
+        x: Math.round(from.x + dx * 0.32 + nx * bend),
+        y: Math.round(from.y + dy * 0.32 + ny * bend)
+      },
+      c2: {
+        x: Math.round(from.x + dx * 0.68 + nx * bend),
+        y: Math.round(from.y + dy * 0.68 + ny * bend)
+      }
+    };
+  }
+
+  function cubicPoint(from, c1, c2, to, t) {
+    const mt = 1 - t;
+    return {
+      x: mt * mt * mt * from.x + 3 * mt * mt * t * c1.x + 3 * mt * t * t * c2.x + t * t * t * to.x,
+      y: mt * mt * mt * from.y + 3 * mt * mt * t * c1.y + 3 * mt * t * t * c2.y + t * t * t * to.y
+    };
+  }
+
+  function cubicTangent(from, c1, c2, to, t) {
+    const mt = 1 - t;
+    return {
+      x: 3 * mt * mt * (c1.x - from.x) + 6 * mt * t * (c2.x - c1.x) + 3 * t * t * (to.x - c2.x),
+      y: 3 * mt * mt * (c1.y - from.y) + 6 * mt * t * (c2.y - c1.y) + 3 * t * t * (to.y - c2.y)
+    };
+  }
+
+  function wavyPath(from, to) {
+    const controls = curvedControls(from, to);
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const length = Math.hypot(dx, dy) || 1;
     const steps = Math.max(8, Math.ceil(length / 18));
     const points = [];
     for (let i = 0; i <= steps; i += 1) {
       const t = i / steps;
+      const base = cubicPoint(from, controls.c1, controls.c2, to, t);
+      const tangent = cubicTangent(from, controls.c1, controls.c2, to, t);
+      const tangentLength = Math.hypot(tangent.x, tangent.y) || 1;
+      const nx = -tangent.y / tangentLength;
+      const ny = tangent.x / tangentLength;
       const wave = Math.sin(t * Math.PI * 2 * Math.max(2, Math.round(length / 68))) * 7;
       points.push({
-        x: Math.round(from.x + dx * t + nx * wave),
-        y: Math.round(from.y + dy * t + ny * wave)
+        x: Math.round(base.x + nx * wave),
+        y: Math.round(base.y + ny * wave)
       });
     }
     return points.map((point, index) => `${index ? "L" : "M"} ${point.x} ${point.y}`).join(" ");
@@ -890,7 +938,9 @@
     els.lineLayer.appendChild(draft);
     const draw = (clientX, clientY) => {
       const to = screenToWorld(clientX, clientY);
-      draft.setAttribute("d", `M ${fromPoint.x} ${fromPoint.y} L ${Math.round(to.x)} ${Math.round(to.y)}`);
+      const target = { x: Math.round(to.x), y: Math.round(to.y) };
+      const controls = curvedControls(fromPoint, target);
+      draft.setAttribute("d", `M ${fromPoint.x} ${fromPoint.y} C ${controls.c1.x} ${controls.c1.y}, ${controls.c2.x} ${controls.c2.y}, ${target.x} ${target.y}`);
     };
     draw(event.clientX, event.clientY);
     const onMove = (moveEvent) => {
@@ -2384,14 +2434,14 @@
         return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
       }
 
-      float particleField(vec2 uv, float scale, float speed) {
+      float particleField(vec2 uv, float scale, float speed, float size) {
         vec2 p = uv * scale + vec2(u_time * speed, -u_time * speed * 0.64);
         vec2 cell = floor(p);
         vec2 local = fract(p) - 0.5;
         float n = hash(cell);
-        vec2 drift = vec2(sin(u_time * 0.7 + n * 6.28), cos(u_time * 0.48 + n * 5.3)) * 0.18;
-        float dotShape = 1.0 - smoothstep(0.025, 0.075, length(local + drift));
-        return dotShape * smoothstep(0.58, 1.0, n);
+        vec2 drift = vec2(sin(u_time * 0.7 + n * 6.28), cos(u_time * 0.48 + n * 5.3)) * 0.2;
+        float dotShape = 1.0 - smoothstep(size * 0.45, size, length(local + drift));
+        return dotShape * smoothstep(0.46, 1.0, n);
       }
 
       void main() {
@@ -2408,8 +2458,8 @@
         color += vec3(0.24, 0.44, 0.36) * smoothstep(0.82, 0.08, distance(uv, vec2(0.52, 0.95))) * 0.24;
         color += vec3(0.12, 0.19, 0.28) * gridA;
         color += vec3(0.24, 0.37, 0.44) * gridB;
-        float particles = particleField(uv, 28.0, 0.016) + particleField(uv + 0.37, 46.0, -0.01) * 0.55;
-        color += vec3(0.42, 0.78, 0.86) * particles * 0.12;
+        float particles = particleField(uv, 22.0, 0.018, 0.13) + particleField(uv + 0.37, 34.0, -0.012, 0.1) * 0.72;
+        color += vec3(0.48, 0.88, 0.96) * particles * 0.32;
         color *= smoothstep(0.86, 0.22, vignette);
         gl_FragColor = vec4(color, 1.0);
       }
