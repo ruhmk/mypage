@@ -6,10 +6,10 @@
     <meta name="theme-color" content="#07090f" />
     <title>Today Fragments</title>
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=14" />
+    <link rel="stylesheet" href="styles.css?v=15" />
     <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <script src="vendor/qrcode-generator.js?v=14" defer></script>
-    <script src="vendor/jsQR.js?v=14" defer></script>
+    <script src="vendor/qrcode-generator.js?v=15" defer></script>
+    <script src="vendor/jsQR.js?v=15" defer></script>
   </head>
   <body>
     <noscript>Today Fragmentsを使うにはJavaScriptを有効にしてください。</noscript>
@@ -34,6 +34,15 @@
           </div>
           <div id="sync-status" class="sync-status">ローカル保存</div>
           <nav class="toolbar" aria-label="ツール">
+            <button id="undo-action" class="icon-button" title="戻る" aria-label="戻る" disabled>
+              <span>↶</span>
+            </button>
+            <button id="redo-action" class="icon-button" title="進む" aria-label="進む" disabled>
+              <span>↷</span>
+            </button>
+            <button id="movement-lock" class="icon-button" title="全体の位置ロック" aria-label="全体の位置ロック">
+              <span>止</span>
+            </button>
             <button id="add-group" class="icon-button" title="グループ追加" aria-label="グループ追加">
               <span>□</span>
             </button>
@@ -69,6 +78,6 @@
     </main>
 
     <div id="modal-root" class="modal-root" aria-live="polite"></div>
-    <script src="app.js?v=14" defer></script>
+    <script src="app.js?v=15" defer></script>
   </body>
 </html>

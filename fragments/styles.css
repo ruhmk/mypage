@@ -308,35 +308,20 @@ html.setup-mode .setup-screen {
   pointer-events: none;
 }
 
-.particle-layer::before,
-.particle-layer::after {
-  content: "";
+.particle-dot {
   position: absolute;
-  inset: -12%;
-  background-repeat: repeat;
+  width: var(--particle-size);
+  height: var(--particle-size);
+  border-radius: 50%;
+  background: var(--particle-color);
   mix-blend-mode: screen;
-  opacity: 0.72;
-  animation: particle-drift 18s linear infinite;
-}
-
-.particle-layer::before {
-  background-image:
-    radial-gradient(circle, rgba(170, 245, 255, 0.9) 0 2px, transparent 3.2px),
-    radial-gradient(circle, rgba(255, 122, 168, 0.52) 0 1.7px, transparent 3px);
-  background-size: 86px 86px, 132px 132px;
-  background-position: 0 0, 44px 26px;
-  filter: drop-shadow(0 0 8px rgba(103, 232, 249, 0.44));
-}
-
-.particle-layer::after {
-  background-image:
-    radial-gradient(circle, rgba(255, 209, 102, 0.58) 0 2.4px, transparent 4px),
-    radial-gradient(circle, rgba(143, 240, 196, 0.48) 0 1.8px, transparent 3.4px);
-  background-size: 154px 154px, 116px 116px;
-  background-position: 70px 40px, 12px 88px;
-  opacity: 0.48;
-  animation-duration: 26s;
-  animation-direction: reverse;
+  opacity: var(--particle-opacity);
+  filter:
+    blur(var(--particle-blur))
+    drop-shadow(0 0 8px color-mix(in srgb, var(--particle-color), transparent 34%));
+  animation: particle-float var(--particle-duration) ease-in-out infinite;
+  animation-delay: var(--particle-delay);
+  transform: translate3d(0, 0, 0) scale(0.82);
 }
 
 .world {
@@ -502,9 +487,16 @@ html.setup-mode .setup-screen {
   }
 }
 
-@keyframes particle-drift {
-  to {
-    transform: translate3d(-96px, 72px, 0);
+@keyframes particle-float {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(0.82);
+  }
+  45% {
+    transform: translate3d(var(--particle-dx), var(--particle-dy), 0) scale(1.22);
+  }
+  72% {
+    transform: translate3d(calc(var(--particle-dx) * -0.42), calc(var(--particle-dy) * 0.34), 0) scale(0.96);
   }
 }
 
@@ -628,6 +620,30 @@ html.setup-mode .setup-screen {
   background: rgba(255, 255, 255, 0.1);
 }
 
+.icon-button:disabled {
+  cursor: default;
+  opacity: 0.38;
+}
+
+.icon-button:disabled:hover {
+  transform: none;
+  border-color: var(--line);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.icon-button.active {
+  border-color: rgba(255, 209, 102, 0.48);
+  background: rgba(255, 209, 102, 0.16);
+  color: #fff0bd;
+}
+
+.workspace.movement-locked .note-card,
+.workspace.movement-locked .group-node,
+.note-card.locked,
+.group-node.locked {
+  cursor: default;
+}
+
 .composer {
   position: absolute;
   z-index: 28;
@@ -704,6 +720,10 @@ html.setup-mode .setup-screen {
     0 32px 100px color-mix(in srgb, var(--group-color), transparent 78%);
 }
 
+.group-node.locked {
+  border-style: dashed;
+}
+
 .group-node.drop-target {
   border-color: color-mix(in srgb, var(--group-color), white 70%);
   background:
@@ -739,6 +759,11 @@ html.setup-mode .setup-screen {
   cursor: nwse-resize;
   opacity: 0.74;
   touch-action: none;
+}
+
+.group-node.locked .resize-handle,
+.workspace.movement-locked .resize-handle {
+  opacity: 0.22;
 }
 
 .note-card {
@@ -801,6 +826,31 @@ html.setup-mode .setup-screen {
     0 0 0 3px color-mix(in srgb, var(--card-color), transparent 72%),
     0 16px 0 rgba(0, 0, 0, 0.14),
     0 34px 82px color-mix(in srgb, var(--card-color), transparent 82%);
+}
+
+.note-card.locked {
+  border-style: dashed;
+}
+
+.lock-badge {
+  position: absolute;
+  right: 9px;
+  top: 7px;
+  padding: 2px 5px;
+  border: 1px solid rgba(255, 209, 102, 0.42);
+  border-radius: 7px;
+  background: rgba(255, 209, 102, 0.13);
+  color: #ffe6a0;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+}
+
+.lock-control.active {
+  border-color: rgba(255, 209, 102, 0.48);
+  background: rgba(255, 209, 102, 0.15);
+  color: #fff0bd;
 }
 
 .note-title {
@@ -1088,7 +1138,7 @@ html.setup-mode .setup-screen {
 
   .toolbar {
     flex-wrap: wrap;
-    max-width: 184px;
+    max-width: 232px;
     justify-content: flex-end;
   }
 

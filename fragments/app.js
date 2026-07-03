@@ -9,7 +9,7 @@
   const DRIVE_FILE = "today-fragments.json";
   const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
   const GROUP_COLORS = ["#67e8f9", "#ff7aa8", "#ffd166", "#8ff0c4", "#a78bfa"];
-  const APP_VERSION = "14";
+  const APP_VERSION = "15";
   const NOTE_CARD_WIDTH = 210;
   const NOTE_CARD_HEIGHT = 62;
   const GROUP_FIT_PADDING = 52;
@@ -41,7 +41,8 @@
     lastEntityTap: null,
     entityTapCandidates: new Map(),
     connectionDraft: null,
-    panelsCollapsed: false
+    panelsCollapsed: false,
+    history: { undo: [], redo: [], restoring: false }
   };
 
   const $ = (selector, root = document) => root.querySelector(selector);
@@ -86,6 +87,10 @@
     els.trashOpen = $("#trash-open");
     els.settingsOpen = $("#settings-open");
     els.panelToggle = $("#panel-toggle");
+    els.undoAction = $("#undo-action");
+    els.redoAction = $("#redo-action");
+    els.movementLock = $("#movement-lock");
+    els.particleLayer = $(".particle-layer");
   }
 
   async function loadState() {
@@ -124,6 +129,7 @@
       note.createdAt ||= nowIso();
       note.updatedAt ||= note.createdAt;
       note.localDate ||= localDate(note.createdAt);
+      note.locked = Boolean(note.locked);
     });
     merged.groups.forEach((group) => {
       group.x = Number.isFinite(group.x) ? group.x : 0;
@@ -133,6 +139,7 @@
       group.createdAt ||= nowIso();
       group.updatedAt ||= group.createdAt;
       group.color ||= GROUP_COLORS[0];
+      group.locked = Boolean(group.locked);
     });
     merged.connections.forEach((connection) => {
       connection.from = normalizeEndpoint(connection.from);
@@ -160,6 +167,7 @@
       deviceId: "",
       savePassword: true,
       syncPassword: "",
+      movementLocked: false,
       drive: {
         clientId: "",
         folderName: DRIVE_FOLDER,
@@ -352,8 +360,11 @@
       app.view.y = Math.round(window.innerHeight / 2);
     }
     initWebGl();
+    initParticles();
     updateWorldTransform();
     applyPanelState();
+    applyMovementLockState();
+    updateUndoRedoButtons();
     renderAll();
     updateStatus();
   }
@@ -376,6 +387,9 @@
     els.trashOpen.addEventListener("click", openTrashModal);
     els.settingsOpen.addEventListener("click", openSettingsModal);
     els.panelToggle.addEventListener("click", togglePanels);
+    els.undoAction.addEventListener("click", undo);
+    els.redoAction.addEventListener("click", redo);
+    els.movementLock.addEventListener("click", toggleMovementLock);
     els.workspace.addEventListener("contextmenu", (event) => {
       if (event.target.closest?.(".note-card, .group-node, .connection-path, .line-layer")) event.preventDefault();
     });
@@ -386,8 +400,10 @@
     els.workspace.addEventListener("pointercancel", onWorkspacePointerUp);
     window.addEventListener("resize", () => {
       resizeGlCanvas();
+      initParticles();
       renderAll();
     });
+    document.addEventListener("keydown", onKeyDown);
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "hidden") {
         persistState();
@@ -399,6 +415,31 @@
   function autosizeComposer() {
     els.quickNote.style.height = "auto";
     els.quickNote.style.height = `${Math.min(160, els.quickNote.scrollHeight)}px`;
+  }
+
+  function initParticles() {
+    if (!els.particleLayer) return;
+    const count = Math.round(clamp((window.innerWidth * window.innerHeight) / 7600, 90, 170));
+    const key = `${count}:${Math.round(window.innerWidth / 80)}:${Math.round(window.innerHeight / 80)}`;
+    if (els.particleLayer.dataset.key === key) return;
+    els.particleLayer.dataset.key = key;
+    const colors = ["#aaf5ff", "#67e8f9", "#ff7aa8", "#ffd166", "#8ff0c4", "#a78bfa"];
+    const particles = Array.from({ length: count }, (_, index) => {
+      const size = randomBetween(2.2, index % 9 === 0 ? 7.6 : 5.4);
+      const dx = randomBetween(-46, 46);
+      const dy = randomBetween(-38, 52);
+      const duration = randomBetween(10, 24);
+      const delay = randomBetween(-24, 0);
+      const opacity = randomBetween(0.34, 0.92);
+      const blur = randomBetween(0, 1.2);
+      const color = colors[Math.floor(Math.random() * colors.length)];
+      return `<span class="particle-dot" style="left:${randomBetween(-4, 104).toFixed(2)}%;top:${randomBetween(-4, 104).toFixed(2)}%;--particle-size:${size.toFixed(2)}px;--particle-dx:${dx.toFixed(1)}px;--particle-dy:${dy.toFixed(1)}px;--particle-duration:${duration.toFixed(2)}s;--particle-delay:${delay.toFixed(2)}s;--particle-opacity:${opacity.toFixed(2)};--particle-blur:${blur.toFixed(2)}px;--particle-color:${color}"></span>`;
+    });
+    els.particleLayer.innerHTML = particles.join("");
+  }
+
+  function randomBetween(min, max) {
+    return min + Math.random() * (max - min);
   }
 
   function renderAll() {
@@ -420,8 +461,9 @@
         const delay = -(seed % 4200);
         const rotate = ((seed % 9) - 4) * 0.26;
         return `
-          <article class="group-node ${selected ? "selected" : ""} ${cardCount ? "has-cards" : ""}" data-id="${group.id}" style="left:${group.x}px;top:${group.y}px;width:${group.w}px;height:${group.h}px;--group-color:${group.color};--group-radius:${radius};--float-delay:${delay}ms;--float-rotate:${rotate}deg">
+          <article class="group-node ${selected ? "selected" : ""} ${cardCount ? "has-cards" : ""} ${group.locked ? "locked" : ""}" data-id="${group.id}" style="left:${group.x}px;top:${group.y}px;width:${group.w}px;height:${group.h}px;--group-color:${group.color};--group-radius:${radius};--float-delay:${delay}ms;--float-rotate:${rotate}deg">
             <span class="group-label">${escapeHtml(group.title || "グループ")}</span>
+            ${group.locked ? '<span class="lock-badge">LOCK</span>' : ""}
             <span class="resize-handle" data-resize="${group.id}"></span>
           </article>
         `;
@@ -448,8 +490,9 @@
         const delay = -(seed % 3600);
         const rotate = ((seed % 11) - 5) * 0.32;
         return `
-          <article class="note-card ${selected ? "selected" : ""} ${primaryGroup ? "grouped" : ""}" data-id="${note.id}" style="left:${note.x}px;top:${note.y}px;--card-color:${primaryGroup?.color || "#67e8f9"};--float-delay:${delay}ms;--float-rotate:${rotate}deg">
+          <article class="note-card ${selected ? "selected" : ""} ${primaryGroup ? "grouped" : ""} ${note.locked ? "locked" : ""}" data-id="${note.id}" style="left:${note.x}px;top:${note.y}px;--card-color:${primaryGroup?.color || "#67e8f9"};--float-delay:${delay}ms;--float-rotate:${rotate}deg">
             <h2 class="note-title">${escapeHtml(title || "無題")}</h2>
+            ${note.locked ? '<span class="lock-badge">LOCK</span>' : ""}
           </article>
         `;
       })
@@ -512,8 +555,10 @@
       completeConnectionDraft(type, id);
       return false;
     }
+    const entity = findEntity(type, id);
+    const movementBlocked = isEntityMovementBlocked(entity);
     if (usesMobileEntityMode(event)) {
-      if (isSelectedEntity(type, id)) {
+      if (!movementBlocked && isSelectedEntity(type, id)) {
         event.preventDefault();
         event.stopPropagation();
         selectEntity(type, id, { render: false });
@@ -527,6 +572,10 @@
     event.preventDefault();
     event.stopPropagation();
     selectEntity(type, id, { render: false });
+    if (movementBlocked) {
+      if (app.settings.movementLocked) beginViewportInteraction(event);
+      return false;
+    }
     return true;
   }
 
@@ -567,24 +616,36 @@
           <textarea id="inspect-note-body">${escapeHtml(note.body || "")}</textarea>
         </div>
         <div class="pill">${groupNames.length ? escapeHtml(groupNames.join(" / ")) : "未分類"}</div>
+        <button id="inspect-note-lock" class="soft-button lock-control ${note.locked ? "active" : ""}" type="button">
+          ${note.locked ? "位置ロック中" : "位置をロック"}
+        </button>
         ${renderConnectionControls("note", note.id)}
         <div class="button-row">
           <button id="inspect-note-trash" class="danger-button" type="button">ゴミ箱へ</button>
         </div>
       </div>
     `;
+    let noteEditCaptured = false;
+    const captureNoteEdit = () => {
+      if (noteEditCaptured) return;
+      captureHistory();
+      noteEditCaptured = true;
+    };
     $("#inspect-note-title").addEventListener("input", (event) => {
+      captureNoteEdit();
       note.title = event.target.value;
       touchEntity("note", note.id);
       renderCards();
     });
     $("#inspect-note-body").addEventListener("input", (event) => {
+      captureNoteEdit();
       note.body = event.target.value;
       note.localDate = localDate(note.createdAt);
       touchEntity("note", note.id);
       renderCards();
     });
     bindConnectionControls("note", note.id);
+    $("#inspect-note-lock").addEventListener("click", () => toggleEntityLock("note", note.id));
     $("[data-close-inspector]").addEventListener("click", clearSelection);
     $("#inspect-note-trash").addEventListener("click", () => moveToTrash("note", note.id));
   }
@@ -606,24 +667,36 @@
             ${GROUP_COLORS.map((color) => `<option value="${color}" ${group.color === color ? "selected" : ""}>${color}</option>`).join("")}
           </select>
         </div>
+        <button id="inspect-group-lock" class="soft-button lock-control ${group.locked ? "active" : ""}" type="button">
+          ${group.locked ? "位置ロック中" : "位置をロック"}
+        </button>
         ${renderConnectionControls("group", group.id)}
         <div class="button-row">
           <button id="inspect-group-trash" class="danger-button" type="button">ゴミ箱へ</button>
         </div>
       </div>
     `;
+    let groupEditCaptured = false;
+    const captureGroupEdit = () => {
+      if (groupEditCaptured) return;
+      captureHistory();
+      groupEditCaptured = true;
+    };
     $("#inspect-group-title").addEventListener("input", (event) => {
+      captureGroupEdit();
       group.title = event.target.value;
       touchEntity("group", group.id);
       renderGroups();
     });
     $("#inspect-group-color").addEventListener("change", (event) => {
+      captureHistory();
       group.color = event.target.value;
       touchEntity("group", group.id);
       renderGroups();
       renderCards();
     });
     bindConnectionControls("group", group.id);
+    $("#inspect-group-lock").addEventListener("click", () => toggleEntityLock("group", group.id));
     $("[data-close-inspector]").addEventListener("click", clearSelection);
     $("#inspect-group-trash").addEventListener("click", () => moveToTrash("group", group.id));
   }
@@ -658,11 +731,13 @@
       </div>
     `;
     $("#inspect-connection-kind").addEventListener("change", (event) => {
+      captureHistory();
       connection.kind = event.target.value;
       touchEntity("connection", connection.id);
       renderConnections();
     });
     $("#inspect-connection-style").addEventListener("change", (event) => {
+      captureHistory();
       connection.style = event.target.value;
       touchEntity("connection", connection.id);
       renderConnections();
@@ -697,6 +772,7 @@
   }
 
   function createNote(body) {
+    captureHistory();
     const center = screenToWorld(window.innerWidth / 2, window.innerHeight / 2);
     const timestamp = nowIso();
     const note = {
@@ -720,6 +796,7 @@
   }
 
   function createGroup() {
+    captureHistory();
     const center = screenToWorld(window.innerWidth / 2, window.innerHeight / 2);
     const timestamp = nowIso();
     const group = {
@@ -920,6 +997,7 @@
   function cycleConnectionStyle(id) {
     const connection = findConnection(id);
     if (!connection) return;
+    captureHistory();
     const index = CONNECTION_STYLES.indexOf(connection.style);
     connection.style = CONNECTION_STYLES[(index + 1) % CONNECTION_STYLES.length];
     touchEntity("connection", id);
@@ -998,6 +1076,7 @@
       toast("既に接続されています");
       return;
     }
+    captureHistory();
     const timestamp = nowIso();
     const connection = {
       id: uid("connection"),
@@ -1066,7 +1145,9 @@
     const group = type === "group" || type === "resize-group" ? findGroup(id) : null;
     const target = note || group;
     if (!target) return;
+    if (isEntityMovementBlocked(target)) return;
     const node = event.currentTarget;
+    const historySnapshot = makeHistorySnapshot();
     try {
       node.setPointerCapture(event.pointerId);
     } catch {
@@ -1115,6 +1196,7 @@
       node.classList.remove("dragging");
       clearDropHighlights();
       if (start.moved) {
+        rememberHistorySnapshot(historySnapshot);
         if (type === "note") {
           updateNoteGroups(note);
           fitGroupsToCards([...start.groupIds, ...(note.groupIds || [])], { markTouched: true });
@@ -1151,6 +1233,7 @@
     ids.forEach((id) => {
       const group = findGroup(id);
       if (!group || !isVisibleEntity(group)) return;
+      if (group.locked) return;
       const notes = getGroupNotes(id);
       if (!notes.length) return;
       const bounds = notes.map(noteBounds);
@@ -1286,6 +1369,121 @@
     els.panelToggle.textContent = app.panelsCollapsed ? "▥" : "▤";
   }
 
+  function makeHistorySnapshot() {
+    return {
+      data: sanitizeData(app.data),
+      selected: app.selected ? { ...app.selected } : null,
+      movementLocked: Boolean(app.settings.movementLocked)
+    };
+  }
+
+  function captureHistory() {
+    if (app.history.restoring || !app.data) return;
+    rememberHistorySnapshot(makeHistorySnapshot());
+  }
+
+  function rememberHistorySnapshot(snapshot) {
+    if (app.history.restoring || !snapshot) return;
+    app.history.undo.push(snapshot);
+    if (app.history.undo.length > 80) app.history.undo.shift();
+    app.history.redo = [];
+    updateUndoRedoButtons();
+  }
+
+  function restoreHistorySnapshot(snapshot) {
+    app.history.restoring = true;
+    app.data = normalizeData(snapshot.data || createEmptyData());
+    app.selected = validateSelection(snapshot.selected);
+    app.settings.movementLocked = Boolean(snapshot.movementLocked);
+    app.history.restoring = false;
+    markRestoredDataDirty();
+    applyMovementLockState();
+    renderAll();
+    persistState();
+    if (app.settings.role === "phone") scheduleDriveSave();
+    updateUndoRedoButtons();
+  }
+
+  function undo() {
+    const snapshot = app.history.undo.pop();
+    if (!snapshot) return;
+    app.history.redo.push(makeHistorySnapshot());
+    restoreHistorySnapshot(snapshot);
+  }
+
+  function redo() {
+    const snapshot = app.history.redo.pop();
+    if (!snapshot) return;
+    app.history.undo.push(makeHistorySnapshot());
+    restoreHistorySnapshot(snapshot);
+  }
+
+  function updateUndoRedoButtons() {
+    if (!els.undoAction || !els.redoAction) return;
+    els.undoAction.disabled = !app.history.undo.length;
+    els.redoAction.disabled = !app.history.redo.length;
+  }
+
+  function validateSelection(selection) {
+    const entity = selection ? findEntity(selection.type, selection.id) : null;
+    if (!entity || !isVisibleEntity(entity)) return null;
+    return { type: selection.type, id: selection.id };
+  }
+
+  function markRestoredDataDirty() {
+    if (app.settings.role !== "pc") return;
+    app.dirty.notes = Object.fromEntries(app.data.notes.map((note) => [note.id, note.updatedAt || nowIso()]));
+    app.dirty.groups = Object.fromEntries(app.data.groups.map((group) => [group.id, group.updatedAt || nowIso()]));
+    app.dirty.connections = Object.fromEntries(app.data.connections.map((connection) => [connection.id, connection.updatedAt || nowIso()]));
+  }
+
+  function onKeyDown(event) {
+    const key = event.key.toLowerCase();
+    const modifier = event.ctrlKey || event.metaKey;
+    if (!modifier) return;
+    if (key === "z" && event.shiftKey) {
+      event.preventDefault();
+      redo();
+      return;
+    }
+    if (key === "z") {
+      event.preventDefault();
+      undo();
+      return;
+    }
+    if (key === "y") {
+      event.preventDefault();
+      redo();
+    }
+  }
+
+  function isEntityMovementBlocked(entity) {
+    return Boolean(app.settings.movementLocked || entity?.locked);
+  }
+
+  function toggleMovementLock() {
+    captureHistory();
+    app.settings.movementLocked = !app.settings.movementLocked;
+    applyMovementLockState();
+    persistState();
+    toast(app.settings.movementLocked ? "全体の位置をロックしました" : "全体の位置ロックを解除しました");
+  }
+
+  function applyMovementLockState() {
+    els.workspace.classList.toggle("movement-locked", Boolean(app.settings.movementLocked));
+    els.movementLock.classList.toggle("active", Boolean(app.settings.movementLocked));
+    els.movementLock.setAttribute("aria-pressed", app.settings.movementLocked ? "true" : "false");
+  }
+
+  function toggleEntityLock(type, id) {
+    const entity = findEntity(type, id);
+    if (!entity) return;
+    captureHistory();
+    entity.locked = !entity.locked;
+    touchEntity(type, id);
+    renderAll();
+  }
+
   function makePinchState() {
     const points = Array.from(app.pointers.values());
     const a = points[0];
@@ -1343,6 +1541,7 @@
   function moveToTrash(type, id) {
     const entity = findEntity(type, id);
     if (!entity) return;
+    captureHistory();
     entity.trashedAt = nowIso();
     entity.updatedAt = entity.trashedAt;
     if (type === "note" || type === "group") {
@@ -1364,6 +1563,7 @@
   function restoreEntity(type, id) {
     const entity = findEntity(type, id);
     if (!entity) return;
+    captureHistory();
     entity.trashedAt = "";
     entity.updatedAt = nowIso();
     touchEntity(type, id, { alreadyUpdated: true });
@@ -1374,6 +1574,7 @@
   function deleteForever(type, id) {
     const entity = findEntity(type, id);
     if (!entity) return;
+    captureHistory();
     entity.deletedAt = nowIso();
     entity.trashedAt = entity.trashedAt || entity.deletedAt;
     entity.updatedAt = entity.deletedAt;
