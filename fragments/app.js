@@ -9,7 +9,7 @@
   const DRIVE_FILE = "today-fragments.json";
   const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
   const GROUP_COLORS = ["#67e8f9", "#ff7aa8", "#ffd166", "#8ff0c4", "#a78bfa"];
-  const APP_VERSION = "10";
+  const APP_VERSION = "11";
 
   const els = {};
   const loadedScripts = new Map();
@@ -975,7 +975,11 @@
         ${phoneFields}
         <div class="button-row">
           <button id="settings-save" class="primary-button" type="button">保存</button>
-          ${app.settings.role === "phone" ? '<button id="settings-drive-connect" class="soft-button" type="button">Drive接続</button>' : '<button id="settings-github-load" class="soft-button" type="button">GitHubから再読込</button>'}
+          ${
+            app.settings.role === "phone"
+              ? '<button id="settings-drive-connect" class="soft-button" type="button">Drive接続</button><button id="settings-github-test" class="soft-button" type="button">GitHub確認</button>'
+              : '<button id="settings-github-load" class="soft-button" type="button">GitHubから再読込</button>'
+          }
         </div>
         <p id="settings-status" class="status-line"></p>
       </div>
@@ -989,6 +993,17 @@
       readSettingsModal();
       await persistState();
       await connectGoogleDrive($("#settings-status"));
+    });
+    $("#settings-github-test")?.addEventListener("click", async () => {
+      readSettingsModal();
+      const status = $("#settings-status");
+      try {
+        status.textContent = "GitHub確認中";
+        status.textContent = await testGithubConnection();
+        await persistState();
+      } catch (error) {
+        status.textContent = error.message || "GitHub確認に失敗しました";
+      }
     });
     $("#settings-github-load")?.addEventListener("click", async () => {
       readSettingsModal();
@@ -1255,6 +1270,37 @@
     return json.sha || "";
   }
 
+  async function testGithubConnection() {
+    requireGithubSettings(true);
+    const g = app.settings.github;
+    const branch = g.branch || "main";
+    const checked = `${g.owner}/${g.repo} / ${branch} / ${g.path}`;
+
+    const repoResponse = await fetch(githubRepoApiUrl(), {
+      headers: githubHeaders(true)
+    });
+    if (!repoResponse.ok) throw await makeGithubError(repoResponse);
+
+    const branchResponse = await fetch(`${githubRepoApiUrl()}/branches/${encodeURIComponent(branch)}`, {
+      headers: githubHeaders(true)
+    });
+    if (!branchResponse.ok) {
+      if (branchResponse.status === 404) {
+        throw new Error(`GitHubリポジトリは見えますが、ブランチ「${branch}」が見つかりません。\n確認した設定: ${checked}`);
+      }
+      throw await makeGithubError(branchResponse);
+    }
+
+    const fileResponse = await fetch(`${githubApiUrl()}?ref=${encodeURIComponent(branch)}`, {
+      headers: githubHeaders(true)
+    });
+    if (fileResponse.ok) return `GitHub確認OK\n確認した設定: ${checked}\n同期ファイルも見つかりました`;
+    if (fileResponse.status === 404) {
+      return `GitHub確認OK\n確認した設定: ${checked}\n同期ファイルはまだありません。次のGitHub同期で作成できます`;
+    }
+    throw await makeGithubError(fileResponse);
+  }
+
   async function makeGithubError(response) {
     let detail = "";
     try {
@@ -1274,7 +1320,17 @@
       );
     }
     if (response.status === 401 || response.status === 403) {
-      return new Error("GitHub認証に失敗しました。トークン、組織承認、Contents: Read and write 権限を確認してください。");
+      return new Error(
+        [
+          "GitHub認証に失敗しました。",
+          detail ? `GitHubからの理由: ${detail}` : "",
+          "スマホの設定に入っているトークン文字列、対象リポジトリ、ブランチを確認してください。",
+          "Fine-grained tokenは、対象リポジトリと Contents: Read and write 権限が必要です。",
+          "会社/組織リポジトリの場合は、組織承認が必要なことがあります。"
+        ]
+          .filter(Boolean)
+          .join("\n")
+      );
     }
     return new Error(`GitHub ${response.status}${detail ? `: ${detail}` : ""}`);
   }
@@ -1282,6 +1338,11 @@
   function githubApiUrl() {
     const g = app.settings.github;
     return `https://api.github.com/repos/${encodeURIComponent(g.owner)}/${encodeURIComponent(g.repo)}/contents/${g.path.split("/").map(encodeURIComponent).join("/")}`;
+  }
+
+  function githubRepoApiUrl() {
+    const g = app.settings.github;
+    return `https://api.github.com/repos/${encodeURIComponent(g.owner)}/${encodeURIComponent(g.repo)}`;
   }
 
   function githubHeaders(needsToken) {

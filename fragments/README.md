@@ -95,6 +95,29 @@ GitHubトークンはFine-grained personal access tokenを推奨します。
 - GitHubユーザー/組織: `qualiarts`
 - リポジトリ: `today-fragments`
 
+### GitHub認証に失敗したとき
+
+日を跨いだ直後に急に出た場合でも、トークン設定画面で有効期限なしになっているなら、アプリ側に入っているGitHub設定かトークン文字列がずれている可能性が高いです。
+
+必要ならGitHubで新しいFine-grained personal access tokenを作り直し、スマホ側の設定に入れ直してください。
+
+- Resource owner: GitHub Pagesを置いているユーザー/組織
+- Repository access: `fragments`
+- Repository permissions: `Contents` を `Read and write`
+- Expiration: 期限切れしにくい日付。組織ポリシーで上限がある場合はそれに従う
+- 会社/組織リポジトリの場合: tokenが `pending` になっていないか、組織承認が必要ではないか確認
+
+`ruhmk/mypage` の `open_page` ブランチ内に `fragments` フォルダを置いている場合、アプリのGitHub設定は次の形です。
+
+- GitHubユーザー/組織: `ruhmk`
+- リポジトリ: `mypage`
+- ブランチ: `open_page`
+- 同期ファイル: `fragments/daily-fragments-sync/data.enc.json`
+
+`fragments` はリポジトリ名ではなくフォルダ名なので、「同期ファイル」の先頭に入れます。
+
+設定画面の「GitHub確認」を押すと、リポジトリ、ブランチ、同期ファイルの順に確認します。
+
 ## GitHub Pagesへの配置
 
 このフォルダのファイルをGitHub Pagesで公開するリポジトリへ置きます。
