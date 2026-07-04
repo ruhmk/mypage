@@ -1,4 +1,4 @@
-window.FAMILY_CALENDAR_UPDATED_AT = "2026-07-03T00:40:26.107Z";
+window.FAMILY_CALENDAR_UPDATED_AT = "2026-07-04T00:40:26.204Z";
 window.FAMILY_CALENDAR_EVENTS = [
   {
     "id": "work-QiuN5ev4OOzmdVq7oE",
@@ -955,6 +955,15 @@ window.FAMILY_CALENDAR_EVENTS = [
     "allDay": false
   },
   {
+    "id": "work-dUExXTR_8pGMe6MAIv",
+    "title": "仕事",
+    "start": "2026-07-08T04:30:00.000Z",
+    "end": "2026-07-08T05:00:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": false
+  },
+  {
     "id": "work-h1dhJOFmxuj05GCa6I",
     "title": "仕事",
     "start": "2026-07-08T06:30:00.000Z",
@@ -977,6 +986,15 @@ window.FAMILY_CALENDAR_EVENTS = [
     "title": "仕事",
     "start": "2026-07-08T08:00:00.000Z",
     "end": "2026-07-08T08:30:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": false
+  },
+  {
+    "id": "work-BOspV76YiHNrG50p_1",
+    "title": "仕事",
+    "start": "2026-07-08T09:00:00.000Z",
+    "end": "2026-07-08T10:00:00.000Z",
     "source": "work",
     "note": "",
     "allDay": false
@@ -2399,6 +2417,42 @@ window.FAMILY_CALENDAR_EVENTS = [
     "title": "仕事",
     "start": "2026-09-03T09:00:00.000Z",
     "end": "2026-09-03T09:30:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": false
+  },
+  {
+    "id": "work-fm2XqCtxo9xAB6xWLC",
+    "title": "仕事",
+    "start": "2026-09-04T01:20:00.000Z",
+    "end": "2026-09-04T01:30:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": false
+  },
+  {
+    "id": "work-vkNmflbCEMThDaPXoq",
+    "title": "仕事",
+    "start": "2026-09-04T05:30:00.000Z",
+    "end": "2026-09-04T06:00:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": false
+  },
+  {
+    "id": "work-ivhWJn492-s_AM34cv",
+    "title": "仕事",
+    "start": "2026-09-04T07:00:00.000Z",
+    "end": "2026-09-04T07:30:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": false
+  },
+  {
+    "id": "work-6hJWUdhBG09x_qrWGY",
+    "title": "仕事",
+    "start": "2026-09-04T07:00:00.000Z",
+    "end": "2026-09-04T07:30:00.000Z",
     "source": "work",
     "note": "",
     "allDay": false
