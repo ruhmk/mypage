@@ -280,6 +280,20 @@ html.setup-mode .setup-screen {
   overflow: hidden;
   background: #07090f;
   touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -webkit-user-drag: none;
+  -webkit-touch-callout: none;
+}
+
+body.dragging-entity,
+body.dragging-entity .workspace,
+body.dragging-entity .workspace * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -webkit-user-drag: none !important;
 }
 
 .workspace.connecting .note-card,
@@ -713,7 +727,9 @@ html.setup-mode .setup-screen {
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
+  -moz-user-select: none;
   -webkit-user-drag: none;
+  -webkit-touch-callout: none;
   transition:
     translate var(--fast),
     left 180ms ease,
@@ -765,7 +781,9 @@ html.setup-mode .setup-screen {
   pointer-events: none;
   user-select: none;
   -webkit-user-select: none;
+  -moz-user-select: none;
   -webkit-user-drag: none;
+  -webkit-touch-callout: none;
 }
 
 .resize-handle {
@@ -805,7 +823,9 @@ html.setup-mode .setup-screen {
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
+  -moz-user-select: none;
   -webkit-user-drag: none;
+  -webkit-touch-callout: none;
   transition:
     translate var(--fast),
     transform var(--fast),
@@ -888,7 +908,9 @@ html.setup-mode .setup-screen {
   pointer-events: none;
   user-select: none;
   -webkit-user-select: none;
+  -moz-user-select: none;
   -webkit-user-drag: none;
+  -webkit-touch-callout: none;
 }
 
 .note-body {

@@ -9,7 +9,7 @@
   const DRIVE_FILE = "today-fragments.json";
   const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
   const GROUP_COLORS = ["#67e8f9", "#ff7aa8", "#ffd166", "#8ff0c4", "#a78bfa"];
-  const APP_VERSION = "21";
+  const APP_VERSION = "22";
   const NOTE_CARD_WIDTH = 210;
   const NOTE_CARD_HEIGHT = 62;
   const GROUP_FIT_PADDING = 52;
@@ -397,7 +397,10 @@
     els.workspace.addEventListener("contextmenu", (event) => {
       if (event.target.closest?.(".note-card, .group-node, .connection-path, .line-layer")) event.preventDefault();
     });
-    els.workspace.addEventListener("dragstart", (event) => event.preventDefault());
+    document.addEventListener("dragstart", guardNativeWorkspaceDrag, true);
+    document.addEventListener("selectstart", guardWorkspaceSelection, true);
+    document.addEventListener("drop", guardNativeWorkspaceDrag, true);
+    document.addEventListener("dragover", guardNativeWorkspaceDrag, true);
     els.workspace.addEventListener("wheel", onWheel, { passive: false });
     els.workspace.addEventListener("pointerdown", onWorkspacePointerDown);
     window.addEventListener("pointermove", onWorkspacePointerMove, true);
@@ -490,8 +493,8 @@
         const delay = -(seed % 4200);
         const rotate = ((seed % 9) - 4) * 0.26;
         return `
-          <article class="group-node ${selected ? "selected" : ""} ${cardCount ? "has-cards" : ""} ${group.locked ? "locked" : ""}" data-id="${group.id}" style="left:${group.x}px;top:${group.y}px;width:${group.w}px;height:${group.h}px;--group-color:${group.color};--group-radius:${radius};--float-delay:${delay}ms;--float-rotate:${rotate}deg">
-            <span class="group-label">${escapeHtml(group.title || "グループ")}</span>
+          <article class="group-node ${selected ? "selected" : ""} ${cardCount ? "has-cards" : ""} ${group.locked ? "locked" : ""}" data-id="${group.id}" draggable="false" style="left:${group.x}px;top:${group.y}px;width:${group.w}px;height:${group.h}px;--group-color:${group.color};--group-radius:${radius};--float-delay:${delay}ms;--float-rotate:${rotate}deg">
+            <span class="group-label" draggable="false">${escapeHtml(group.title || "グループ")}</span>
             ${group.locked ? '<span class="lock-badge">LOCK</span>' : ""}
             <span class="resize-handle" data-resize="${group.id}"></span>
           </article>
@@ -519,8 +522,8 @@
         const delay = -(seed % 3600);
         const rotate = ((seed % 11) - 5) * 0.32;
         return `
-          <article class="note-card ${selected ? "selected" : ""} ${primaryGroup ? "grouped" : ""} ${note.locked ? "locked" : ""}" data-id="${note.id}" style="left:${note.x}px;top:${note.y}px;--card-color:${primaryGroup?.color || "#67e8f9"};--float-delay:${delay}ms;--float-rotate:${rotate}deg">
-            <h2 class="note-title">${escapeHtml(title || "無題")}</h2>
+          <article class="note-card ${selected ? "selected" : ""} ${primaryGroup ? "grouped" : ""} ${note.locked ? "locked" : ""}" data-id="${note.id}" draggable="false" style="left:${note.x}px;top:${note.y}px;--card-color:${primaryGroup?.color || "#67e8f9"};--float-delay:${delay}ms;--float-rotate:${rotate}deg">
+            <h2 class="note-title" draggable="false">${escapeHtml(title || "無題")}</h2>
             ${note.locked ? '<span class="lock-badge">LOCK</span>' : ""}
           </article>
         `;
@@ -606,6 +609,33 @@
       return false;
     }
     return true;
+  }
+
+  function guardNativeWorkspaceDrag(event) {
+    if (!isWorkspaceInteractionTarget(event.target)) return;
+    if (isEditableTarget(event.target)) return;
+    event.preventDefault();
+    clearTextSelection();
+  }
+
+  function guardWorkspaceSelection(event) {
+    if (!isWorkspaceInteractionTarget(event.target)) return;
+    if (isEditableTarget(event.target)) return;
+    event.preventDefault();
+    clearTextSelection();
+  }
+
+  function isWorkspaceInteractionTarget(target) {
+    return Boolean(target?.closest?.(".workspace"));
+  }
+
+  function isEditableTarget(target) {
+    return Boolean(target?.closest?.("input, textarea, select, [contenteditable='true'], .inspector, .composer, .modal-root"));
+  }
+
+  function clearTextSelection() {
+    const selection = window.getSelection?.();
+    if (selection && !selection.isCollapsed) selection.removeAllRanges();
   }
 
   function renderInspector() {
@@ -1172,6 +1202,7 @@
   function beginEntityDrag(event, type, id) {
     finishActiveEntityDrag();
     resetViewportInteraction();
+    clearTextSelection();
     const note = type === "note" ? findNote(id) : null;
     const group = type === "group" || type === "resize-group" ? findGroup(id) : null;
     const target = note || group;
@@ -1185,6 +1216,7 @@
       // Some mobile browsers are picky about pointer capture; window listeners still keep drag alive.
     }
     node.classList.add("dragging");
+    document.body.classList.add("dragging-entity");
     const start = {
       pointerId: event.pointerId,
       type,
@@ -1252,6 +1284,7 @@
         // Ignore browsers that already released capture.
       }
       node.classList.remove("dragging");
+      document.body.classList.remove("dragging-entity");
       clearDropHighlights();
       if (start.moved) {
         rememberHistorySnapshot(historySnapshot);

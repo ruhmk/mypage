@@ -1,16 +1,16 @@
-const CACHE_NAME = "today-fragments-v21";
+const CACHE_NAME = "today-fragments-v22";
 const CORE_ASSETS = [
   "./",
   "./index.html",
   "./styles.css",
-  "./styles.css?v=21",
+  "./styles.css?v=22",
   "./app.js",
-  "./app.js?v=21",
+  "./app.js?v=22",
   "./manifest.webmanifest",
   "./vendor/qrcode-generator.js",
-  "./vendor/qrcode-generator.js?v=21",
+  "./vendor/qrcode-generator.js?v=22",
   "./vendor/jsQR.js",
-  "./vendor/jsQR.js?v=21",
+  "./vendor/jsQR.js?v=22",
   "./icons/icon-192.svg",
   "./icons/icon-512.svg"
 ];
