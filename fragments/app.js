@@ -9,7 +9,7 @@
   const DRIVE_FILE = "today-fragments.json";
   const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
   const GROUP_COLORS = ["#67e8f9", "#ff7aa8", "#ffd166", "#8ff0c4", "#a78bfa"];
-  const APP_VERSION = "22";
+  const APP_VERSION = "23";
   const NOTE_CARD_WIDTH = 210;
   const NOTE_CARD_HEIGHT = 62;
   const GROUP_FIT_PADDING = 52;
@@ -99,6 +99,7 @@
   async function loadState() {
     const stored = await idbGet(STATE_KEY).catch(() => null);
     app.settings = mergeSettings(stored?.settings || {});
+    app.panelsCollapsed = Boolean(app.settings.panelsCollapsed);
     app.data = normalizeData(stored?.data || createEmptyData());
     app.dirty = { notes: {}, groups: {}, connections: {}, ...(stored?.dirty || {}) };
     if (!app.settings.deviceId) app.settings.deviceId = uid("device");
@@ -171,6 +172,7 @@
       savePassword: true,
       syncPassword: "",
       movementLocked: false,
+      panelsCollapsed: false,
       drive: {
         clientId: "",
         folderName: DRIVE_FOLDER,
@@ -443,8 +445,8 @@
     const colors = ["#aaf5ff", "#67e8f9", "#ff7aa8", "#ffd166", "#8ff0c4", "#a78bfa"];
     const gradients = Array.from({ length: count }, (_, index) => {
       const accent = index % 7 === 0;
-      const size = mobile ? randomBetween(1.7, accent ? 4.4 : 3.0) : randomBetween(1.9, accent ? 5.2 : 3.5);
-      const fade = size * (mobile ? 2.2 : 2.6);
+      const size = mobile ? randomBetween(1.15, accent ? 3.2 : 2.2) : randomBetween(1.35, accent ? 3.9 : 2.7);
+      const fade = size * (mobile ? 2.05 : 2.35);
       const opacity = mobile ? randomBetween(0.34, 0.66) : randomBetween(0.42, 0.78);
       const color = colors[Math.floor(Math.random() * colors.length)];
       const x = randomBetween(18, tileSize - 18);
@@ -455,7 +457,7 @@
     els.particleLayer.style.setProperty("--particle-tile-size", `${tileSize}px`);
     els.particleLayer.style.setProperty("--particle-image", gradients.join(","));
     els.particleLayer.style.setProperty("--particle-opacity", mobile ? "0.7" : "0.82");
-    els.particleLayer.style.setProperty("--particle-duration", mobile ? "42s" : "34s");
+    els.particleLayer.style.setProperty("--particle-duration", mobile ? "28s" : "22s");
     els.particleLayer.style.setProperty("--particle-drift-x", mobile ? "18px" : "28px");
     els.particleLayer.style.setProperty("--particle-drift-y", mobile ? "-12px" : "-18px");
     els.particleLayer.style.setProperty("--particle-return-x", mobile ? "-8px" : "-14px");
@@ -605,7 +607,7 @@
     event.stopPropagation();
     selectEntity(type, id, { render: false });
     if (movementBlocked) {
-      if (app.settings.movementLocked) beginViewportInteraction(event);
+      beginViewportInteraction(event, { type, id });
       return false;
     }
     return true;
@@ -1032,10 +1034,9 @@
 
   function wavyPath(from, to) {
     const controls = curvedControls(from, to);
-    const dx = to.x - from.x;
-    const dy = to.y - from.y;
-    const length = Math.hypot(dx, dy) || 1;
-    const steps = Math.max(8, Math.ceil(length / 18));
+    const length = Math.hypot(to.x - from.x, to.y - from.y) || 1;
+    const steps = Math.max(18, Math.ceil(length / 10));
+    const cycles = Math.max(2, Math.round(length / 86));
     const points = [];
     for (let i = 0; i <= steps; i += 1) {
       const t = i / steps;
@@ -1044,13 +1045,31 @@
       const tangentLength = Math.hypot(tangent.x, tangent.y) || 1;
       const nx = -tangent.y / tangentLength;
       const ny = tangent.x / tangentLength;
-      const wave = Math.sin(t * Math.PI * 2 * Math.max(2, Math.round(length / 68))) * 7;
+      const taper = Math.sin(Math.PI * t);
+      const wave = Math.sin(t * Math.PI * 2 * cycles) * 5.8 * taper;
       points.push({
-        x: Math.round(base.x + nx * wave),
-        y: Math.round(base.y + ny * wave)
+        x: base.x + nx * wave,
+        y: base.y + ny * wave
       });
     }
-    return points.map((point, index) => `${index ? "L" : "M"} ${point.x} ${point.y}`).join(" ");
+    if (points.length < 3) return `M ${formatCoord(from.x)} ${formatCoord(from.y)} L ${formatCoord(to.x)} ${formatCoord(to.y)}`;
+    const segments = [`M ${formatCoord(points[0].x)} ${formatCoord(points[0].y)}`];
+    for (let i = 1; i < points.length - 1; i += 1) {
+      const current = points[i];
+      const next = points[i + 1];
+      const mid = {
+        x: (current.x + next.x) / 2,
+        y: (current.y + next.y) / 2
+      };
+      segments.push(`Q ${formatCoord(current.x)} ${formatCoord(current.y)} ${formatCoord(mid.x)} ${formatCoord(mid.y)}`);
+    }
+    const last = points[points.length - 1];
+    segments.push(`T ${formatCoord(last.x)} ${formatCoord(last.y)}`);
+    return segments.join(" ");
+  }
+
+  function formatCoord(value) {
+    return Number(value.toFixed(2));
   }
 
   function cycleConnectionStyle(id) {
@@ -1492,7 +1511,9 @@
     app.lastEntityTap = { type, id, time: now, x: event.clientX, y: event.clientY };
     if (!isDoubleTap) return;
     app.panelsCollapsed = false;
+    app.settings.panelsCollapsed = false;
     applyPanelState();
+    persistState();
     selectEntity(type, id);
   }
 
@@ -1502,7 +1523,9 @@
 
   function togglePanels() {
     app.panelsCollapsed = !app.panelsCollapsed;
+    app.settings.panelsCollapsed = app.panelsCollapsed;
     applyPanelState();
+    persistState();
   }
 
   function applyPanelState() {

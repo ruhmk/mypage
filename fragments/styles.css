@@ -323,7 +323,7 @@ body.dragging-entity .workspace * {
   --particle-tile-size: 400px;
   --particle-image: none;
   --particle-opacity: 0.8;
-  --particle-duration: 34s;
+  --particle-duration: 22s;
   --particle-pan-x: 0px;
   --particle-pan-y: 0px;
   --particle-drift-x: 28px;
@@ -429,7 +429,7 @@ body.dragging-entity .workspace * {
 }
 
 .connection-flow.wavy {
-  stroke-dasharray: 8 18;
+  display: none;
 }
 
 .connection-node:hover .connection-main,
