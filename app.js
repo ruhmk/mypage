@@ -1,3011 +1,3170 @@
-const STORAGE_KEY = "knowledge-map-canvas-state-v1";
-const MAPS_KEY = "knowledge-map-canvas-maps-v1";
-const WORLD = { width: 3200, height: 2200, cx: 1600, cy: 1100 };
-const NODE_WIDTH = 238;
-const ROOT_WIDTH = 250;
-const DEFAULT_VERTICAL_GAP = 26;
-const DEFAULT_HORIZONTAL_GAP = 452;
-const DEFAULT_SNAP_STEP = 32;
-const LEGACY_DEFAULT_VERTICAL_GAP = 28;
-const LEGACY_DEFAULT_HORIZONTAL_GAP = 260;
-const ANIMATION_MS = 80;
-const COLLISION_GAP = 18;
-const PNG_EXPORT_PADDING = 160;
-const PNG_EXPORT_MAX_SIDE = 16384;
-const PNG_EXPORT_MAX_PIXELS = 90000000;
-const LAYER_Y_AXIS_GAP = 500;
-const VIEW_PERSPECTIVE = 4200;
-const BRANCH_COLORS = [
-  "#2f80ed",
-  "#e24a68",
-  "#0e9f6e",
-  "#b7791f",
-  "#7c3aed",
-  "#008a9a",
-  "#d14375",
-  "#3f7f2d",
-];
-const NODE_TYPES = {
-  idea: { label: "要点", icon: "●" },
-  task: { label: "タスク", icon: "✓" },
-  decision: { label: "決定", icon: "◆" },
-  risk: { label: "注意", icon: "!" },
-  question: { label: "問い", icon: "?" },
-};
-const RELATION_TYPES = {
-  normal: { label: "通常" },
-  note: { label: "補足" },
-  dependency: { label: "依存" },
-  risk: { label: "注意" },
-};
+(() => {
+  "use strict";
 
-const sampleTree = {
-  id: "root",
-  text: "Knowledge Map Canvas",
-  collapsed: false,
-  children: [
-    {
-      id: "capture",
-      text: "情報を取り込む",
-      collapsed: false,
-      children: [
-        { id: "capture-text", text: "文章やメモを貼り付ける", children: [] },
-        { id: "capture-outline", text: "アウトライン形式で整理", children: [] },
-        { id: "capture-json", text: "JSONとして保存できる", children: [] },
-      ],
-    },
-    {
-      id: "explore",
-      text: "動的に読む",
-      collapsed: false,
-      children: [
-        { id: "explore-collapse", text: "枝を開閉して粒度を変える", children: [] },
-        { id: "explore-search", text: "検索で関係ノードを強調", children: [] },
-        { id: "explore-zoom", text: "ズームとパンで全体を見る", children: [] },
-      ],
-    },
-    {
-      id: "edit",
-      text: "その場で編集",
-      collapsed: false,
-      children: [
-        { id: "edit-title", text: "ノード内の文字を直接変更", children: [] },
-        { id: "edit-add", text: "子ノードや隣ノードを追加", children: [] },
-        { id: "edit-color", text: "枝ごとに色を自動設定", children: [] },
-      ],
-    },
-  ],
-};
+  const DB_NAME = "today-fragments-db";
+  const DB_VERSION = 1;
+  const STATE_KEY = "today-fragments-state-v1";
+  const GITHUB_DEFAULT_PATH = "daily-fragments-sync/data.enc.json";
+  const DRIVE_FOLDER = "Today Fragments";
+  const DRIVE_FILE = "today-fragments.json";
+  const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+  const GROUP_COLORS = ["#67e8f9", "#ff7aa8", "#ffd166", "#8ff0c4", "#a78bfa"];
+  const APP_VERSION = "21";
+  const NOTE_CARD_WIDTH = 210;
+  const NOTE_CARD_HEIGHT = 62;
+  const GROUP_FIT_PADDING = 52;
+  const CONNECTION_STYLES = ["solid", "dotted", "dashed", "wavy"];
+  const CONNECTION_KINDS = [
+    { id: "related", label: "関連", color: "#67e8f9" },
+    { id: "cause", label: "原因", color: "#ffd166" }
+  ];
 
-const initialLibrary = loadLibrary();
-const initialSettings = normalizeSettings(initialLibrary.active.settings);
-
-const state = {
-  tree: clone(initialLibrary.active.tree),
-  mapId: initialLibrary.active.id,
-  mapName: initialLibrary.active.name,
-  maps: initialLibrary.maps,
-  selectedId: "root",
-  zoom: 0.86,
-  pan: { x: 0, y: 0 },
-  maxDepth: initialSettings.maxDepth,
-  horizontalSpacing: initialSettings.horizontalSpacing,
-  verticalSpacing: initialSettings.verticalSpacing,
-  snapStep: initialSettings.snapStep,
-  search: "",
-  flashId: null,
-  removingId: null,
-  isDraggingNode: false,
-  isLayer3d: false,
-  view3d: { yaw: -8, pitch: 58 },
-  focusLayerDepth: 0,
-  layerFilterDepth: 0,
-  focusNodeId: "",
-  dragGuide: { x: null, y: null },
-  undoStack: [],
-  redoStack: [],
-  positions: new Map(),
-  visibleIds: new Set(),
-  renderedIds: new Set(),
-  edgeList: [],
-};
-
-let removeTimer = null;
-let activeNodeDrag = null;
-let viewBeforeMapMaximize = null;
-
-const els = {
-  viewport: document.getElementById("canvasViewport"),
-  world: document.getElementById("canvasWorld"),
-  view: document.getElementById("canvasView"),
-  floorLayer: document.getElementById("floorLayer"),
-  edgeLayer: document.getElementById("edgeLayer"),
-  edge3dLayer: document.getElementById("edge3dLayer"),
-  nodeLayer: document.getElementById("nodeLayer"),
-  outlineInput: document.getElementById("outlineInput"),
-  exportOutput: document.getElementById("exportOutput"),
-  selectionLabel: document.getElementById("selectionLabel"),
-  statusText: document.getElementById("statusText"),
-  searchInput: document.getElementById("searchInput"),
-  depthSlider: document.getElementById("depthSlider"),
-  horizontalSpacingSlider: document.getElementById("horizontalSpacingSlider"),
-  verticalSpacingSlider: document.getElementById("verticalSpacingSlider"),
-  snapStepSlider: document.getElementById("snapStepSlider"),
-  snapStepValue: document.getElementById("snapStepValue"),
-  mapSelect: document.getElementById("mapSelect"),
-  markdownFileInput: document.getElementById("markdownFileInput"),
-  nodeDetailTitle: document.getElementById("nodeDetailTitle"),
-  nodeNoteInput: document.getElementById("nodeNoteInput"),
-  nodeTypeSelect: document.getElementById("nodeTypeSelect"),
-  relationTypeSelect: document.getElementById("relationTypeSelect"),
-  focusNodeButton: document.getElementById("focusNodeButton"),
-  jumpSourceButton: document.getElementById("jumpSourceButton"),
-  layerList: document.getElementById("layerList"),
-  nodeContextMenu: document.getElementById("nodeContextMenu"),
-  guideLayer: document.getElementById("guideLayer"),
-  guideVertical: document.getElementById("guideVertical"),
-  guideHorizontal: document.getElementById("guideHorizontal"),
-  summaryOutput: document.getElementById("summaryOutput"),
-};
-
-function clone(value) {
-  return JSON.parse(JSON.stringify(value));
-}
-
-function makeId(prefix = "node") {
-  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
-}
-
-function normalizeNode(node) {
-  return {
-    id: node.id || makeId(),
-    text: String(node.text || "新しいノード"),
-    memo: String(node.memo || ""),
-    type: normalizeNodeType(node.type),
-    relationType: normalizeRelationType(node.relationType),
-    layer: normalizeLayer(node.layer),
-    parallelOf: typeof node.parallelOf === "string" ? node.parallelOf : "",
-    offset: normalizeOffset(node.offset),
-    collapsed: Boolean(node.collapsed),
-    children: Array.isArray(node.children) ? node.children.map(normalizeNode) : [],
+  const els = {};
+  const loadedScripts = new Map();
+  const app = {
+    data: null,
+    settings: null,
+    dirty: { notes: {}, groups: {}, connections: {} },
+    selected: null,
+    view: { x: 0, y: 0, zoom: 1 },
+    gl: null,
+    drive: { accessToken: "", saving: false, pending: false, connected: false },
+    saveTimer: 0,
+    driveTimer: 0,
+    inspectorTimer: 0,
+    pointers: new Map(),
+    panStart: null,
+    pinchStart: null,
+    qrParts: new Map(),
+    scanSession: 0,
+    dragHoverGroupId: "",
+    lastEntityTap: null,
+    entityTapCandidates: new Map(),
+    connectionDraft: null,
+    panelsCollapsed: false,
+    history: { undo: [], redo: [], restoring: false },
+    particles: { x: 0, y: 0, targetX: 0, targetY: 0, raf: 0, initialized: false },
+    activeEntityDrag: null
   };
-}
 
-function normalizeLayer(layer) {
-  const value = Number(layer);
-  return Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0;
-}
+  const $ = (selector, root = document) => root.querySelector(selector);
+  const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
+  const nowIso = () => new Date().toISOString();
+  const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
-function getNodeLayer(node) {
-  return normalizeLayer(node?.layer);
-}
+  document.addEventListener("DOMContentLoaded", init);
 
-function normalizeNodeType(type) {
-  return Object.prototype.hasOwnProperty.call(NODE_TYPES, type) ? type : "idea";
-}
-
-function normalizeRelationType(type) {
-  return Object.prototype.hasOwnProperty.call(RELATION_TYPES, type) ? type : "normal";
-}
-
-function normalizeOffset(offset) {
-  return {
-    x: Number(offset?.x) || 0,
-    y: Number(offset?.y) || 0,
-  };
-}
-
-function loadLibrary() {
-  try {
-    const savedMaps = localStorage.getItem(MAPS_KEY);
-    if (savedMaps) {
-      const parsed = JSON.parse(savedMaps);
-      const maps = Array.isArray(parsed.maps) ? parsed.maps.map(normalizeMapItem) : [];
-      if (maps.length) {
-        const active = maps.find((map) => map.id === parsed.activeId) || maps[0];
-        return { active, maps };
-      }
+  async function init() {
+    collectEls();
+    await loadState();
+    registerServiceWorker();
+    bindWorkspaceEvents();
+    if (app.settings.role) {
+      startWorkspace();
+    } else {
+      renderSetup();
     }
-
-    const legacy = localStorage.getItem(STORAGE_KEY);
-    const tree = legacy ? normalizeNode(JSON.parse(legacy)) : clone(sampleTree);
-    const active = makeMapItem("最初のマップ", tree);
-    return { active, maps: [active] };
-  } catch {
-    const active = makeMapItem("最初のマップ", clone(sampleTree));
-    return { active, maps: [active] };
   }
-}
 
-function defaultSettings() {
-  return {
-    maxDepth: 8,
-    horizontalSpacing: DEFAULT_HORIZONTAL_GAP,
-    verticalSpacing: DEFAULT_VERTICAL_GAP,
-    snapStep: DEFAULT_SNAP_STEP,
-  };
-}
-
-function normalizeSettings(settings = {}) {
-  settings = settings || {};
-  const horizontalSpacing = Number(settings.horizontalSpacing);
-  const verticalSpacing = Number(settings.verticalSpacing);
-  const snapStep = Number(settings.snapStep);
-  const shouldMigrateLegacySpacing =
-    horizontalSpacing === LEGACY_DEFAULT_HORIZONTAL_GAP && verticalSpacing === LEGACY_DEFAULT_VERTICAL_GAP;
-  return {
-    maxDepth: Number(settings.maxDepth) || 8,
-    horizontalSpacing:
-      shouldMigrateLegacySpacing || !Number.isFinite(horizontalSpacing) ? DEFAULT_HORIZONTAL_GAP : horizontalSpacing,
-    verticalSpacing:
-      shouldMigrateLegacySpacing || !Number.isFinite(verticalSpacing) ? DEFAULT_VERTICAL_GAP : verticalSpacing,
-    snapStep: Number.isFinite(snapStep) ? clamp(Math.round(snapStep), 8, 96) : DEFAULT_SNAP_STEP,
-  };
-}
-
-function currentSettings() {
-  return {
-    maxDepth: state.maxDepth,
-    horizontalSpacing: state.horizontalSpacing,
-    verticalSpacing: state.verticalSpacing,
-    snapStep: state.snapStep,
-  };
-}
-
-function makeMapItem(name, tree = clone(sampleTree), settings = defaultSettings()) {
-  return {
-    id: makeId("map"),
-    name,
-    tree: normalizeNode(tree),
-    settings: normalizeSettings(settings),
-    updatedAt: new Date().toISOString(),
-  };
-}
-
-function normalizeMapItem(item) {
-  return {
-    id: item.id || makeId("map"),
-    name: String(item.name || "無題のマップ"),
-    tree: normalizeNode(item.tree || clone(sampleTree)),
-    settings: normalizeSettings(item.settings),
-    updatedAt: item.updatedAt || new Date().toISOString(),
-  };
-}
-
-function saveTree() {
-  let current = state.maps.find((map) => map.id === state.mapId);
-  if (!current) {
-    current = makeMapItem(state.mapName || state.tree.text || "無題のマップ", state.tree);
-    current.id = state.mapId || current.id;
-    state.mapId = current.id;
-    state.maps.push(current);
+  function collectEls() {
+    els.setup = $("#setup");
+    els.workspace = $("#workspace");
+    els.canvas = $("#gl-canvas");
+    els.world = $("#world");
+    els.groupLayer = $("#group-layer");
+    els.lineLayer = $("#line-layer");
+    els.cardLayer = $("#card-layer");
+    els.roleLabel = $("#role-label");
+    els.syncStatus = $("#sync-status");
+    els.toolbar = $(".toolbar");
+    els.composer = $("#composer");
+    els.quickNote = $("#quick-note");
+    els.inspector = $("#inspector");
+    els.modalRoot = $("#modal-root");
+    els.addGroup = $("#add-group");
+    els.exportAi = $("#export-ai");
+    els.githubSync = $("#github-sync");
+    els.pcQr = $("#pc-qr");
+    els.phoneImport = $("#phone-import");
+    els.trashOpen = $("#trash-open");
+    els.settingsOpen = $("#settings-open");
+    els.panelToggle = $("#panel-toggle");
+    els.undoAction = $("#undo-action");
+    els.redoAction = $("#redo-action");
+    els.resetView = $("#reset-view");
+    els.movementLock = $("#movement-lock");
+    els.particleLayer = $(".particle-layer");
   }
-  current.name = state.mapName || state.tree.text || "無題のマップ";
-  current.tree = normalizeNode(state.tree);
-  current.settings = currentSettings();
-  current.updatedAt = new Date().toISOString();
-  localStorage.setItem(MAPS_KEY, JSON.stringify({ activeId: state.mapId, maps: state.maps }));
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state.tree));
-  updateMapSelect();
-}
 
-function captureSnapshot() {
-  return {
-    mapId: state.mapId,
-    mapName: state.mapName,
-    tree: clone(state.tree),
-    selectedId: state.selectedId,
-    maxDepth: state.maxDepth,
-    horizontalSpacing: state.horizontalSpacing,
-    verticalSpacing: state.verticalSpacing,
-    snapStep: state.snapStep,
-    search: state.search,
-  };
-}
-
-function pushHistory(snapshot = captureSnapshot()) {
-  const last = state.undoStack[state.undoStack.length - 1];
-  if (last && JSON.stringify(last) === JSON.stringify(snapshot)) return;
-  state.undoStack.push(snapshot);
-  if (state.undoStack.length > 80) state.undoStack.shift();
-  state.redoStack = [];
-}
-
-function restoreSnapshot(snapshot) {
-  window.clearTimeout(removeTimer);
-  state.mapId = snapshot.mapId;
-  state.mapName = snapshot.mapName;
-  state.tree = normalizeNode(snapshot.tree);
-  state.selectedId = snapshot.selectedId || state.tree.id;
-  const settings = normalizeSettings(snapshot);
-  state.maxDepth = settings.maxDepth;
-  state.horizontalSpacing = settings.horizontalSpacing;
-  state.verticalSpacing = settings.verticalSpacing;
-  state.snapStep = settings.snapStep;
-  state.search = snapshot.search || "";
-  state.flashId = null;
-  state.removingId = null;
-  state.isLayer3d = false;
-  state.layerFilterDepth = 0;
-  state.focusLayerDepth = 0;
-  state.focusNodeId = "";
-  state.dragGuide = { x: null, y: null };
-  document.body.classList.remove("layer-3d");
-  els.viewport.classList.remove("is-layer-3d");
-  ensureSelectedNodeVisible();
-  els.searchInput.value = state.search;
-  els.depthSlider.value = state.maxDepth;
-  els.horizontalSpacingSlider.value = state.horizontalSpacing;
-  els.verticalSpacingSlider.value = state.verticalSpacing;
-  els.snapStepSlider.value = state.snapStep;
-  updateSnapStepValue();
-  els.outlineInput.value = toMarkdown(state.tree).join("\n");
-  els.exportOutput.value = toMarkdown(state.tree).join("\n");
-  render();
-}
-
-function undo() {
-  if (!state.undoStack.length) {
-    els.statusText.textContent = "戻せる操作はありません。";
-    return;
+  async function loadState() {
+    const stored = await idbGet(STATE_KEY).catch(() => null);
+    app.settings = mergeSettings(stored?.settings || {});
+    app.data = normalizeData(stored?.data || createEmptyData());
+    app.dirty = { notes: {}, groups: {}, connections: {}, ...(stored?.dirty || {}) };
+    if (!app.settings.deviceId) app.settings.deviceId = uid("device");
+    if (!app.data.deviceId) app.data.deviceId = app.settings.deviceId;
   }
-  const current = captureSnapshot();
-  const previous = state.undoStack.pop();
-  state.redoStack.push(current);
-  restoreSnapshot(previous);
-  els.statusText.textContent = "Undoしました。";
-}
 
-function redo() {
-  if (!state.redoStack.length) {
-    els.statusText.textContent = "やり直せる操作はありません。";
-    return;
+  function createEmptyData() {
+    const timestamp = nowIso();
+    return {
+      schemaVersion: 1,
+      app: "Today Fragments",
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      deviceId: "",
+      notes: [],
+      groups: [],
+      connections: []
+    };
   }
-  const current = captureSnapshot();
-  const next = state.redoStack.pop();
-  state.undoStack.push(current);
-  restoreSnapshot(next);
-  els.statusText.textContent = "Redoしました。";
-}
 
-function findNode(id, node = state.tree, parent = null) {
-  if (node.id === id) return { node, parent };
-  for (const child of node.children) {
-    const result = findNode(id, child, node);
-    if (result) return result;
-  }
-  return null;
-}
-
-function walk(node, visitor, depth = 0, parent = null, branchIndex = 0) {
-  visitor(node, depth, parent, branchIndex);
-  node.children.forEach((child, index) => walk(child, visitor, depth + 1, node, depth === 0 ? index : branchIndex));
-}
-
-function getVisibleChildren(node, depth) {
-  if (node.collapsed || depth >= state.maxDepth) return [];
-  if (state.isLayer3d || state.layerFilterDepth === null) return node.children;
-  const currentLayer = getNodeLayer(node);
-  if (currentLayer !== state.layerFilterDepth) return node.children;
-  return node.children.filter((child) => getNodeLayer(child) === state.layerFilterDepth);
-}
-
-function measureSubtree(node, depth = 0) {
-  const children = getLayoutChildren(node, depth);
-  if (!children.length) return 86;
-  return children.reduce((sum, child) => sum + measureSubtree(child, depth + 1), 0) + Math.max(0, children.length - 1) * state.verticalSpacing;
-}
-
-function getLayoutChildren(node, depth) {
-  return getVisibleChildren(node, depth).filter((child) => !isParallelLayerChild(node, child));
-}
-
-function getParallelLayerChildren(node, depth) {
-  return getVisibleChildren(node, depth).filter((child) => isParallelLayerChild(node, child));
-}
-
-function isParallelLayerChild(parent, child) {
-  return Boolean(child.parallelOf === parent.id || getNodeLayer(parent) !== getNodeLayer(child));
-}
-
-function layoutTree() {
-  state.positions.clear();
-  state.visibleIds.clear();
-  state.edgeList = [];
-
-  const rootSpan = measureSubtree(state.tree);
-  placeNode(state.tree, WORLD.cx, WORLD.cy - rootSpan / 2 + rootSpan / 2, 0, 0, null);
-  resolveLayoutCollisions();
-  alignParallelLayerNodes();
-  if (state.isLayer3d) {
-    clampFocusLayerDepth();
-    applyLayerProjection();
-  }
-}
-
-function alignParallelLayerNodes() {
-  walk(state.tree, (node) => {
-    if (!node.parallelOf) return;
-    const pos = state.positions.get(node.id);
-    const anchor = state.positions.get(node.parallelOf);
-    if (!pos || !anchor) return;
-
-    const offset = normalizeOffset(node.offset);
-    const targetBaseX = anchor.x;
-    const targetBaseY = anchor.y;
-    const targetX = targetBaseX + offset.x;
-    const targetY = targetBaseY + offset.y;
-    const dx = targetX - pos.x;
-    const dy = targetY - pos.y;
-
-    walkSubtree(node, (subNode) => {
-      const subPos = state.positions.get(subNode.id);
-      if (!subPos) return;
-      subPos.x += dx;
-      subPos.y += dy;
-      if (subNode.id === node.id) {
-        subPos.baseX = targetBaseX;
-        subPos.baseY = targetBaseY;
-      } else {
-        subPos.baseX += dx;
-        subPos.baseY += dy;
-      }
+  function normalizeData(data) {
+    const base = createEmptyData();
+    const merged = { ...base, ...data };
+    merged.notes = Array.isArray(data.notes) ? data.notes : [];
+    merged.groups = Array.isArray(data.groups) ? data.groups : [];
+    merged.connections = Array.isArray(data.connections) ? data.connections : [];
+    merged.notes.forEach((note) => {
+      note.groupIds = Array.isArray(note.groupIds) ? note.groupIds : [];
+      note.x = Number.isFinite(note.x) ? note.x : 0;
+      note.y = Number.isFinite(note.y) ? note.y : 0;
+      note.createdAt ||= nowIso();
+      note.updatedAt ||= note.createdAt;
+      note.localDate ||= localDate(note.createdAt);
+      note.locked = Boolean(note.locked);
     });
-  });
-}
-
-function applyLayerProjection() {
-  state.positions.forEach((pos) => {
-    pos.layerAxisY = getLayerAxisY(pos.layer);
-  });
-}
-
-function getLayerAxisY(layer) {
-  return -normalizeLayer(layer) * LAYER_Y_AXIS_GAP;
-}
-
-function placeNode(node, x, y, depth, branchIndex, parent) {
-  const color = depth === 0 ? "#1f2937" : BRANCH_COLORS[branchIndex % BRANCH_COLORS.length];
-  const width = depth === 0 ? ROOT_WIDTH : NODE_WIDTH;
-  const height = estimateNodeHeight(node, width, depth);
-  const offset = normalizeOffset(node.offset);
-  const layer = getNodeLayer(node);
-  state.positions.set(node.id, {
-    x: x + offset.x,
-    y: y + offset.y,
-    baseX: x,
-    baseY: y,
-    depth,
-    layer,
-    color,
-    branchIndex,
-    width,
-    height,
-  });
-  state.visibleIds.add(node.id);
-  if (parent) {
-    state.edgeList.push({ from: parent.id, to: node.id, color, relationType: normalizeRelationType(node.relationType) });
+    merged.groups.forEach((group) => {
+      group.x = Number.isFinite(group.x) ? group.x : 0;
+      group.y = Number.isFinite(group.y) ? group.y : 0;
+      group.w = Number.isFinite(group.w) ? group.w : 320;
+      group.h = Number.isFinite(group.h) ? group.h : 220;
+      group.createdAt ||= nowIso();
+      group.updatedAt ||= group.createdAt;
+      group.color ||= GROUP_COLORS[0];
+      group.locked = Boolean(group.locked);
+    });
+    merged.connections.forEach((connection) => {
+      connection.from = normalizeEndpoint(connection.from);
+      connection.to = normalizeEndpoint(connection.to);
+      connection.kind = CONNECTION_KINDS.some((kind) => kind.id === connection.kind) ? connection.kind : "related";
+      connection.style = CONNECTION_STYLES.includes(connection.style) ? connection.style : "solid";
+      connection.createdAt ||= nowIso();
+      connection.updatedAt ||= connection.createdAt;
+      connection.trashedAt ||= "";
+      connection.deletedAt ||= "";
+    });
+    return merged;
   }
 
-  const children = getLayoutChildren(node, depth);
-  const parallelChildren = getParallelLayerChildren(node, depth);
-  if (!children.length && !parallelChildren.length) return;
-
-  const total = children.reduce((sum, child) => sum + measureSubtree(child, depth + 1), 0) + (children.length - 1) * state.verticalSpacing;
-  let cursor = y - total / 2;
-  children.forEach((child, index) => {
-    const span = measureSubtree(child, depth + 1);
-    const childY = cursor + span / 2;
-    const direction = depth === 0 ? (index % 2 === 0 ? 1 : -1) : x >= WORLD.cx ? 1 : -1;
-    const childX = depth === 0 ? WORLD.cx + direction * state.horizontalSpacing : x + direction * state.horizontalSpacing;
-    const nextBranch = depth === 0 ? index : branchIndex;
-    placeNode(child, childX, childY, depth + 1, nextBranch, node);
-    cursor += span + state.verticalSpacing;
-  });
-
-  parallelChildren.forEach((child) => {
-    placeNode(child, x, y, depth + 1, branchIndex, node);
-  });
-}
-
-function estimateNodeHeight(node, width, depth) {
-  const actionWidth = 136;
-  const textWidth = Math.max(64, width - actionWidth);
-  const lineCapacity = Math.max(7, Math.floor(textWidth / 8));
-  const lineCount = Math.max(1, Math.ceil([...node.text].length / lineCapacity));
-  const baseHeight = depth === 0 ? 84 : 68;
-  return Math.min(150, Math.max(baseHeight, 32 + lineCount * 18));
-}
-
-function resolveLayoutCollisions() {
-  if (state.positions.size < 2) return;
-
-  for (let pass = 0; pass < 8; pass++) {
-    let changed = false;
-    const items = [...state.positions.entries()]
-      .map(([id, pos]) => ({ id, pos }))
-      .sort((a, b) => a.pos.y - b.pos.y || a.pos.depth - b.pos.depth || a.pos.x - b.pos.x);
-
-    for (let i = 0; i < items.length; i++) {
-      for (let j = i + 1; j < items.length; j++) {
-        const upper = items[i];
-        const lower = items[j];
-        if (!hasHorizontalOverlap(upper.pos, lower.pos)) continue;
-
-        const minLowerY = upper.pos.y + (upper.pos.height + lower.pos.height) / 2 + COLLISION_GAP;
-        const overlap = minLowerY - lower.pos.y;
-        if (overlap <= 0) continue;
-
-        const shiftId = isAncestorId(lower.id, upper.id) ? upper.id : lower.id;
-        shiftVisibleSubtree(shiftId, overlap);
-        changed = true;
-      }
-    }
-
-    if (!changed) return;
-  }
-}
-
-function hasHorizontalOverlap(a, b) {
-  return Math.abs(a.x - b.x) < (a.width + b.width) / 2 + COLLISION_GAP;
-}
-
-function isAncestorId(ancestorId, nodeId) {
-  const found = findNode(ancestorId);
-  if (!found) return false;
-  let matched = false;
-  walkSubtree(found.node, (node) => {
-    if (node.id !== ancestorId && node.id === nodeId) matched = true;
-  });
-  return matched;
-}
-
-function shiftVisibleSubtree(id, dy) {
-  const found = findNode(id);
-  if (!found) return;
-  walkSubtree(found.node, (node) => {
-    const pos = state.positions.get(node.id);
-    if (pos) pos.y += dy;
-  });
-}
-
-function pathForEdge(from, to) {
-  const fromSide = to.x >= from.x ? from.width / 2 : -from.width / 2;
-  const toSide = to.x >= from.x ? -to.width / 2 : to.width / 2;
-  const startX = from.x + fromSide;
-  const endX = to.x + toSide;
-  const curve = Math.max(82, Math.abs(endX - startX) * 0.42);
-  const c1x = startX + (to.x >= from.x ? curve : -curve);
-  const c2x = endX - (to.x >= from.x ? curve : -curve);
-  return `M ${startX} ${from.y} C ${c1x} ${from.y}, ${c2x} ${to.y}, ${endX} ${to.y}`;
-}
-
-function pathForLayerConnector(from, to) {
-  const startX = from.x;
-  const direction = to.y >= from.y ? 1 : -1;
-  const startY = from.y + (from.height / 2) * direction;
-  const endX = to.x;
-  const endY = to.y - (to.height / 2) * direction;
-  const midY = (startY + endY) / 2;
-  return `M ${startX} ${startY} C ${startX} ${midY}, ${endX} ${midY}, ${endX} ${endY}`;
-}
-
-function getConnectorAxisY(from, to) {
-  return ((from?.layerAxisY || 0) + (to?.layerAxisY || 0)) / 2;
-}
-
-function applyLayerDepthStyle(element, axisY) {
-  if (!state.isLayer3d) {
-    element.style.transform = "";
-    return;
-  }
-  element.style.transform = `translateZ(${axisY}px)`;
-  element.style.transformBox = "fill-box";
-  element.style.transformOrigin = "center";
-}
-
-function make3dEdge(edge, from, to, matches, hasSearch, previousEdges) {
-  const start = connectorPoint(from, to, 1);
-  const end = connectorPoint(to, from, 1);
-  const dx = end.x - start.x;
-  const dy = end.y - start.y;
-  const dz = end.z - start.z;
-  const length = Math.max(1, Math.hypot(dx, dy, dz));
-  const xyLength = Math.hypot(dx, dy);
-  const theta = xyLength < 0.001 ? 0 : (Math.atan2(dy, dx) * 180) / Math.PI;
-  const phi = (-Math.asin(clamp(dz / length, -1, 1)) * 180) / Math.PI;
-  const line = document.createElement("span");
-  const className =
-    edgeClass(edge, matches, hasSearch).replace("edge-path", "edge-3d-line") +
-    (previousEdges.has(edgeKey(edge)) ? "" : " is-entering");
-  line.className = className;
-  line.dataset.from = edge.from;
-  line.dataset.to = edge.to;
-  line.dataset.relation = edge.relationType || "normal";
-  line.style.width = `${length}px`;
-  line.style.setProperty("--branch", edge.color);
-  line.style.transform = `translate3d(${start.x}px, ${start.y}px, ${start.z}px) rotateZ(${theta}deg) rotateY(${phi}deg)`;
-  return line;
-}
-
-function connectorPoint(pos, toward, sign) {
-  const x = pos.x;
-  const y = pos.y;
-  const z = pos.layerAxisY || 0;
-  const dx = (toward?.x || x) - x;
-  const dy = (toward?.y || y) - y;
-  const dz = (toward?.layerAxisY || 0) - z;
-  const length = Math.hypot(dx, dy, dz);
-  if (length < 0.001) return { x, y, z };
-
-  const inset = Math.min(42, Math.max(24, Math.min(pos.width, pos.height) * 0.42));
-  return {
-    x: x + (dx / length) * inset * sign,
-    y: y + (dy / length) * inset * sign,
-    z: z + (dz / length) * inset * sign,
-  };
-}
-
-function edgeKey(edge) {
-  return `${edge.from}->${edge.to}`;
-}
-
-function render() {
-  const previousPositions = new Map(state.positions);
-  const previousEdges = new Set(state.edgeList.map(edgeKey));
-  layoutTree();
-  clampFocusLayerDepth();
-  ensureFocusNodeVisible();
-  state.renderedIds.clear();
-  els.nodeLayer.textContent = "";
-  els.floorLayer.textContent = "";
-  els.edgeLayer.textContent = "";
-  els.edge3dLayer.textContent = "";
-  els.edgeLayer.setAttribute("viewBox", `0 0 ${WORLD.width} ${WORLD.height}`);
-
-  const fragment = document.createDocumentFragment();
-  const floorFragment = document.createDocumentFragment();
-  const edgeFragment = document.createDocumentFragment();
-  const edge3dFragment = document.createDocumentFragment();
-  const matches = getSearchMatches();
-  const hasSearch = state.search.trim().length > 0;
-
-  if (state.isLayer3d) {
-    renderLayerFloors(floorFragment);
+  function normalizeEndpoint(endpoint = {}) {
+    return {
+      type: endpoint.type === "group" ? "group" : "note",
+      id: endpoint.id || ""
+    };
   }
 
-  state.edgeList.forEach((edge) => {
-    if (!shouldRenderEdge(edge)) return;
-    const from = state.positions.get(edge.from);
-    const to = state.positions.get(edge.to);
-    if (!from || !to) return;
-    const isConnector = isLayerConnectorEdge(edge);
-    if (state.isLayer3d) {
-      edge3dFragment.appendChild(make3dEdge(edge, from, to, matches, hasSearch, previousEdges));
+  function mergeSettings(settings) {
+    return {
+      role: "",
+      deviceId: "",
+      savePassword: true,
+      syncPassword: "",
+      movementLocked: false,
+      drive: {
+        clientId: "",
+        folderName: DRIVE_FOLDER,
+        fileName: DRIVE_FILE,
+        folderId: "",
+        fileId: "",
+        ...(settings.drive || {})
+      },
+      github: {
+        owner: "",
+        repo: "",
+        branch: "main",
+        path: GITHUB_DEFAULT_PATH,
+        token: "",
+        ...(settings.github || {})
+      },
+      ...settings
+    };
+  }
+
+  function renderSetup() {
+    document.documentElement.classList.add("setup-mode");
+    document.documentElement.classList.remove("workspace-mode");
+    document.body.classList.remove("role-phone", "role-pc");
+    els.workspace.classList.add("hidden");
+    els.setup.classList.remove("hidden");
+    els.setup.innerHTML = `
+      <div class="setup-wrap">
+        <div class="setup-title">
+          <h1>Today Fragments</h1>
+          <p>今日あったことを雑に置いて、あとから眺めて、必要な時だけAIに渡せる形で残します。</p>
+        </div>
+        <div class="mode-grid">
+          <button class="mode-card" data-mode="phone">
+            <strong>スマホで始める</strong>
+            <span>Driveを本体にして、GitHub同期とPC取り込みを扱います。</span>
+          </button>
+          <button class="mode-card" data-mode="pc">
+            <strong>PCで使う</strong>
+            <span>GitHubの暗号化データを読み、編集差分はQRでスマホへ渡します。</span>
+          </button>
+        </div>
+        <div id="setup-detail"></div>
+      </div>
+    `;
+    $$(".mode-card", els.setup).forEach((button) => {
+      button.addEventListener("click", () => renderSetupDetail(button.dataset.mode));
+    });
+  }
+
+  function renderSetupDetail(mode) {
+    const detail = $("#setup-detail", els.setup);
+    const g = app.settings.github;
+    const d = app.settings.drive;
+    if (mode === "phone") {
+      detail.innerHTML = `
+        <section class="setup-card">
+          <h2>スマホ設定</h2>
+          <div class="form-grid">
+            <div class="form-row">
+              <label>Google OAuthクライアントID</label>
+              <input id="setup-drive-client" value="${escapeAttr(d.clientId)}" placeholder="xxxxx.apps.googleusercontent.com" />
+            </div>
+            <div class="form-row">
+              <label>同期パスワード</label>
+              <input id="setup-password" type="password" value="${escapeAttr(app.settings.syncPassword)}" autocomplete="current-password" />
+            </div>
+            <div class="field-split">
+              <div class="form-row">
+                <label>GitHubユーザー/組織</label>
+                <input id="setup-gh-owner" value="${escapeAttr(g.owner)}" placeholder="owner" />
+              </div>
+              <div class="form-row">
+                <label>リポジトリ</label>
+                <input id="setup-gh-repo" value="${escapeAttr(g.repo)}" placeholder="repo" />
+              </div>
+            </div>
+            <div class="field-split">
+              <div class="form-row">
+                <label>ブランチ</label>
+                <input id="setup-gh-branch" value="${escapeAttr(g.branch)}" placeholder="main" />
+              </div>
+              <div class="form-row">
+                <label>同期ファイル</label>
+                <input id="setup-gh-path" value="${escapeAttr(g.path)}" />
+              </div>
+            </div>
+            <div class="form-row">
+              <label>GitHubトークン</label>
+              <input id="setup-gh-token" type="password" value="${escapeAttr(g.token)}" autocomplete="off" />
+            </div>
+            <div class="button-row">
+              <button id="setup-phone-start" class="primary-button" type="button">開始</button>
+              <button id="setup-drive-connect" class="soft-button" type="button">Drive接続</button>
+            </div>
+            <p id="setup-status" class="status-line"></p>
+          </div>
+        </section>
+      `;
+      $("#setup-phone-start").addEventListener("click", async () => {
+        readSetupFields("phone");
+        app.settings.role = "phone";
+        await persistState();
+        startWorkspace();
+      });
+      $("#setup-drive-connect").addEventListener("click", async () => {
+        readSetupFields("phone");
+        await persistState();
+        await connectGoogleDrive($("#setup-status"));
+      });
       return;
     }
 
-    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    path.setAttribute("d", isConnector ? pathForLayerConnector(from, to) : pathForEdge(from, to));
-    const className = edgeClass(edge, matches, hasSearch) + (previousEdges.has(edgeKey(edge)) ? "" : " is-entering");
-    path.setAttribute("class", className);
-    path.setAttribute("pathLength", "1");
-    path.dataset.from = edge.from;
-    path.dataset.to = edge.to;
-    path.dataset.relation = edge.relationType || "normal";
-    path.style.setProperty("--branch", edge.color);
-    applyLayerDepthStyle(path, isConnector ? getConnectorAxisY(from, to) : from.layerAxisY || 0);
-    edgeFragment.appendChild(path);
-  });
+    detail.innerHTML = `
+      <section class="setup-card">
+        <h2>PC設定</h2>
+        <div class="form-grid">
+          <div class="field-split">
+            <div class="form-row">
+              <label>GitHubユーザー/組織</label>
+              <input id="setup-gh-owner" value="${escapeAttr(g.owner)}" placeholder="owner" />
+            </div>
+            <div class="form-row">
+              <label>リポジトリ</label>
+              <input id="setup-gh-repo" value="${escapeAttr(g.repo)}" placeholder="repo" />
+            </div>
+          </div>
+          <div class="field-split">
+            <div class="form-row">
+              <label>ブランチ</label>
+              <input id="setup-gh-branch" value="${escapeAttr(g.branch)}" placeholder="main" />
+            </div>
+            <div class="form-row">
+              <label>同期ファイル</label>
+              <input id="setup-gh-path" value="${escapeAttr(g.path)}" />
+            </div>
+          </div>
+          <div class="form-row">
+            <label>同期パスワード</label>
+            <input id="setup-password" type="password" value="${escapeAttr(app.settings.syncPassword)}" autocomplete="current-password" />
+          </div>
+          <label class="pill"><input id="setup-save-password" type="checkbox" ${app.settings.savePassword ? "checked" : ""} /> パスワードを保存</label>
+          <div class="button-row">
+            <button id="setup-pc-start" class="primary-button" type="button">読み込んで開始</button>
+          </div>
+          <p id="setup-status" class="status-line"></p>
+        </div>
+      </section>
+    `;
+    $("#setup-pc-start").addEventListener("click", async () => {
+      readSetupFields("pc");
+      const status = $("#setup-status");
+      try {
+        status.textContent = "GitHubから読み込み中";
+        await loadGithubSnapshot();
+        app.settings.role = "pc";
+        if (!app.settings.savePassword) app.settings.syncPassword = "";
+        await persistState();
+        startWorkspace();
+      } catch (error) {
+        status.textContent = error.message || "読み込みに失敗しました";
+      }
+    });
+  }
 
-  walk(state.tree, (node) => {
-    const pos = state.positions.get(node.id);
-    if (!pos) return;
-    if (!shouldRenderLayer(pos.layer)) return;
-    state.renderedIds.add(node.id);
-    const nodeEl = document.createElement("article");
-    nodeEl.className = nodeClass(node, pos, matches, hasSearch);
-    nodeEl.dataset.id = node.id;
-    nodeEl.dataset.type = normalizeNodeType(node.type);
-    nodeEl.style.left = `${pos.x}px`;
-    nodeEl.style.top = `${pos.y}px`;
-    nodeEl.style.setProperty("--branch", pos.color);
-    nodeEl.style.setProperty("--node-width", `${pos.depth === 0 ? ROOT_WIDTH : NODE_WIDTH}px`);
-    nodeEl.style.setProperty("--layer-y", `${state.isLayer3d ? pos.layerAxisY || 0 : 0}px`);
-    if (state.isLayer3d) {
-      nodeEl.style.zIndex = String(100000 + Math.round(pos.layerAxisY || 0));
+  function readSetupFields(role) {
+    const github = app.settings.github;
+    github.owner = $("#setup-gh-owner")?.value.trim() || "";
+    github.repo = $("#setup-gh-repo")?.value.trim() || "";
+    github.branch = $("#setup-gh-branch")?.value.trim() || "main";
+    github.path = $("#setup-gh-path")?.value.trim() || GITHUB_DEFAULT_PATH;
+    if (role === "phone") {
+      github.token = $("#setup-gh-token")?.value.trim() || "";
+      app.settings.drive.clientId = $("#setup-drive-client")?.value.trim() || "";
     }
-    applyNodeMotion(nodeEl, pos, previousPositions.get(node.id));
+    app.settings.savePassword = $("#setup-save-password")?.checked ?? true;
+    app.settings.syncPassword = $("#setup-password")?.value || "";
+  }
 
-    const title = document.createElement("div");
-    title.className = "node-title";
-    title.contentEditable = "true";
-    title.spellcheck = false;
-    title.textContent = node.text;
-    title.setAttribute("role", "textbox");
-    title.setAttribute("aria-label", "Node text");
+  function startWorkspace() {
+    document.documentElement.classList.remove("setup-mode");
+    document.documentElement.classList.add("workspace-mode");
+    els.setup.classList.add("hidden");
+    els.workspace.classList.remove("hidden");
+    document.body.classList.toggle("role-phone", app.settings.role === "phone");
+    document.body.classList.toggle("role-pc", app.settings.role === "pc");
+    els.roleLabel.textContent = app.settings.role === "phone" ? "スマホ本体" : "PCローカル";
+    if (!app.view.x && !app.view.y) {
+      app.view.x = Math.round(window.innerWidth / 2);
+      app.view.y = Math.round(window.innerHeight / 2);
+    }
+    initWebGl();
+    initParticles();
+    updateWorldTransform();
+    applyPanelState();
+    applyMovementLockState();
+    updateUndoRedoButtons();
+    renderAll();
+    updateStatus();
+  }
 
-    const content = document.createElement("div");
-    content.className = "node-content";
-    const badge = document.createElement("span");
-    badge.className = "node-type-badge";
-    badge.title = NODE_TYPES[normalizeNodeType(node.type)].label;
-    badge.textContent = NODE_TYPES[normalizeNodeType(node.type)].icon;
-    content.append(badge, title);
+  function bindWorkspaceEvents() {
+    els.composer.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const body = els.quickNote.value.trim();
+      if (!body) return;
+      createNote(body);
+      els.quickNote.value = "";
+      autosizeComposer();
+    });
+    els.quickNote.addEventListener("input", autosizeComposer);
+    els.addGroup.addEventListener("click", createGroup);
+    els.exportAi.addEventListener("click", openExportModal);
+    els.githubSync.addEventListener("click", syncGithubFromPhone);
+    els.pcQr.addEventListener("click", openQrModal);
+    els.phoneImport.addEventListener("click", openImportModal);
+    els.trashOpen.addEventListener("click", openTrashModal);
+    els.settingsOpen.addEventListener("click", openSettingsModal);
+    els.panelToggle.addEventListener("click", togglePanels);
+    els.undoAction.addEventListener("click", undo);
+    els.redoAction.addEventListener("click", redo);
+    els.resetView?.addEventListener("click", resetViewToContent);
+    els.movementLock.addEventListener("click", toggleMovementLock);
+    els.workspace.addEventListener("contextmenu", (event) => {
+      if (event.target.closest?.(".note-card, .group-node, .connection-path, .line-layer")) event.preventDefault();
+    });
+    els.workspace.addEventListener("dragstart", (event) => event.preventDefault());
+    els.workspace.addEventListener("wheel", onWheel, { passive: false });
+    els.workspace.addEventListener("pointerdown", onWorkspacePointerDown);
+    window.addEventListener("pointermove", onWorkspacePointerMove, true);
+    window.addEventListener("pointerup", onWorkspacePointerUp, true);
+    window.addEventListener("pointercancel", onWorkspacePointerUp, true);
+    window.addEventListener("blur", () => {
+      finishActiveEntityDrag();
+      resetViewportInteraction();
+    });
+    window.addEventListener("resize", () => {
+      resizeGlCanvas();
+      initParticles();
+      updateParticleTarget(true);
+      renderAll();
+    });
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") {
+        finishActiveEntityDrag();
+        resetViewportInteraction();
+        persistState();
+        if (app.settings.role === "phone") saveDriveNow();
+      }
+    });
+  }
 
-    const actions = document.createElement("div");
-    actions.className = "node-actions";
+  function autosizeComposer() {
+    els.quickNote.style.height = "auto";
+    els.quickNote.style.height = `${Math.min(160, els.quickNote.scrollHeight)}px`;
+  }
 
-    const addChildButton = makeNodeButton("node-add-child", "+", "子ノードを追加");
-    const deleteButton = makeNodeButton("node-delete", "×", "このノードを削除");
-    const toggle = makeNodeButton(
-      `node-toggle${node.children.length ? "" : " is-empty"}`,
-      node.collapsed ? "▸" : "▾",
-      node.collapsed ? "展開" : "折りたたみ",
+  function initParticles() {
+    if (!els.particleLayer) return;
+    const mobile = useLightweightEffects();
+    const tileSize = 400;
+    const count = mobile ? 9 : 14;
+    const key = `${mobile ? "m" : "d"}:${tileSize}:${count}`;
+    if (els.particleLayer.dataset.key === key) return;
+    els.particleLayer.dataset.key = key;
+    const colors = ["#aaf5ff", "#67e8f9", "#ff7aa8", "#ffd166", "#8ff0c4", "#a78bfa"];
+    const gradients = Array.from({ length: count }, (_, index) => {
+      const accent = index % 7 === 0;
+      const size = mobile ? randomBetween(1.7, accent ? 4.4 : 3.0) : randomBetween(1.9, accent ? 5.2 : 3.5);
+      const fade = size * (mobile ? 2.2 : 2.6);
+      const opacity = mobile ? randomBetween(0.34, 0.66) : randomBetween(0.42, 0.78);
+      const color = colors[Math.floor(Math.random() * colors.length)];
+      const x = randomBetween(18, tileSize - 18);
+      const y = randomBetween(18, tileSize - 18);
+      return `radial-gradient(circle at ${x.toFixed(1)}px ${y.toFixed(1)}px, ${hexToRgba(color, opacity)} 0 ${size.toFixed(2)}px, transparent ${fade.toFixed(2)}px)`;
+    });
+    els.particleLayer.innerHTML = "";
+    els.particleLayer.style.setProperty("--particle-tile-size", `${tileSize}px`);
+    els.particleLayer.style.setProperty("--particle-image", gradients.join(","));
+    els.particleLayer.style.setProperty("--particle-opacity", mobile ? "0.7" : "0.82");
+    els.particleLayer.style.setProperty("--particle-duration", mobile ? "42s" : "34s");
+    els.particleLayer.style.setProperty("--particle-drift-x", mobile ? "18px" : "28px");
+    els.particleLayer.style.setProperty("--particle-drift-y", mobile ? "-12px" : "-18px");
+    els.particleLayer.style.setProperty("--particle-return-x", mobile ? "-8px" : "-14px");
+    els.particleLayer.style.setProperty("--particle-return-y", mobile ? "9px" : "12px");
+  }
+
+  function randomBetween(min, max) {
+    return min + Math.random() * (max - min);
+  }
+
+  function hexToRgba(hex, alpha) {
+    const value = hex.replace("#", "");
+    const red = parseInt(value.slice(0, 2), 16);
+    const green = parseInt(value.slice(2, 4), 16);
+    const blue = parseInt(value.slice(4, 6), 16);
+    return `rgba(${red}, ${green}, ${blue}, ${alpha.toFixed(2)})`;
+  }
+
+  function renderAll() {
+    renderGroups();
+    renderConnections();
+    renderCards();
+    renderInspector();
+    updateStatus();
+  }
+
+  function renderGroups() {
+    const groups = app.data.groups.filter((group) => isVisibleEntity(group));
+    els.groupLayer.innerHTML = groups
+      .map((group) => {
+        const selected = app.selected?.type === "group" && app.selected.id === group.id;
+        const cardCount = getGroupNotes(group.id).length;
+        const radius = groupRadius(group, cardCount);
+        const seed = hashNumber(group.id);
+        const delay = -(seed % 4200);
+        const rotate = ((seed % 9) - 4) * 0.26;
+        return `
+          <article class="group-node ${selected ? "selected" : ""} ${cardCount ? "has-cards" : ""} ${group.locked ? "locked" : ""}" data-id="${group.id}" style="left:${group.x}px;top:${group.y}px;width:${group.w}px;height:${group.h}px;--group-color:${group.color};--group-radius:${radius};--float-delay:${delay}ms;--float-rotate:${rotate}deg">
+            <span class="group-label">${escapeHtml(group.title || "グループ")}</span>
+            ${group.locked ? '<span class="lock-badge">LOCK</span>' : ""}
+            <span class="resize-handle" data-resize="${group.id}"></span>
+          </article>
+        `;
+      })
+      .join("");
+    $$(".group-node", els.groupLayer).forEach((node) => {
+      const id = node.dataset.id;
+      node.addEventListener("pointerdown", (event) => {
+        if (!handleEntityPointerDown(event, "group", id)) return;
+        const isResize = event.target.closest(".resize-handle");
+        beginEntityDrag(event, isResize ? "resize-group" : "group", id);
+      });
+    });
+  }
+
+  function renderCards() {
+    const notes = app.data.notes.filter((note) => isVisibleEntity(note));
+    els.cardLayer.innerHTML = notes
+      .map((note) => {
+        const selected = app.selected?.type === "note" && app.selected.id === note.id;
+        const title = note.title || deriveTitle(note.body);
+        const primaryGroup = getNotePrimaryGroup(note);
+        const seed = hashNumber(note.id);
+        const delay = -(seed % 3600);
+        const rotate = ((seed % 11) - 5) * 0.32;
+        return `
+          <article class="note-card ${selected ? "selected" : ""} ${primaryGroup ? "grouped" : ""} ${note.locked ? "locked" : ""}" data-id="${note.id}" style="left:${note.x}px;top:${note.y}px;--card-color:${primaryGroup?.color || "#67e8f9"};--float-delay:${delay}ms;--float-rotate:${rotate}deg">
+            <h2 class="note-title">${escapeHtml(title || "無題")}</h2>
+            ${note.locked ? '<span class="lock-badge">LOCK</span>' : ""}
+          </article>
+        `;
+      })
+      .join("");
+    $$(".note-card", els.cardLayer).forEach((node) => {
+      const id = node.dataset.id;
+      node.addEventListener("pointerdown", (event) => {
+        if (!handleEntityPointerDown(event, "note", id)) return;
+        beginEntityDrag(event, "note", id);
+      });
+    });
+  }
+
+  function renderConnections() {
+    const connections = app.data.connections.filter((connection) => isVisibleEntity(connection) && resolveEndpoint(connection.from) && resolveEndpoint(connection.to));
+    els.lineLayer.innerHTML = `
+      ${connections
+        .map((connection) => {
+          const kind = getConnectionKind(connection.kind);
+          const selected = app.selected?.type === "connection" && app.selected.id === connection.id;
+          const d = connectionPath(connection);
+          const points = connectionPoints(connection);
+          if (!points) return "";
+          return `
+            <g class="connection-node ${selected ? "selected" : ""}" data-id="${connection.id}" style="--connection-color:${kind.color}">
+              <path class="connection-path connection-hit" d="${d}"></path>
+              <path class="connection-path connection-main ${connection.style}" d="${d}"></path>
+              <path class="connection-path connection-flow ${connection.style}" d="${d}"></path>
+              <circle class="connection-point start" cx="${points.from.x}" cy="${points.from.y}" r="5"></circle>
+              <circle class="connection-point end" cx="${points.to.x}" cy="${points.to.y}" r="6.5"></circle>
+            </g>
+          `;
+        })
+        .join("")}
+    `;
+    $$(".connection-node", els.lineLayer).forEach((node) => {
+      const id = node.dataset.id;
+      node.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        event.stopPropagation();
+        selectEntity("connection", id);
+      });
+      node.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        cycleConnectionStyle(id);
+      });
+    });
+  }
+
+  function handleEntityPointerDown(event, type, id) {
+    if (event.button === 2) {
+      beginConnectionDrag(event, type, id);
+      return false;
+    }
+    if (app.connectionDraft) {
+      event.preventDefault();
+      event.stopPropagation();
+      completeConnectionDraft(type, id);
+      return false;
+    }
+    const entity = findEntity(type, id);
+    const movementBlocked = isEntityMovementBlocked(entity);
+    if (usesMobileEntityMode(event)) {
+      if (!movementBlocked && isSelectedEntity(type, id)) {
+        event.preventDefault();
+        event.stopPropagation();
+        selectEntity(type, id, { render: false });
+        return true;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      beginViewportInteraction(event, { type, id });
+      return false;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    selectEntity(type, id, { render: false });
+    if (movementBlocked) {
+      if (app.settings.movementLocked) beginViewportInteraction(event);
+      return false;
+    }
+    return true;
+  }
+
+  function renderInspector() {
+    const selected = getSelectedEntity();
+    if (!selected) {
+      els.inspector.classList.add("empty");
+      els.inspector.innerHTML = "";
+      return;
+    }
+    els.inspector.classList.remove("empty");
+    if (app.selected.type === "note") {
+      renderNoteInspector(selected);
+    } else if (app.selected.type === "group") {
+      renderGroupInspector(selected);
+    } else {
+      renderConnectionInspector(selected);
+    }
+  }
+
+  function renderNoteInspector(note) {
+    const groupNames = (note.groupIds || [])
+      .map((id) => findGroup(id))
+      .filter((group) => group && isVisibleEntity(group))
+      .map((group) => group.title || "グループ");
+    els.inspector.innerHTML = `
+      <div class="inspector-head">
+        <h2>カード</h2>
+        <button class="inspector-close" data-close-inspector type="button" aria-label="閉じる">×</button>
+      </div>
+      <div class="form-grid">
+        <div class="form-row">
+          <label>タイトル</label>
+          <input id="inspect-note-title" value="${escapeAttr(note.title || "")}" placeholder="${escapeAttr(deriveTitle(note.body))}" />
+        </div>
+        <div class="form-row">
+          <label>本文</label>
+          <textarea id="inspect-note-body">${escapeHtml(note.body || "")}</textarea>
+        </div>
+        <div class="pill">${groupNames.length ? escapeHtml(groupNames.join(" / ")) : "未分類"}</div>
+        <button id="inspect-note-lock" class="soft-button lock-control ${note.locked ? "active" : ""}" type="button">
+          ${note.locked ? "位置ロック中" : "位置をロック"}
+        </button>
+        ${renderConnectionControls("note", note.id)}
+        <div class="button-row">
+          <button id="inspect-note-trash" class="danger-button" type="button">ゴミ箱へ</button>
+        </div>
+      </div>
+    `;
+    let noteEditCaptured = false;
+    const captureNoteEdit = () => {
+      if (noteEditCaptured) return;
+      captureHistory();
+      noteEditCaptured = true;
+    };
+    $("#inspect-note-title").addEventListener("input", (event) => {
+      captureNoteEdit();
+      note.title = event.target.value;
+      touchEntity("note", note.id);
+      renderCards();
+    });
+    $("#inspect-note-body").addEventListener("input", (event) => {
+      captureNoteEdit();
+      note.body = event.target.value;
+      note.localDate = localDate(note.createdAt);
+      touchEntity("note", note.id);
+      renderCards();
+    });
+    bindConnectionControls("note", note.id);
+    $("#inspect-note-lock").addEventListener("click", () => toggleEntityLock("note", note.id));
+    $("[data-close-inspector]").addEventListener("click", clearSelection);
+    $("#inspect-note-trash").addEventListener("click", () => moveToTrash("note", note.id));
+  }
+
+  function renderGroupInspector(group) {
+    els.inspector.innerHTML = `
+      <div class="inspector-head">
+        <h2>グループ</h2>
+        <button class="inspector-close" data-close-inspector type="button" aria-label="閉じる">×</button>
+      </div>
+      <div class="form-grid">
+        <div class="form-row">
+          <label>名前</label>
+          <input id="inspect-group-title" value="${escapeAttr(group.title || "")}" />
+        </div>
+        <div class="form-row">
+          <label>色</label>
+          <select id="inspect-group-color">
+            ${GROUP_COLORS.map((color) => `<option value="${color}" ${group.color === color ? "selected" : ""}>${color}</option>`).join("")}
+          </select>
+        </div>
+        <button id="inspect-group-lock" class="soft-button lock-control ${group.locked ? "active" : ""}" type="button">
+          ${group.locked ? "位置ロック中" : "位置をロック"}
+        </button>
+        ${renderConnectionControls("group", group.id)}
+        <div class="button-row">
+          <button id="inspect-group-trash" class="danger-button" type="button">ゴミ箱へ</button>
+        </div>
+      </div>
+    `;
+    let groupEditCaptured = false;
+    const captureGroupEdit = () => {
+      if (groupEditCaptured) return;
+      captureHistory();
+      groupEditCaptured = true;
+    };
+    $("#inspect-group-title").addEventListener("input", (event) => {
+      captureGroupEdit();
+      group.title = event.target.value;
+      touchEntity("group", group.id);
+      renderGroups();
+    });
+    $("#inspect-group-color").addEventListener("change", (event) => {
+      captureHistory();
+      group.color = event.target.value;
+      touchEntity("group", group.id);
+      renderGroups();
+      renderCards();
+    });
+    bindConnectionControls("group", group.id);
+    $("#inspect-group-lock").addEventListener("click", () => toggleEntityLock("group", group.id));
+    $("[data-close-inspector]").addEventListener("click", clearSelection);
+    $("#inspect-group-trash").addEventListener("click", () => moveToTrash("group", group.id));
+  }
+
+  function renderConnectionInspector(connection) {
+    const fromLabel = endpointLabel(connection.from);
+    const toLabel = endpointLabel(connection.to);
+    els.inspector.innerHTML = `
+      <div class="inspector-head">
+        <h2>線</h2>
+        <button class="inspector-close" data-close-inspector type="button" aria-label="閉じる">×</button>
+      </div>
+      <div class="form-grid">
+        <div class="pill">${escapeHtml(fromLabel)} → ${escapeHtml(toLabel)}</div>
+        <div class="field-split">
+          <div class="form-row">
+            <label>意味</label>
+            <select id="inspect-connection-kind">
+              ${CONNECTION_KINDS.map((kind) => `<option value="${kind.id}" ${connection.kind === kind.id ? "selected" : ""}>${kind.label}</option>`).join("")}
+            </select>
+          </div>
+          <div class="form-row">
+            <label>線種</label>
+            <select id="inspect-connection-style">
+              ${CONNECTION_STYLES.map((style) => `<option value="${style}" ${connection.style === style ? "selected" : ""}>${connectionStyleLabel(style)}</option>`).join("")}
+            </select>
+          </div>
+        </div>
+        <div class="button-row">
+          <button id="inspect-connection-trash" class="danger-button" type="button">削除</button>
+        </div>
+      </div>
+    `;
+    $("#inspect-connection-kind").addEventListener("change", (event) => {
+      captureHistory();
+      connection.kind = event.target.value;
+      touchEntity("connection", connection.id);
+      renderConnections();
+    });
+    $("#inspect-connection-style").addEventListener("change", (event) => {
+      captureHistory();
+      connection.style = event.target.value;
+      touchEntity("connection", connection.id);
+      renderConnections();
+    });
+    $("[data-close-inspector]").addEventListener("click", clearSelection);
+    $("#inspect-connection-trash").addEventListener("click", () => moveToTrash("connection", connection.id));
+  }
+
+  function renderConnectionControls(type, id) {
+    return `
+      <div class="field-split">
+        <div class="form-row">
+          <label>線の意味</label>
+          <select id="connection-kind">
+            ${CONNECTION_KINDS.map((kind) => `<option value="${kind.id}">${kind.label}</option>`).join("")}
+          </select>
+        </div>
+        <div class="form-row">
+          <label>接続</label>
+          <button id="connection-start" class="soft-button" type="button" data-type="${type}" data-id="${id}">接続開始</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function bindConnectionControls(type, id) {
+    $("#connection-start")?.addEventListener("click", () => {
+      app.connectionDraft = { type, id, kind: $("#connection-kind")?.value || "related" };
+      toast("接続先をタップしてください");
+      els.workspace.classList.add("connecting");
+    });
+  }
+
+  function createNote(body) {
+    captureHistory();
+    const center = screenToWorld(window.innerWidth / 2, window.innerHeight / 2);
+    const timestamp = nowIso();
+    const note = {
+      id: uid("note"),
+      title: "",
+      body,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      localDate: localDate(timestamp),
+      x: Math.round(center.x - 115 + Math.random() * 36 - 18),
+      y: Math.round(center.y - 58 + Math.random() * 36 - 18),
+      groupIds: [],
+      trashedAt: "",
+      deletedAt: ""
+    };
+    app.data.notes.push(note);
+    selectEntity("note", note.id);
+    touchEntity("note", note.id, { alreadyUpdated: true });
+    renderAll();
+    toast("追加しました");
+  }
+
+  function createGroup() {
+    captureHistory();
+    const center = screenToWorld(window.innerWidth / 2, window.innerHeight / 2);
+    const timestamp = nowIso();
+    const group = {
+      id: uid("group"),
+      title: "新しいグループ",
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      x: Math.round(center.x - 170),
+      y: Math.round(center.y - 120),
+      w: 340,
+      h: 240,
+      color: GROUP_COLORS[app.data.groups.length % GROUP_COLORS.length],
+      trashedAt: "",
+      deletedAt: ""
+    };
+    app.data.groups.push(group);
+    updateAllNoteGroups(true);
+    selectEntity("group", group.id);
+    touchEntity("group", group.id, { alreadyUpdated: true });
+    renderAll();
+  }
+
+  function selectEntity(type, id, options = {}) {
+    app.selected = { type, id };
+    if (options.render === false) {
+      updateSelectionClasses();
+      renderInspector();
+      return;
+    }
+    renderAll();
+  }
+
+  function clearSelection() {
+    app.selected = null;
+    app.connectionDraft = null;
+    els.workspace.classList.remove("connecting");
+    renderAll();
+  }
+
+  function updateSelectionClasses() {
+    $$(".note-card", els.cardLayer).forEach((node) => {
+      node.classList.toggle("selected", app.selected?.type === "note" && app.selected.id === node.dataset.id);
+    });
+    $$(".group-node", els.groupLayer).forEach((node) => {
+      node.classList.toggle("selected", app.selected?.type === "group" && app.selected.id === node.dataset.id);
+    });
+    $$(".connection-node", els.lineLayer).forEach((node) => {
+      node.classList.toggle("selected", app.selected?.type === "connection" && app.selected.id === node.dataset.id);
+    });
+  }
+
+  function getSelectedEntity() {
+    if (!app.selected) return null;
+    if (app.selected.type === "note") return findNote(app.selected.id);
+    if (app.selected.type === "group") return findGroup(app.selected.id);
+    return findConnection(app.selected.id);
+  }
+
+  function isSelectedEntity(type, id) {
+    return app.selected?.type === type && app.selected.id === id;
+  }
+
+  function getGroupNotes(groupId) {
+    return app.data.notes.filter((note) => isVisibleEntity(note) && note.groupIds?.includes(groupId));
+  }
+
+  function getNotePrimaryGroup(note) {
+    return (note.groupIds || []).map((id) => findGroup(id)).find((group) => group && isVisibleEntity(group)) || null;
+  }
+
+  function getConnectionKind(kindId) {
+    return CONNECTION_KINDS.find((kind) => kind.id === kindId) || CONNECTION_KINDS[0];
+  }
+
+  function connectionStyleLabel(style) {
+    return {
+      solid: "実線",
+      dotted: "点線",
+      dashed: "破線",
+      wavy: "波線"
+    }[style] || "実線";
+  }
+
+  function endpointLabel(endpoint) {
+    const entity = resolveEndpoint(endpoint);
+    if (!entity) return "不明";
+    if (endpoint.type === "group") return entity.title || "グループ";
+    return entity.title || deriveTitle(entity.body) || "無題";
+  }
+
+  function resolveEndpoint(endpoint) {
+    if (!endpoint?.id) return null;
+    const entity = endpoint.type === "group" ? findGroup(endpoint.id) : findNote(endpoint.id);
+    return isVisibleEntity(entity) ? entity : null;
+  }
+
+  function endpointBounds(endpoint) {
+    const entity = resolveEndpoint(endpoint);
+    if (!entity) return null;
+    if (endpoint.type === "group") {
+      return { x: entity.x, y: entity.y, w: entity.w, h: entity.h };
+    }
+    return noteBounds(entity);
+  }
+
+  function connectionPath(connection) {
+    const points = connectionPoints(connection);
+    if (!points) return "";
+    if (connection.style === "wavy") return wavyPath(points.from, points.to);
+    const controls = curvedControls(points.from, points.to);
+    return `M ${points.from.x} ${points.from.y} C ${controls.c1.x} ${controls.c1.y}, ${controls.c2.x} ${controls.c2.y}, ${points.to.x} ${points.to.y}`;
+  }
+
+  function connectionPoints(connection) {
+    const fromBounds = endpointBounds(connection.from);
+    const toBounds = endpointBounds(connection.to);
+    if (!fromBounds || !toBounds) return null;
+    const fromCenter = rectCenter(fromBounds);
+    const toCenter = rectCenter(toBounds);
+    const from = edgePoint(fromBounds, toCenter);
+    const to = edgePoint(toBounds, fromCenter);
+    return { from, to };
+  }
+
+  function rectCenter(rect) {
+    return { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 };
+  }
+
+  function edgePoint(rect, toward) {
+    const center = rectCenter(rect);
+    const dx = toward.x - center.x;
+    const dy = toward.y - center.y;
+    const scale = 0.5 / Math.max(Math.abs(dx) / rect.w || 0.001, Math.abs(dy) / rect.h || 0.001);
+    return {
+      x: Math.round(center.x + dx * scale),
+      y: Math.round(center.y + dy * scale)
+    };
+  }
+
+  function curvedControls(from, to) {
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const length = Math.hypot(dx, dy) || 1;
+    const nx = -dy / length;
+    const ny = dx / length;
+    const bend = clamp(length * 0.18, 28, 120);
+    return {
+      c1: {
+        x: Math.round(from.x + dx * 0.32 + nx * bend),
+        y: Math.round(from.y + dy * 0.32 + ny * bend)
+      },
+      c2: {
+        x: Math.round(from.x + dx * 0.68 + nx * bend),
+        y: Math.round(from.y + dy * 0.68 + ny * bend)
+      }
+    };
+  }
+
+  function cubicPoint(from, c1, c2, to, t) {
+    const mt = 1 - t;
+    return {
+      x: mt * mt * mt * from.x + 3 * mt * mt * t * c1.x + 3 * mt * t * t * c2.x + t * t * t * to.x,
+      y: mt * mt * mt * from.y + 3 * mt * mt * t * c1.y + 3 * mt * t * t * c2.y + t * t * t * to.y
+    };
+  }
+
+  function cubicTangent(from, c1, c2, to, t) {
+    const mt = 1 - t;
+    return {
+      x: 3 * mt * mt * (c1.x - from.x) + 6 * mt * t * (c2.x - c1.x) + 3 * t * t * (to.x - c2.x),
+      y: 3 * mt * mt * (c1.y - from.y) + 6 * mt * t * (c2.y - c1.y) + 3 * t * t * (to.y - c2.y)
+    };
+  }
+
+  function wavyPath(from, to) {
+    const controls = curvedControls(from, to);
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const length = Math.hypot(dx, dy) || 1;
+    const steps = Math.max(8, Math.ceil(length / 18));
+    const points = [];
+    for (let i = 0; i <= steps; i += 1) {
+      const t = i / steps;
+      const base = cubicPoint(from, controls.c1, controls.c2, to, t);
+      const tangent = cubicTangent(from, controls.c1, controls.c2, to, t);
+      const tangentLength = Math.hypot(tangent.x, tangent.y) || 1;
+      const nx = -tangent.y / tangentLength;
+      const ny = tangent.x / tangentLength;
+      const wave = Math.sin(t * Math.PI * 2 * Math.max(2, Math.round(length / 68))) * 7;
+      points.push({
+        x: Math.round(base.x + nx * wave),
+        y: Math.round(base.y + ny * wave)
+      });
+    }
+    return points.map((point, index) => `${index ? "L" : "M"} ${point.x} ${point.y}`).join(" ");
+  }
+
+  function cycleConnectionStyle(id) {
+    const connection = findConnection(id);
+    if (!connection) return;
+    captureHistory();
+    const index = CONNECTION_STYLES.indexOf(connection.style);
+    connection.style = CONNECTION_STYLES[(index + 1) % CONNECTION_STYLES.length];
+    touchEntity("connection", id);
+    selectEntity("connection", id);
+  }
+
+  function beginConnectionDrag(event, type, id) {
+    event.preventDefault();
+    event.stopPropagation();
+    const from = { type, id };
+    const fromBounds = endpointBounds(from);
+    if (!fromBounds) return;
+    const fromPoint = edgePoint(fromBounds, screenToWorld(event.clientX, event.clientY));
+    const draft = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    draft.classList.add("connection-path", "connection-draft");
+    els.lineLayer.appendChild(draft);
+    const draw = (clientX, clientY) => {
+      const to = screenToWorld(clientX, clientY);
+      const target = { x: Math.round(to.x), y: Math.round(to.y) };
+      const controls = curvedControls(fromPoint, target);
+      draft.setAttribute("d", `M ${fromPoint.x} ${fromPoint.y} C ${controls.c1.x} ${controls.c1.y}, ${controls.c2.x} ${controls.c2.y}, ${target.x} ${target.y}`);
+    };
+    draw(event.clientX, event.clientY);
+    const onMove = (moveEvent) => {
+      if (moveEvent.pointerId !== event.pointerId) return;
+      moveEvent.preventDefault();
+      draw(moveEvent.clientX, moveEvent.clientY);
+    };
+    const onUp = (upEvent) => {
+      if (upEvent.pointerId !== event.pointerId) return;
+      window.removeEventListener("pointermove", onMove, true);
+      window.removeEventListener("pointerup", onUp, true);
+      window.removeEventListener("pointercancel", onUp, true);
+      draft.remove();
+      const target = entityFromPoint(upEvent.clientX, upEvent.clientY);
+      if (target) createConnection(from, target, "related");
+    };
+    window.addEventListener("pointermove", onMove, true);
+    window.addEventListener("pointerup", onUp, true);
+    window.addEventListener("pointercancel", onUp, true);
+  }
+
+  function entityFromPoint(x, y) {
+    const node = document.elementFromPoint(x, y)?.closest?.(".note-card, .group-node");
+    if (!node) return null;
+    return {
+      type: node.classList.contains("group-node") ? "group" : "note",
+      id: node.dataset.id
+    };
+  }
+
+  function completeConnectionDraft(type, id) {
+    const draft = app.connectionDraft;
+    if (!draft) return;
+    app.connectionDraft = null;
+    els.workspace.classList.remove("connecting");
+    createConnection({ type: draft.type, id: draft.id }, { type, id }, draft.kind || "related");
+  }
+
+  function createConnection(from, to, kind = "related") {
+    if (!from.id || !to.id || (from.type === to.type && from.id === to.id)) {
+      toast("同じ対象には接続できません");
+      return;
+    }
+    const existing = app.data.connections.find(
+      (connection) =>
+        isVisibleEntity(connection) &&
+        connection.kind === kind &&
+        connection.from.type === from.type &&
+        connection.from.id === from.id &&
+        connection.to.type === to.type &&
+        connection.to.id === to.id
     );
+    if (existing) {
+      selectEntity("connection", existing.id);
+      toast("既に接続されています");
+      return;
+    }
+    captureHistory();
+    const timestamp = nowIso();
+    const connection = {
+      id: uid("connection"),
+      from,
+      to,
+      kind,
+      style: "solid",
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      trashedAt: "",
+      deletedAt: ""
+    };
+    app.data.connections.push(connection);
+    touchEntity("connection", connection.id, { alreadyUpdated: true });
+    selectEntity("connection", connection.id);
+    toast("接続しました");
+  }
 
-    if (node.id === state.tree.id) {
-      deleteButton.disabled = true;
+  function noteBounds(note) {
+    return {
+      x: note.x,
+      y: note.y,
+      w: NOTE_CARD_WIDTH,
+      h: NOTE_CARD_HEIGHT
+    };
+  }
+
+  function noteCenter(note) {
+    const bounds = noteBounds(note);
+    return {
+      x: bounds.x + bounds.w / 2,
+      y: bounds.y + bounds.h / 2
+    };
+  }
+
+  function getContainingGroups(note) {
+    const center = noteCenter(note);
+    return app.data.groups
+      .filter((group) => isVisibleEntity(group))
+      .filter((group) => center.x >= group.x && center.x <= group.x + group.w && center.y >= group.y && center.y <= group.y + group.h)
+      .sort((a, b) => a.w * a.h - b.w * b.h);
+  }
+
+  function groupRadius(group, cardCount) {
+    const seed = hashNumber(`${group.id}:${cardCount}:${Math.round(group.w)}:${Math.round(group.h)}`);
+    const horizontal = group.w >= group.h ? 1 : -1;
+    const a = clamp(34 + (seed % 10) + cardCount * 2 + horizontal * 4, 28, 56);
+    const b = clamp(30 + ((seed >> 3) % 12) - horizontal * 2, 24, 52);
+    const c = clamp(38 + ((seed >> 5) % 10) + horizontal * 2, 28, 58);
+    const d = clamp(28 + ((seed >> 7) % 14) + cardCount, 24, 54);
+    const e = clamp(28 + ((seed >> 2) % 12), 24, 52);
+    const f = clamp(40 + ((seed >> 4) % 12) + horizontal * 2, 28, 58);
+    const g = clamp(30 + ((seed >> 6) % 10) + cardCount, 24, 54);
+    const h = clamp(38 + ((seed >> 8) % 12) - horizontal * 2, 28, 58);
+    return `${a}% ${b}% ${c}% ${d}% / ${e}% ${f}% ${g}% ${h}%`;
+  }
+
+  function hashNumber(value) {
+    return String(value)
+      .split("")
+      .reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) >>> 0, 2166136261);
+  }
+
+  function beginEntityDrag(event, type, id) {
+    finishActiveEntityDrag();
+    resetViewportInteraction();
+    const note = type === "note" ? findNote(id) : null;
+    const group = type === "group" || type === "resize-group" ? findGroup(id) : null;
+    const target = note || group;
+    if (!target) return;
+    if (isEntityMovementBlocked(target)) return;
+    const node = event.currentTarget;
+    const historySnapshot = makeHistorySnapshot();
+    try {
+      node.setPointerCapture(event.pointerId);
+    } catch {
+      // Some mobile browsers are picky about pointer capture; window listeners still keep drag alive.
+    }
+    node.classList.add("dragging");
+    const start = {
+      pointerId: event.pointerId,
+      type,
+      id,
+      sx: event.clientX,
+      sy: event.clientY,
+      wx: screenToWorld(event.clientX, event.clientY).x,
+      wy: screenToWorld(event.clientX, event.clientY).y,
+      x: target.x,
+      y: target.y,
+      w: target.w,
+      h: target.h,
+      groupIds: note ? [...(note.groupIds || [])] : [],
+      moved: false
+    };
+    let lastClientX = event.clientX;
+    let lastClientY = event.clientY;
+    let autoPanFrame = 0;
+    const placeTarget = (clientX, clientY) => {
+      const current = screenToWorld(clientX, clientY);
+      const dx = current.x - start.wx;
+      const dy = current.y - start.wy;
+      start.moved = start.moved || Math.abs(clientX - start.sx) + Math.abs(clientY - start.sy) > 3;
+      if (type === "resize-group") {
+        group.w = Math.round(clamp(start.w + dx, 180, 1200));
+        group.h = Math.round(clamp(start.h + dy, 140, 900));
+        node.style.width = `${group.w}px`;
+        node.style.height = `${group.h}px`;
+        renderConnections();
+        return;
+      }
+      target.x = Math.round(start.x + dx);
+      target.y = Math.round(start.y + dy);
+      node.style.left = `${target.x}px`;
+      node.style.top = `${target.y}px`;
+      if (type === "note") updateDropHighlight(note);
+      renderConnections();
+    };
+    const autoPan = () => {
+      autoPanFrame = 0;
+      const pan = viewportEdgePan(lastClientX, lastClientY);
+      if (!pan.x && !pan.y) return;
+      start.moved = true;
+      app.view.x += pan.x;
+      app.view.y += pan.y;
+      updateWorldTransform();
+      placeTarget(lastClientX, lastClientY);
+      autoPanFrame = requestAnimationFrame(autoPan);
+    };
+    const ensureAutoPan = () => {
+      const pan = viewportEdgePan(lastClientX, lastClientY);
+      if ((pan.x || pan.y) && !autoPanFrame) autoPanFrame = requestAnimationFrame(autoPan);
+    };
+    const finish = () => {
+      window.removeEventListener("pointermove", onMove, true);
+      window.removeEventListener("pointerup", onUp, true);
+      window.removeEventListener("pointercancel", onUp, true);
+      if (autoPanFrame) {
+        cancelAnimationFrame(autoPanFrame);
+        autoPanFrame = 0;
+      }
+      try {
+        node.releasePointerCapture(start.pointerId);
+      } catch {
+        // Ignore browsers that already released capture.
+      }
+      node.classList.remove("dragging");
+      clearDropHighlights();
+      if (start.moved) {
+        rememberHistorySnapshot(historySnapshot);
+        if (type === "note") {
+          updateNoteGroups(note);
+          fitGroupsToCards([...start.groupIds, ...(note.groupIds || [])], { markTouched: true });
+          touchEntity("note", id);
+        } else {
+          touchEntity("group", id);
+          updateAllNoteGroups(true);
+        }
+      }
+      app.activeEntityDrag = null;
+      renderAll();
+    };
+    const onMove = (moveEvent) => {
+      if (moveEvent.pointerId !== start.pointerId) return;
+      moveEvent.preventDefault();
+      lastClientX = moveEvent.clientX;
+      lastClientY = moveEvent.clientY;
+      placeTarget(lastClientX, lastClientY);
+      ensureAutoPan();
+    };
+    const onUp = (upEvent) => {
+      if (upEvent.pointerId !== start.pointerId) return;
+      upEvent.preventDefault();
+      finish();
+    };
+    app.activeEntityDrag = { pointerId: start.pointerId, finish };
+    window.addEventListener("pointermove", onMove, true);
+    window.addEventListener("pointerup", onUp, true);
+    window.addEventListener("pointercancel", onUp, true);
+  }
+
+  function finishActiveEntityDrag() {
+    const active = app.activeEntityDrag;
+    if (!active) return;
+    active.finish();
+  }
+
+  function updateAllNoteGroups(markTouched = false) {
+    app.data.notes.filter((note) => isVisibleEntity(note)).forEach((note) => {
+      const changed = updateNoteGroups(note);
+      if (changed && markTouched) touchEntity("note", note.id);
+    });
+  }
+
+  function updateNoteGroups(note) {
+    const groupIds = getContainingGroups(note).map((group) => group.id);
+    const before = (note.groupIds || []).join("|");
+    const after = groupIds.join("|");
+    note.groupIds = groupIds;
+    return before !== after;
+  }
+
+  function fitGroupsToCards(groupIds, options = {}) {
+    const ids = Array.from(new Set(groupIds.filter(Boolean)));
+    ids.forEach((id) => {
+      const group = findGroup(id);
+      if (!group || !isVisibleEntity(group)) return;
+      if (group.locked) return;
+      const notes = getGroupNotes(id);
+      if (!notes.length) return;
+      const bounds = notes.map(noteBounds);
+      const minX = Math.min(...bounds.map((bound) => bound.x));
+      const minY = Math.min(...bounds.map((bound) => bound.y));
+      const maxX = Math.max(...bounds.map((bound) => bound.x + bound.w));
+      const maxY = Math.max(...bounds.map((bound) => bound.y + bound.h));
+      const next = {
+        x: Math.round(minX - GROUP_FIT_PADDING),
+        y: Math.round(minY - GROUP_FIT_PADDING),
+        w: Math.round(clamp(maxX - minX + GROUP_FIT_PADDING * 2, 240, 1600)),
+        h: Math.round(clamp(maxY - minY + GROUP_FIT_PADDING * 2, 160, 1200))
+      };
+      const changed = group.x !== next.x || group.y !== next.y || group.w !== next.w || group.h !== next.h;
+      if (!changed) return;
+      Object.assign(group, next);
+      if (options.markTouched) touchEntity("group", id);
+    });
+  }
+
+  function updateDropHighlight(note) {
+    const hoverGroup = getContainingGroups(note)[0] || null;
+    const nextId = hoverGroup?.id || "";
+    if (app.dragHoverGroupId === nextId) return;
+    app.dragHoverGroupId = nextId;
+    $$(".group-node", els.groupLayer).forEach((node) => {
+      node.classList.toggle("drop-target", node.dataset.id === nextId);
+    });
+  }
+
+  function clearDropHighlights() {
+    app.dragHoverGroupId = "";
+    $$(".group-node", els.groupLayer).forEach((node) => node.classList.remove("drop-target"));
+  }
+
+  function onWheel(event) {
+    if (event.ctrlKey || event.metaKey || event.deltaY) {
+      event.preventDefault();
+      const before = screenToWorld(event.clientX, event.clientY);
+      const factor = event.deltaY > 0 ? 0.92 : 1.08;
+      app.view.zoom = clamp(app.view.zoom * factor, 0.35, 2.4);
+      app.view.x = event.clientX - before.x * app.view.zoom;
+      app.view.y = event.clientY - before.y * app.view.zoom;
+      updateWorldTransform();
+    }
+  }
+
+  function viewportEdgePan(clientX, clientY) {
+    const margin = useLightweightEffects() ? 86 : 72;
+    const maxSpeed = useLightweightEffects() ? 9 : 14;
+    const edgeSpeed = (distance) => {
+      if (distance >= margin) return 0;
+      const amount = 1 - clamp(distance / margin, 0, 1);
+      return Math.round(maxSpeed * amount * amount * 100) / 100;
+    };
+    return {
+      x: edgeSpeed(clientX) - edgeSpeed(window.innerWidth - clientX),
+      y: edgeSpeed(clientY) - edgeSpeed(window.innerHeight - clientY)
+    };
+  }
+
+  function onWorkspacePointerDown(event) {
+    if (app.selected && isInspectorDismissTarget(event.target)) clearSelection();
+    if (!isViewportPanTarget(event.target)) return;
+    beginViewportInteraction(event);
+  }
+
+  function beginViewportInteraction(event, tapTarget = null) {
+    event.preventDefault();
+    const shouldResetStalePointers = event.pointerType !== "touch" || event.isPrimary;
+    if (shouldResetStalePointers && app.pointers.size && !app.pointers.has(event.pointerId)) {
+      resetViewportInteraction();
+    }
+    try {
+      els.workspace.setPointerCapture(event.pointerId);
+    } catch {
+      // Pointer capture is not always available on mobile Safari.
+    }
+    app.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (tapTarget) {
+      app.entityTapCandidates.set(event.pointerId, {
+        ...tapTarget,
+        x: event.clientX,
+        y: event.clientY
+      });
+    }
+    if (app.pointers.size === 1) {
+      app.panStart = { x: event.clientX, y: event.clientY, vx: app.view.x, vy: app.view.y };
+    }
+    if (app.pointers.size === 2) {
+      app.pinchStart = makePinchState();
+    }
+  }
+
+  function onWorkspacePointerMove(event) {
+    if (!app.pointers.has(event.pointerId)) return;
+    event.preventDefault();
+    app.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (app.pointers.size === 2 && app.pinchStart) {
+      const current = makePinchState();
+      const worldMid = app.pinchStart.worldMid;
+      app.view.zoom = clamp(app.pinchStart.zoom * (current.distance / app.pinchStart.distance), 0.35, 2.4);
+      app.view.x = current.mid.x - worldMid.x * app.view.zoom;
+      app.view.y = current.mid.y - worldMid.y * app.view.zoom;
+      updateWorldTransform();
+      return;
+    }
+    if (app.pointers.size === 1 && app.panStart) {
+      app.view.x = app.panStart.vx + event.clientX - app.panStart.x;
+      app.view.y = app.panStart.vy + event.clientY - app.panStart.y;
+      updateWorldTransform();
+    }
+  }
+
+  function onWorkspacePointerUp(event) {
+    if (!app.pointers.has(event.pointerId)) return;
+    event.preventDefault();
+    const tapTarget = app.entityTapCandidates.get(event.pointerId);
+    if (tapTarget && Math.hypot(event.clientX - tapTarget.x, event.clientY - tapTarget.y) < 10) {
+      handleEntityTap(tapTarget.type, tapTarget.id, event);
+    }
+    app.entityTapCandidates.delete(event.pointerId);
+    app.pointers.delete(event.pointerId);
+    if (app.pointers.size < 2) app.pinchStart = null;
+    if (app.pointers.size === 0) resetViewportInteraction();
+  }
+
+  function resetViewportInteraction() {
+    app.pointers.clear();
+    app.entityTapCandidates.clear();
+    app.panStart = null;
+    app.pinchStart = null;
+  }
+
+  function handleEntityTap(type, id, event) {
+    const now = Date.now();
+    const last = app.lastEntityTap;
+    const isDoubleTap =
+      last &&
+      last.type === type &&
+      last.id === id &&
+      now - last.time < 360 &&
+      Math.hypot(event.clientX - last.x, event.clientY - last.y) < 28;
+    app.lastEntityTap = { type, id, time: now, x: event.clientX, y: event.clientY };
+    if (!isDoubleTap) return;
+    app.panelsCollapsed = false;
+    applyPanelState();
+    selectEntity(type, id);
+  }
+
+  function usesMobileEntityMode(event) {
+    return event.pointerType === "touch" || isSmallViewport();
+  }
+
+  function togglePanels() {
+    app.panelsCollapsed = !app.panelsCollapsed;
+    applyPanelState();
+  }
+
+  function applyPanelState() {
+    els.workspace.classList.toggle("panels-collapsed", app.panelsCollapsed);
+    els.panelToggle.textContent = app.panelsCollapsed ? "▥" : "▤";
+  }
+
+  function makeHistorySnapshot() {
+    return {
+      data: sanitizeData(app.data),
+      selected: app.selected ? { ...app.selected } : null,
+      movementLocked: Boolean(app.settings.movementLocked)
+    };
+  }
+
+  function captureHistory() {
+    if (app.history.restoring || !app.data) return;
+    rememberHistorySnapshot(makeHistorySnapshot());
+  }
+
+  function rememberHistorySnapshot(snapshot) {
+    if (app.history.restoring || !snapshot) return;
+    app.history.undo.push(snapshot);
+    if (app.history.undo.length > 80) app.history.undo.shift();
+    app.history.redo = [];
+    updateUndoRedoButtons();
+  }
+
+  function restoreHistorySnapshot(snapshot) {
+    app.history.restoring = true;
+    app.data = normalizeData(snapshot.data || createEmptyData());
+    app.selected = validateSelection(snapshot.selected);
+    app.settings.movementLocked = Boolean(snapshot.movementLocked);
+    app.history.restoring = false;
+    markRestoredDataDirty();
+    applyMovementLockState();
+    renderAll();
+    persistState();
+    if (app.settings.role === "phone") scheduleDriveSave();
+    updateUndoRedoButtons();
+  }
+
+  function undo() {
+    const snapshot = app.history.undo.pop();
+    if (!snapshot) return;
+    app.history.redo.push(makeHistorySnapshot());
+    restoreHistorySnapshot(snapshot);
+  }
+
+  function redo() {
+    const snapshot = app.history.redo.pop();
+    if (!snapshot) return;
+    app.history.undo.push(makeHistorySnapshot());
+    restoreHistorySnapshot(snapshot);
+  }
+
+  function updateUndoRedoButtons() {
+    if (!els.undoAction || !els.redoAction) return;
+    els.undoAction.disabled = !app.history.undo.length;
+    els.redoAction.disabled = !app.history.redo.length;
+  }
+
+  function validateSelection(selection) {
+    const entity = selection ? findEntity(selection.type, selection.id) : null;
+    if (!entity || !isVisibleEntity(entity)) return null;
+    return { type: selection.type, id: selection.id };
+  }
+
+  function markRestoredDataDirty() {
+    if (app.settings.role !== "pc") return;
+    app.dirty.notes = Object.fromEntries(app.data.notes.map((note) => [note.id, note.updatedAt || nowIso()]));
+    app.dirty.groups = Object.fromEntries(app.data.groups.map((group) => [group.id, group.updatedAt || nowIso()]));
+    app.dirty.connections = Object.fromEntries(app.data.connections.map((connection) => [connection.id, connection.updatedAt || nowIso()]));
+  }
+
+  function onKeyDown(event) {
+    const key = event.key.toLowerCase();
+    const modifier = event.ctrlKey || event.metaKey;
+    if (!modifier) return;
+    if (key === "0") {
+      event.preventDefault();
+      resetViewToContent();
+      return;
+    }
+    if (key === "z" && event.shiftKey) {
+      event.preventDefault();
+      redo();
+      return;
+    }
+    if (key === "z") {
+      event.preventDefault();
+      undo();
+      return;
+    }
+    if (key === "y") {
+      event.preventDefault();
+      redo();
+    }
+  }
+
+  function isEntityMovementBlocked(entity) {
+    return Boolean(app.settings.movementLocked || entity?.locked);
+  }
+
+  function toggleMovementLock() {
+    captureHistory();
+    app.settings.movementLocked = !app.settings.movementLocked;
+    applyMovementLockState();
+    persistState();
+    toast(app.settings.movementLocked ? "全体の位置をロックしました" : "全体の位置ロックを解除しました");
+  }
+
+  function applyMovementLockState() {
+    els.workspace.classList.toggle("movement-locked", Boolean(app.settings.movementLocked));
+    els.movementLock.classList.toggle("active", Boolean(app.settings.movementLocked));
+    els.movementLock.setAttribute("aria-pressed", app.settings.movementLocked ? "true" : "false");
+  }
+
+  function toggleEntityLock(type, id) {
+    const entity = findEntity(type, id);
+    if (!entity) return;
+    captureHistory();
+    entity.locked = !entity.locked;
+    touchEntity(type, id);
+    renderAll();
+  }
+
+  function makePinchState() {
+    const points = Array.from(app.pointers.values());
+    const a = points[0];
+    const b = points[1];
+    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    return {
+      mid,
+      distance: Math.hypot(a.x - b.x, a.y - b.y) || 1,
+      zoom: app.view.zoom,
+      worldMid: screenToWorld(mid.x, mid.y)
+    };
+  }
+
+  function isBackgroundTarget(target) {
+    return target === els.workspace || target === els.canvas || target === els.world || Boolean(target?.classList?.contains("layer"));
+  }
+
+  function isViewportPanTarget(target) {
+    if (!target?.closest || !target.closest(".workspace")) return false;
+    if (
+      target.closest(
+        ".note-card, .group-node, .connection-node, .connection-path, .inspector, .composer, .toolbar, .topbar, .modal-root, button, input, textarea, select, a"
+      )
+    ) {
+      return false;
+    }
+    return true;
+  }
+
+  function isInspectorDismissTarget(target) {
+    if (!target) return false;
+    if (target.closest?.(".inspector, .composer, .toolbar, .topbar, .modal-root")) return false;
+    if (target.closest?.(".note-card")) return false;
+    if (target.closest?.(".group-node")) return isSmallViewport() && app.selected?.type === "note";
+    return isBackgroundTarget(target) || Boolean(target.closest?.(".world"));
+  }
+
+  function isSmallViewport() {
+    return window.matchMedia?.("(max-width: 760px)").matches || window.innerWidth <= 760;
+  }
+
+  function useLightweightEffects() {
+    const hasTouch = (navigator.maxTouchPoints || 0) > 0;
+    const compactSide = Math.min(window.innerWidth, window.innerHeight) <= 760;
+    return isSmallViewport() || (hasTouch && compactSide);
+  }
+
+  function updateWorldTransform() {
+    els.world.style.transform = `translate(${app.view.x}px, ${app.view.y}px) scale(${app.view.zoom})`;
+    updateParticleTarget();
+  }
+
+  function resetViewToContent() {
+    const bounds = contentBounds();
+    app.view.zoom = 1;
+    if (!bounds) {
+      app.view.x = Math.round(window.innerWidth / 2);
+      app.view.y = Math.round(window.innerHeight / 2);
+    } else {
+      app.view.x = Math.round(window.innerWidth / 2 - (bounds.x + bounds.w / 2));
+      app.view.y = Math.round(window.innerHeight / 2 - (bounds.y + bounds.h / 2));
+    }
+    updateWorldTransform();
+    toast("視点を中央に戻しました");
+  }
+
+  function contentBounds() {
+    const rects = [
+      ...app.data.notes.filter((note) => isVisibleEntity(note)).map(noteBounds),
+      ...app.data.groups.filter((group) => isVisibleEntity(group)).map((group) => ({
+        x: group.x,
+        y: group.y,
+        w: group.w,
+        h: group.h
+      }))
+    ];
+    if (!rects.length) return null;
+    const minX = Math.min(...rects.map((rect) => rect.x));
+    const minY = Math.min(...rects.map((rect) => rect.y));
+    const maxX = Math.max(...rects.map((rect) => rect.x + rect.w));
+    const maxY = Math.max(...rects.map((rect) => rect.y + rect.h));
+    return {
+      x: minX,
+      y: minY,
+      w: maxX - minX,
+      h: maxY - minY
+    };
+  }
+
+  function updateParticleTarget(force = false) {
+    if (!els.particleLayer) return;
+    const depth = useLightweightEffects() ? 0.12 : 0.16;
+    app.particles.targetX = app.view.x * depth;
+    app.particles.targetY = app.view.y * depth;
+    if (force || !app.particles.initialized) {
+      app.particles.initialized = true;
+      app.particles.x = app.particles.targetX;
+      app.particles.y = app.particles.targetY;
+      applyParticlePan(app.particles.x, app.particles.y);
+      return;
+    }
+    if (!app.particles.raf) {
+      app.particles.raf = requestAnimationFrame(animateParticlePan);
+    }
+  }
+
+  function animateParticlePan() {
+    app.particles.raf = 0;
+    const ease = useLightweightEffects() ? 0.16 : 0.12;
+    app.particles.x += (app.particles.targetX - app.particles.x) * ease;
+    app.particles.y += (app.particles.targetY - app.particles.y) * ease;
+    if (Math.abs(app.particles.targetX - app.particles.x) < 0.08 && Math.abs(app.particles.targetY - app.particles.y) < 0.08) {
+      app.particles.x = app.particles.targetX;
+      app.particles.y = app.particles.targetY;
+      applyParticlePan(app.particles.x, app.particles.y);
+      return;
+    }
+    applyParticlePan(app.particles.x, app.particles.y);
+    app.particles.raf = requestAnimationFrame(animateParticlePan);
+  }
+
+  function applyParticlePan(x, y) {
+    els.particleLayer.style.setProperty("--particle-pan-x", `${x.toFixed(2)}px`);
+    els.particleLayer.style.setProperty("--particle-pan-y", `${y.toFixed(2)}px`);
+  }
+
+  function screenToWorld(x, y) {
+    return {
+      x: (x - app.view.x) / app.view.zoom,
+      y: (y - app.view.y) / app.view.zoom
+    };
+  }
+
+  function touchEntity(type, id, options = {}) {
+    const entity = findEntity(type, id);
+    if (!entity) return;
+    if (!options.alreadyUpdated) entity.updatedAt = nowIso();
+    app.data.updatedAt = nowIso();
+    if (app.settings.role === "pc") {
+      const bucket = type === "connection" ? "connections" : type === "note" ? "notes" : "groups";
+      app.dirty[bucket][id] = entity.updatedAt;
+    }
+    schedulePersist();
+    if (app.settings.role === "phone") scheduleDriveSave();
+    updateStatus();
+  }
+
+  function moveToTrash(type, id) {
+    const entity = findEntity(type, id);
+    if (!entity) return;
+    captureHistory();
+    entity.trashedAt = nowIso();
+    entity.updatedAt = entity.trashedAt;
+    if (type === "note" || type === "group") {
+      trashConnectionsFor(type, id);
+    }
+    if (type === "group") {
+      app.data.notes.forEach((note) => {
+        if (note.groupIds?.includes(id)) {
+          note.groupIds = note.groupIds.filter((groupId) => groupId !== id);
+          touchEntity("note", note.id);
+        }
+      });
+    }
+    touchEntity(type, id, { alreadyUpdated: true });
+    app.selected = null;
+    renderAll();
+  }
+
+  function restoreEntity(type, id) {
+    const entity = findEntity(type, id);
+    if (!entity) return;
+    captureHistory();
+    entity.trashedAt = "";
+    entity.updatedAt = nowIso();
+    touchEntity(type, id, { alreadyUpdated: true });
+    renderAll();
+    openTrashModal();
+  }
+
+  function deleteForever(type, id) {
+    const entity = findEntity(type, id);
+    if (!entity) return;
+    captureHistory();
+    entity.deletedAt = nowIso();
+    entity.trashedAt = entity.trashedAt || entity.deletedAt;
+    entity.updatedAt = entity.deletedAt;
+    if (type === "connection") {
+      // Keep the deleted marker so future syncs can propagate the removal.
+    } else if (type === "note") {
+      entity.title = "";
+      entity.body = "";
+      entity.groupIds = [];
+      trashConnectionsFor(type, id, true);
+    } else {
+      entity.title = "";
+      trashConnectionsFor(type, id, true);
+      app.data.notes.forEach((note) => {
+        if (note.groupIds?.includes(id)) {
+          note.groupIds = note.groupIds.filter((groupId) => groupId !== id);
+          touchEntity("note", note.id);
+        }
+      });
+    }
+    touchEntity(type, id, { alreadyUpdated: true });
+    renderAll();
+    openTrashModal();
+  }
+
+  function openExportModal() {
+    const today = localDate();
+    openModal(`
+      <div class="modal-head">
+        <h2>AI用に書き出し</h2>
+        <button class="close-button" data-close type="button">×</button>
+      </div>
+      <div class="form-grid">
+        <div class="field-split">
+          <div class="form-row">
+            <label>範囲</label>
+            <select id="export-range">
+              <option value="today">今日だけ</option>
+              <option value="period">期間指定</option>
+              <option value="all">全部</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label>日付</label>
+            <input id="export-start" type="date" value="${today}" />
+          </div>
+        </div>
+        <div class="form-row hidden" id="export-end-wrap">
+          <label>終了日</label>
+          <input id="export-end" type="date" value="${today}" />
+        </div>
+        <textarea id="export-output" class="output-box" readonly></textarea>
+        <div class="button-row">
+          <button id="copy-export" class="primary-button" type="button">コピー</button>
+        </div>
+      </div>
+    `);
+    const range = $("#export-range");
+    const start = $("#export-start");
+    const end = $("#export-end");
+    const endWrap = $("#export-end-wrap");
+    const output = $("#export-output");
+    const refresh = () => {
+      endWrap.classList.toggle("hidden", range.value !== "period");
+      output.value = buildAiExport(range.value, start.value, end.value);
+    };
+    [range, start, end].forEach((input) => input.addEventListener("input", refresh));
+    $("#copy-export").addEventListener("click", async () => {
+      await navigator.clipboard.writeText(output.value);
+      toast("コピーしました");
+    });
+    refresh();
+  }
+
+  function buildAiExport(range, start, end) {
+    const notes = app.data.notes
+      .filter((note) => isVisibleEntity(note))
+      .filter((note) => {
+        if (range === "all") return true;
+        const date = note.localDate || localDate(note.createdAt);
+        if (range === "today") return date === localDate();
+        return date >= start && date <= end;
+      })
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    const groups = app.data.groups.filter((group) => isVisibleEntity(group));
+    const groupById = Object.fromEntries(groups.map((group) => [group.id, group]));
+    const connections = app.data.connections.filter((connection) => isVisibleEntity(connection));
+    const md = notes
+      .map((note) => {
+        const names = (note.groupIds || []).map((id) => groupById[id]?.title).filter(Boolean);
+        return [
+          `### ${note.title || deriveTitle(note.body) || "無題"}`,
+          `- 日時: ${formatDateTime(note.createdAt)}`,
+          `- グループ: ${names.length ? names.join(", ") : "未分類"}`,
+          "",
+          note.body || ""
+        ].join("\n");
+      })
+      .join("\n\n");
+    const json = JSON.stringify(
+      {
+        exportedAt: nowIso(),
+        range,
+        notes,
+        groups,
+        connections
+      },
+      null,
+      2
+    );
+    return [
+      "以下は、私の今日/日々の断片メモです。",
+      "セカンドブレインとして扱い、カテゴリ分け、関係性、繰り返し出ているテーマ、次に考えるとよさそうな問いを整理してください。",
+      "事実と推測を分け、元メモのニュアンスを壊さないでください。",
+      "",
+      "# Markdown素材",
+      md || "対象メモなし",
+      "",
+      "# JSON",
+      "```json",
+      json,
+      "```"
+    ].join("\n");
+  }
+
+  function openSettingsModal() {
+    const g = app.settings.github;
+    const d = app.settings.drive;
+    const phoneFields =
+      app.settings.role === "phone"
+        ? `
+          <div class="form-row">
+            <label>Google OAuthクライアントID</label>
+            <input id="settings-drive-client" value="${escapeAttr(d.clientId)}" />
+          </div>
+          <div class="form-row">
+            <label>GitHubトークン</label>
+            <input id="settings-gh-token" type="password" value="${escapeAttr(g.token)}" />
+          </div>
+        `
+        : "";
+    openModal(`
+      <div class="modal-head">
+        <h2>設定</h2>
+        <button class="close-button" data-close type="button">×</button>
+      </div>
+      <div class="form-grid">
+        <div class="form-row">
+          <label>同期パスワード</label>
+          <input id="settings-password" type="password" value="${escapeAttr(app.settings.syncPassword)}" />
+        </div>
+        <div class="field-split">
+          <div class="form-row">
+            <label>GitHubユーザー/組織</label>
+            <input id="settings-gh-owner" value="${escapeAttr(g.owner)}" />
+          </div>
+          <div class="form-row">
+            <label>リポジトリ</label>
+            <input id="settings-gh-repo" value="${escapeAttr(g.repo)}" />
+          </div>
+        </div>
+        <div class="field-split">
+          <div class="form-row">
+            <label>ブランチ</label>
+            <input id="settings-gh-branch" value="${escapeAttr(g.branch)}" />
+          </div>
+          <div class="form-row">
+            <label>同期ファイル</label>
+            <input id="settings-gh-path" value="${escapeAttr(g.path)}" />
+          </div>
+        </div>
+        ${phoneFields}
+        <div class="button-row">
+          <button id="settings-save" class="primary-button" type="button">保存</button>
+          ${
+            app.settings.role === "phone"
+              ? '<button id="settings-drive-connect" class="soft-button" type="button">Drive接続</button><button id="settings-github-test" class="soft-button" type="button">GitHub確認</button>'
+              : '<button id="settings-github-load" class="soft-button" type="button">GitHubから再読込</button>'
+          }
+        </div>
+        <p id="settings-status" class="status-line"></p>
+      </div>
+    `);
+    $("#settings-save").addEventListener("click", async () => {
+      readSettingsModal();
+      await persistState();
+      toast("保存しました");
+    });
+    $("#settings-drive-connect")?.addEventListener("click", async () => {
+      readSettingsModal();
+      await persistState();
+      await connectGoogleDrive($("#settings-status"));
+    });
+    $("#settings-github-test")?.addEventListener("click", async () => {
+      readSettingsModal();
+      const status = $("#settings-status");
+      try {
+        status.textContent = "GitHub確認中";
+        status.textContent = await testGithubConnection();
+        await persistState();
+      } catch (error) {
+        status.textContent = error.message || "GitHub確認に失敗しました";
+      }
+    });
+    $("#settings-github-load")?.addEventListener("click", async () => {
+      readSettingsModal();
+      const status = $("#settings-status");
+      try {
+        status.textContent = "読み込み中";
+        await loadGithubSnapshot();
+        await persistState();
+        renderAll();
+        status.textContent = "読み込みました";
+      } catch (error) {
+        status.textContent = error.message || "読み込みに失敗しました";
+      }
+    });
+  }
+
+  function readSettingsModal() {
+    app.settings.syncPassword = $("#settings-password")?.value || "";
+    app.settings.github.owner = $("#settings-gh-owner")?.value.trim() || "";
+    app.settings.github.repo = $("#settings-gh-repo")?.value.trim() || "";
+    app.settings.github.branch = $("#settings-gh-branch")?.value.trim() || "main";
+    app.settings.github.path = $("#settings-gh-path")?.value.trim() || GITHUB_DEFAULT_PATH;
+    if (app.settings.role === "phone") {
+      app.settings.drive.clientId = $("#settings-drive-client")?.value.trim() || "";
+      app.settings.github.token = $("#settings-gh-token")?.value.trim() || "";
+    }
+  }
+
+  function openTrashModal() {
+    const notes = app.data.notes.filter((note) => note.trashedAt && !note.deletedAt);
+    const groups = app.data.groups.filter((group) => group.trashedAt && !group.deletedAt);
+    const items = [
+      ...notes.map((note) => ({ type: "note", id: note.id, title: note.title || deriveTitle(note.body), body: compactBody(note.body, 90) })),
+      ...groups.map((group) => ({ type: "group", id: group.id, title: group.title || "グループ", body: "グループ" }))
+    ];
+    openModal(`
+      <div class="modal-head">
+        <h2>ゴミ箱</h2>
+        <button class="close-button" data-close type="button">×</button>
+      </div>
+      <div class="list-stack">
+        ${
+          items.length
+            ? items
+                .map(
+                  (item) => `
+                    <div class="list-item">
+                      <strong>${escapeHtml(item.title || "無題")}</strong>
+                      <p class="status-line">${escapeHtml(item.body || "")}</p>
+                      <div class="button-row">
+                        <button class="soft-button" data-restore="${item.type}:${item.id}" type="button">戻す</button>
+                        <button class="danger-button" data-delete="${item.type}:${item.id}" type="button">完全削除</button>
+                      </div>
+                    </div>
+                  `
+                )
+                .join("")
+            : '<p class="status-line">空です</p>'
+        }
+      </div>
+    `);
+    $$("[data-restore]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const [type, id] = button.dataset.restore.split(":");
+        restoreEntity(type, id);
+      });
+    });
+    $$("[data-delete]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const [type, id] = button.dataset.delete.split(":");
+        deleteForever(type, id);
+      });
+    });
+  }
+
+  async function connectGoogleDrive(statusEl) {
+    if (!app.settings.drive.clientId) {
+      statusEl.textContent = "Google OAuthクライアントIDを入れてください";
+      return;
+    }
+    if (!window.google?.accounts?.oauth2) {
+      statusEl.textContent = "Googleの認可画面を読み込めませんでした";
+      return;
+    }
+    statusEl.textContent = "Drive接続中";
+    await new Promise((resolve, reject) => {
+      const tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: app.settings.drive.clientId,
+        scope: DRIVE_SCOPE,
+        callback: async (response) => {
+          if (response.error) {
+            reject(new Error(response.error));
+            return;
+          }
+          app.drive.accessToken = response.access_token;
+          app.drive.connected = true;
+          try {
+            await ensureDriveFile();
+            await persistState();
+            statusEl.textContent = "Driveに接続しました";
+            renderAll();
+            resolve();
+          } catch (error) {
+            reject(error);
+          }
+        }
+      });
+      tokenClient.requestAccessToken({ prompt: "consent" });
+    }).catch((error) => {
+      statusEl.textContent = error.message || "Drive接続に失敗しました";
+    });
+  }
+
+  async function ensureDriveFile() {
+    const drive = app.settings.drive;
+    const folder = await findOrCreateDriveFolder(drive.folderName || DRIVE_FOLDER);
+    drive.folderId = folder.id;
+    const file = await findDriveFile(drive.fileName || DRIVE_FILE, folder.id);
+    if (file) {
+      drive.fileId = file.id;
+      const remote = await driveFetchJson(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`);
+      const result = mergeData(remote, { markDirty: false });
+      if (result.changed) {
+        toast(`Driveから${result.changed}件取り込みました`);
+      }
+      await saveDriveNow();
+      return;
+    }
+    drive.fileId = await createDriveJsonFile(drive.fileName || DRIVE_FILE, folder.id, sanitizeData(app.data));
+  }
+
+  async function findOrCreateDriveFolder(name) {
+    const query = encodeURIComponent(`name = '${escapeDriveQuery(name)}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`);
+    const result = await driveFetchJson(`https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name)`);
+    if (result.files?.[0]) return result.files[0];
+    const created = await driveFetchJson("https://www.googleapis.com/drive/v3/files", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, mimeType: "application/vnd.google-apps.folder" })
+    });
+    return created;
+  }
+
+  async function findDriveFile(name, folderId) {
+    const query = encodeURIComponent(`name = '${escapeDriveQuery(name)}' and '${folderId}' in parents and trashed = false`);
+    const result = await driveFetchJson(`https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name,modifiedTime)`);
+    return result.files?.[0] || null;
+  }
+
+  async function createDriveJsonFile(name, folderId, data) {
+    const boundary = `tf_${Date.now()}`;
+    const metadata = { name, parents: [folderId], mimeType: "application/json" };
+    const body = [
+      `--${boundary}`,
+      "Content-Type: application/json; charset=UTF-8",
+      "",
+      JSON.stringify(metadata),
+      `--${boundary}`,
+      "Content-Type: application/json; charset=UTF-8",
+      "",
+      JSON.stringify(data, null, 2),
+      `--${boundary}--`
+    ].join("\r\n");
+    const created = await driveFetchJson("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart", {
+      method: "POST",
+      headers: { "Content-Type": `multipart/related; boundary=${boundary}` },
+      body
+    });
+    return created.id;
+  }
+
+  function scheduleDriveSave() {
+    if (app.settings.role !== "phone") return;
+    app.drive.pending = true;
+    updateStatus();
+    clearTimeout(app.driveTimer);
+    app.driveTimer = window.setTimeout(saveDriveNow, 900);
+  }
+
+  async function saveDriveNow() {
+    if (app.settings.role !== "phone") return;
+    if (!app.drive.accessToken || !app.settings.drive.fileId) {
+      app.drive.pending = true;
+      updateStatus();
+      return;
+    }
+    app.drive.saving = true;
+    updateStatus();
+    try {
+      await driveFetchJson(`https://www.googleapis.com/upload/drive/v3/files/${app.settings.drive.fileId}?uploadType=media`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json; charset=UTF-8" },
+        body: JSON.stringify(sanitizeData(app.data), null, 2)
+      });
+      app.drive.pending = false;
+    } catch (error) {
+      app.drive.pending = true;
+      console.warn(error);
+    } finally {
+      app.drive.saving = false;
+      updateStatus();
+    }
+  }
+
+  async function driveFetchJson(url, options = {}) {
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        Authorization: `Bearer ${app.drive.accessToken}`,
+        ...(options.headers || {})
+      }
+    });
+    if (!response.ok) throw new Error(`Drive ${response.status}`);
+    return response.json();
+  }
+
+  async function syncGithubFromPhone() {
+    if (app.settings.role !== "phone") return;
+    try {
+      requireGithubSettings(true);
+      requirePassword();
+      els.syncStatus.textContent = "GitHub同期中";
+      const envelope = await encryptObject(sanitizeData(app.data), app.settings.syncPassword);
+      const content = bytesToBase64(utf8(JSON.stringify(envelope, null, 2)));
+      const sha = await getGithubFileSha().catch(() => "");
+      const body = {
+        message: `Update Today Fragments sync ${new Date().toISOString()}`,
+        content,
+        branch: app.settings.github.branch || "main"
+      };
+      if (sha) body.sha = sha;
+      const response = await fetch(githubApiUrl(), {
+        method: "PUT",
+        headers: githubHeaders(true),
+        body: JSON.stringify(body)
+      });
+      if (!response.ok) throw await makeGithubError(response);
+      toast("GitHub同期しました");
+    } catch (error) {
+      toast(error.message || "GitHub同期に失敗しました");
+    } finally {
+      updateStatus();
+    }
+  }
+
+  async function loadGithubSnapshot() {
+    requireGithubSettings(false);
+    requirePassword();
+    const g = app.settings.github;
+    const url = `https://raw.githubusercontent.com/${encodeURIComponent(g.owner)}/${encodeURIComponent(g.repo)}/${encodeURIComponent(g.branch || "main")}/${g.path}?t=${Date.now()}`;
+    const response = await fetch(url, { cache: "no-store" });
+    if (!response.ok) throw new Error("先にスマホでGitHub同期してください");
+    const envelope = await response.json();
+    const remoteData = await decryptObject(envelope, app.settings.syncPassword);
+    mergeData(remoteData, { markDirty: false });
+  }
+
+  async function getGithubFileSha() {
+    const response = await fetch(`${githubApiUrl()}?ref=${encodeURIComponent(app.settings.github.branch || "main")}`, {
+      headers: githubHeaders(true)
+    });
+    if (!response.ok) return "";
+    const json = await response.json();
+    return json.sha || "";
+  }
+
+  async function testGithubConnection() {
+    requireGithubSettings(true);
+    const g = app.settings.github;
+    const branch = g.branch || "main";
+    const checked = `${g.owner}/${g.repo} / ${branch} / ${g.path}`;
+
+    const repoResponse = await fetch(githubRepoApiUrl(), {
+      headers: githubHeaders(true)
+    });
+    if (!repoResponse.ok) throw await makeGithubError(repoResponse);
+
+    const branchResponse = await fetch(`${githubRepoApiUrl()}/branches/${encodeURIComponent(branch)}`, {
+      headers: githubHeaders(true)
+    });
+    if (!branchResponse.ok) {
+      if (branchResponse.status === 404) {
+        throw new Error(`GitHubリポジトリは見えますが、ブランチ「${branch}」が見つかりません。\n確認した設定: ${checked}`);
+      }
+      throw await makeGithubError(branchResponse);
     }
 
-    actions.append(addChildButton, deleteButton, toggle);
-    nodeEl.append(content, actions);
-    fragment.appendChild(nodeEl);
-  });
-
-  els.floorLayer.appendChild(floorFragment);
-  els.edgeLayer.appendChild(edgeFragment);
-  els.edge3dLayer.appendChild(edge3dFragment);
-  els.nodeLayer.appendChild(fragment);
-  bindRenderedEvents();
-  updateTransform();
-  updateLabels();
-  updateLayerControls();
-  updateLayerPanel();
-  updateAlignmentGuides();
-  saveTree();
-  clearFlashAfterAnimation();
-}
-
-function renderLayerFloors(fragment) {
-  const layers = [...new Set([...state.positions.values()].map((pos) => pos.layer))].sort((a, b) => a - b);
-  layers.forEach((layer) => {
-    const items = [...state.positions.values()].filter((pos) => pos.layer === layer);
-    if (!items.length) return;
-    const paddingX = layer === 0 ? 140 : 170;
-    const paddingY = layer === 0 ? 100 : 120;
-    const minX = Math.min(...items.map((pos) => pos.x - pos.width / 2)) - paddingX;
-    const maxX = Math.max(...items.map((pos) => pos.x + pos.width / 2)) + paddingX;
-    const minY = Math.min(...items.map((pos) => pos.y - pos.height / 2)) - paddingY;
-    const maxY = Math.max(...items.map((pos) => pos.y + pos.height / 2)) + paddingY;
-    const plate = document.createElement("div");
-    plate.className = `floor-plate ${layer === state.focusLayerDepth ? "is-layer-focused" : "is-layer-dimmed"}`;
-    plate.style.left = `${minX}px`;
-    plate.style.top = `${minY}px`;
-    plate.style.width = `${Math.max(1, maxX - minX)}px`;
-    plate.style.height = `${Math.max(1, maxY - minY)}px`;
-    plate.style.zIndex = String(100000 + Math.round(getLayerAxisY(layer)));
-    applyLayerDepthStyle(plate, getLayerAxisY(layer));
-
-    const label = document.createElement("span");
-    label.className = "floor-label";
-    const axisLabel = layer === state.focusLayerDepth ? "アクティブ" : layer < state.focusLayerDepth ? "Y+" : "Y-";
-    label.textContent = `階層 ${layer} / ${axisLabel}`;
-    plate.appendChild(label);
-    fragment.appendChild(plate);
-  });
-}
-
-function shouldRenderLayer(layer) {
-  return state.layerFilterDepth === null || layer === state.layerFilterDepth;
-}
-
-function shouldRenderEdge(edge) {
-  if (isLayerConnectorEdge(edge)) return state.isLayer3d;
-  if (state.layerFilterDepth === null) return true;
-  const from = state.positions.get(edge.from);
-  const to = state.positions.get(edge.to);
-  return Boolean(from && to && from.layer === state.layerFilterDepth && to.layer === state.layerFilterDepth);
-}
-
-function isLayerConnectorEdge(edge) {
-  const from = findNode(edge.from)?.node;
-  const to = findNode(edge.to)?.node;
-  const fromPos = state.positions.get(edge.from);
-  const toPos = state.positions.get(edge.to);
-  return Boolean(
-    (to?.parallelOf && to.parallelOf === edge.from) ||
-      (from?.parallelOf && from.parallelOf === edge.to) ||
-      (fromPos && toPos && fromPos.layer !== toPos.layer),
-  );
-}
-
-function clampFocusLayerDepth() {
-  const maxLayer = getMaxRenderedLayer();
-  state.focusLayerDepth = clamp(state.focusLayerDepth, 0, maxLayer);
-}
-
-function getMaxRenderedLayer() {
-  const layers = [...state.positions.values()].map((pos) => pos.layer);
-  return layers.length ? Math.max(...layers) : 0;
-}
-
-function applyNodeMotion(nodeEl, pos, previous) {
-  if (state.isDraggingNode) return;
-  if (!previous) {
-    nodeEl.classList.add("is-entering");
-    return;
+    const fileResponse = await fetch(`${githubApiUrl()}?ref=${encodeURIComponent(branch)}`, {
+      headers: githubHeaders(true)
+    });
+    if (fileResponse.ok) return `GitHub確認OK\n確認した設定: ${checked}\n同期ファイルも見つかりました`;
+    if (fileResponse.status === 404) {
+      return `GitHub確認OK\n確認した設定: ${checked}\n同期ファイルはまだありません。次のGitHub同期で作成できます`;
+    }
+    throw await makeGithubError(fileResponse);
   }
 
-  const dx = previous.x - pos.x;
-  const dy = previous.y - pos.y;
-  const distance = Math.hypot(dx, dy);
-  if (distance < 3 || nodeEl.classList.contains("is-new") || nodeEl.classList.contains("is-removing")) return;
-
-  const rotation = Math.max(-5, Math.min(5, dx / 70));
-  const stretch = Math.min(1.06, 1 + distance / 5000);
-  nodeEl.classList.add("is-moving");
-  nodeEl.style.setProperty("--move-x", `${dx}px`);
-  nodeEl.style.setProperty("--move-y", `${dy}px`);
-  nodeEl.style.setProperty("--move-rotate", `${rotation}deg`);
-  nodeEl.style.setProperty("--move-scale", stretch.toFixed(3));
-}
-
-function makeNodeButton(className, label, title) {
-  const button = document.createElement("button");
-  button.className = `node-action ${className}`;
-  button.type = "button";
-  button.title = title;
-  button.setAttribute("aria-label", title);
-  button.textContent = label;
-  return button;
-}
-
-function nodeClass(node, pos, matches, hasSearch) {
-  const classes = ["mind-node", `type-${normalizeNodeType(node.type)}`];
-  if (pos.depth === 0) classes.push("root");
-  if (node.parallelOf) classes.push("is-layer-ghost");
-  if (state.isLayer3d) {
-    classes.push(pos.layer === state.focusLayerDepth ? "is-layer-focused" : "is-layer-dimmed");
+  async function makeGithubError(response) {
+    let detail = "";
+    try {
+      const json = await response.json();
+      detail = json.message || "";
+    } catch {
+      detail = "";
+    }
+    if (response.status === 404) {
+      return new Error(
+        [
+          "GitHub 404: リポジトリが見つからないか、トークンに権限がありません。",
+          "GitHubユーザー/組織はメールアドレスではなく、リポジトリURLの名前を入れてください。",
+          "例: https://github.com/example/today-fragments なら example / today-fragments です。",
+          "ブランチ名と、トークンの Contents: Read and write も確認してください。"
+        ].join("\n")
+      );
+    }
+    if (response.status === 401 || response.status === 403) {
+      return new Error(
+        [
+          "GitHub認証に失敗しました。",
+          detail ? `GitHubからの理由: ${detail}` : "",
+          "スマホの設定に入っているトークン文字列、対象リポジトリ、ブランチを確認してください。",
+          "Fine-grained tokenは、対象リポジトリと Contents: Read and write 権限が必要です。",
+          "会社/組織リポジトリの場合は、組織承認が必要なことがあります。"
+        ]
+          .filter(Boolean)
+          .join("\n")
+      );
+    }
+    return new Error(`GitHub ${response.status}${detail ? `: ${detail}` : ""}`);
   }
-  if (isNodeFocusMuted(node.id)) classes.push("is-focus-muted");
-  if (node.id === state.selectedId) classes.push("is-selected");
-  if (node.id === state.flashId) classes.push("is-new");
-  if (node.id === state.removingId) classes.push("is-removing");
-  if (matches.has(node.id)) classes.push("is-match");
-  if (hasSearch && !matches.has(node.id) && !isAncestorOfMatch(node, matches)) classes.push("is-muted");
-  return classes.join(" ");
-}
 
-function clearFlashAfterAnimation() {
-  if (!state.flashId) return;
-  const id = state.flashId;
-  window.setTimeout(() => {
-    if (state.flashId !== id) return;
-    state.flashId = null;
-    const nodeEl = document.querySelector(`.mind-node[data-id="${CSS.escape(id)}"]`);
-    nodeEl?.classList.remove("is-new");
-  }, ANIMATION_MS);
-}
-
-function edgeClass(edge, matches, hasSearch) {
-  const classes = ["edge-path", `relation-${normalizeRelationType(edge.relationType)}`];
-  if (isLayerConnectorEdge(edge)) classes.push("is-layer-connector");
-  if (state.isLayer3d) {
-    const fromLayer = state.positions.get(edge.from)?.layer;
-    const toLayer = state.positions.get(edge.to)?.layer;
-    const touchesFocusedLayer = fromLayer === state.focusLayerDepth || toLayer === state.focusLayerDepth;
-    classes.push(touchesFocusedLayer ? "is-layer-focused" : "is-layer-dimmed");
+  function githubApiUrl() {
+    const g = app.settings.github;
+    return `https://api.github.com/repos/${encodeURIComponent(g.owner)}/${encodeURIComponent(g.repo)}/contents/${g.path.split("/").map(encodeURIComponent).join("/")}`;
   }
-  if (isEdgeFocusMuted(edge)) classes.push("is-focus-muted");
-  if (edge.from === state.selectedId || edge.to === state.selectedId) classes.push("is-selected");
-  if (hasSearch) {
-    const from = findNode(edge.from)?.node;
-    const to = findNode(edge.to)?.node;
-    const relatedToMatch =
-      matches.has(edge.from) ||
-      matches.has(edge.to) ||
-      (from && isAncestorOfMatch(from, matches)) ||
-      (to && isAncestorOfMatch(to, matches));
-    if (!relatedToMatch) classes.push("is-muted");
-  }
-  return classes.join(" ");
-}
 
-function getFocusScopeIds() {
-  if (!state.focusNodeId) return null;
-  const found = findNode(state.focusNodeId);
-  if (!found) {
-    state.focusNodeId = "";
+  function githubRepoApiUrl() {
+    const g = app.settings.github;
+    return `https://api.github.com/repos/${encodeURIComponent(g.owner)}/${encodeURIComponent(g.repo)}`;
+  }
+
+  function githubHeaders(needsToken) {
+    const headers = {
+      Accept: "application/vnd.github+json",
+      "Content-Type": "application/json"
+    };
+    if (needsToken) headers.Authorization = `Bearer ${app.settings.github.token}`;
+    return headers;
+  }
+
+  function requireGithubSettings(needsToken) {
+    const g = app.settings.github;
+    if (!g.owner || !g.repo || !g.path) throw new Error("GitHub設定が足りません");
+    if (needsToken && !g.token) throw new Error("GitHubトークンが必要です");
+  }
+
+  function requirePassword() {
+    if (!app.settings.syncPassword) throw new Error("同期パスワードが必要です");
+  }
+
+  async function openQrModal() {
+    if (app.settings.role !== "pc") return;
+    try {
+      requirePassword();
+      const delta = buildDirtyDelta();
+      if (!delta.notes.length && !delta.groups.length && !delta.connections.length) {
+        toast("未同期の変更はありません");
+        return;
+      }
+      const envelope = await encryptObject(delta, app.settings.syncPassword);
+      const payload = bytesToBase64Url(utf8(JSON.stringify(envelope)));
+      const sessionId = uid("qr").replace(/_/g, "");
+      const chunks = chunkString(payload, 300);
+      let index = 0;
+      openModal(`
+        <div class="modal-head">
+          <h2>QRでスマホへ</h2>
+          <button class="close-button" data-close type="button">×</button>
+        </div>
+        <div class="qr-wrap"><canvas id="qr-canvas"></canvas><textarea id="qr-fallback" class="output-box hidden" readonly></textarea></div>
+        <p id="qr-count" class="status-line"></p>
+        <div class="button-row">
+          <button id="qr-prev" class="soft-button" type="button">前へ</button>
+          <button id="qr-next" class="primary-button" type="button">次へ</button>
+          <button id="qr-clear" class="soft-button" type="button">送信済みにする</button>
+        </div>
+      `);
+      const render = async () => {
+        const frame = `TFQR1.${sessionId}.${index + 1}.${chunks.length}.${chunks[index]}`;
+        $("#qr-count").textContent = `${index + 1} / ${chunks.length}`;
+        $("#qr-prev").disabled = index === 0;
+        $("#qr-next").disabled = index === chunks.length - 1;
+        const canvas = $("#qr-canvas");
+        const fallback = $("#qr-fallback");
+        if (window.QRCode?.toCanvas) {
+          fallback.classList.add("hidden");
+          canvas.classList.remove("hidden");
+          await window.QRCode.toCanvas(canvas, frame, { width: 360, margin: 2, errorCorrectionLevel: "M" });
+        } else if (window.qrcode) {
+          fallback.classList.add("hidden");
+          canvas.classList.remove("hidden");
+          drawQrToCanvas(canvas, frame);
+        } else {
+          canvas.classList.add("hidden");
+          fallback.classList.remove("hidden");
+          fallback.value = frame;
+        }
+      };
+      $("#qr-prev").addEventListener("click", () => {
+        index = Math.max(0, index - 1);
+        render();
+      });
+      $("#qr-next").addEventListener("click", () => {
+        index = Math.min(chunks.length - 1, index + 1);
+        render();
+      });
+      $("#qr-clear").addEventListener("click", async () => {
+        app.dirty = { notes: {}, groups: {}, connections: {} };
+        await persistState();
+        closeModal();
+        updateStatus();
+        toast("未同期を消しました");
+      });
+      await render();
+    } catch (error) {
+      toast(error.message || "QRを作れませんでした");
+    }
+  }
+
+  function drawQrToCanvas(canvas, text) {
+    const qr = window.qrcode(0, "M");
+    qr.addData(text);
+    qr.make();
+    const count = qr.getModuleCount();
+    const margin = 4;
+    const cssSize = 360;
+    const scale = Math.max(2, Math.floor(cssSize / (count + margin * 2)));
+    const size = (count + margin * 2) * scale;
+    const ratio = window.devicePixelRatio || 1;
+    canvas.width = size * ratio;
+    canvas.height = size * ratio;
+    canvas.style.width = `${size}px`;
+    canvas.style.height = `${size}px`;
+    const context = canvas.getContext("2d");
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, size, size);
+    context.fillStyle = "#05070c";
+    for (let y = 0; y < count; y += 1) {
+      for (let x = 0; x < count; x += 1) {
+        if (qr.isDark(y, x)) {
+          context.fillRect((x + margin) * scale, (y + margin) * scale, scale, scale);
+        }
+      }
+    }
+  }
+
+  function buildDirtyDelta() {
+    const noteIds = new Set(Object.keys(app.dirty.notes || {}));
+    const groupIds = new Set(Object.keys(app.dirty.groups || {}));
+    const connectionIds = new Set(Object.keys(app.dirty.connections || {}));
+    return {
+      type: "today-fragments-delta",
+      schemaVersion: 1,
+      createdAt: nowIso(),
+      fromDeviceId: app.settings.deviceId,
+      notes: app.data.notes.filter((note) => noteIds.has(note.id)),
+      groups: app.data.groups.filter((group) => groupIds.has(group.id)),
+      connections: app.data.connections.filter((connection) => connectionIds.has(connection.id))
+    };
+  }
+
+  function openImportModal() {
+    if (app.settings.role !== "phone") return;
+    openModal(`
+      <div class="modal-head">
+        <h2>PCから取り込み</h2>
+        <button class="close-button" data-close type="button">×</button>
+      </div>
+      <video id="scan-video" class="scan-video" autoplay playsinline webkit-playsinline muted></video>
+      <p id="scan-status" class="status-line">iOSでは「カメラ開始」を押して起動してください</p>
+      <div class="form-row">
+        <label>貼り付け取り込み</label>
+        <textarea id="scan-paste" placeholder="QRの文字列"></textarea>
+      </div>
+      <div class="button-row">
+        <button id="scan-start" class="primary-button" type="button">カメラ開始</button>
+        <button id="scan-apply-paste" class="soft-button" type="button">貼り付けを読む</button>
+      </div>
+    `);
+    $("#scan-start").addEventListener("click", startQrScan);
+    $("#scan-apply-paste").addEventListener("click", () => handleQrText($("#scan-paste").value.trim(), { manual: true }));
+  }
+
+  async function startQrScan() {
+    const status = $("#scan-status");
+    const video = $("#scan-video");
+    app.scanSession += 1;
+    const session = app.scanSession;
+    stopScanStream();
+    if (!window.isSecureContext && location.hostname !== "localhost" && location.hostname !== "127.0.0.1") {
+      status.textContent = "カメラはHTTPSで開いた時だけ使えます。GitHub Pagesのhttps URLで開いてください";
+      return;
+    }
+    if (!navigator.mediaDevices?.getUserMedia) {
+      status.textContent = "このブラウザではカメラを開けません。貼り付け取り込みを使ってください";
+      return;
+    }
+    try {
+      status.textContent = "カメラ確認中";
+      video.muted = true;
+      video.playsInline = true;
+      video.setAttribute("playsinline", "");
+      video.setAttribute("webkit-playsinline", "");
+      const stream = await openCameraStream();
+      if (session !== app.scanSession) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+      video.srcObject = stream;
+      await video.play().catch(() => {});
+      status.textContent = "QR読取準備中";
+      const hasReader = await ensureQrReader();
+      if (session !== app.scanSession) return;
+      status.textContent = "読み取り中";
+      if (window.jsQR) {
+        scanWithJsQr(video, status, session);
+      } else if ("BarcodeDetector" in window) {
+        scanWithBarcodeDetector(video, status, session);
+      } else {
+        status.textContent = hasReader
+          ? "QR読取を開始できませんでした。貼り付け取り込みを使ってください"
+          : "QR読取ライブラリを読み込めませんでした。vendor/jsQR.jsがGitHub Pagesに上がっているか確認してください";
+      }
+    } catch (error) {
+      status.textContent = cameraErrorMessage(error);
+    }
+  }
+
+  async function ensureQrReader() {
+    if (window.jsQR) return true;
+    const sources = [
+      `vendor/jsQR.js?v=${APP_VERSION}`,
+      "https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"
+    ];
+    for (const source of sources) {
+      try {
+        await loadScriptOnce(source);
+        if (window.jsQR) return true;
+      } catch (error) {
+        console.warn(`QR reader load failed: ${source}`, error);
+      }
+    }
+    return Boolean(window.jsQR);
+  }
+
+  function loadScriptOnce(source) {
+    if (loadedScripts.has(source)) return loadedScripts.get(source);
+    const promise = new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      let settled = false;
+      const finish = (callback, value) => {
+        if (settled) return;
+        settled = true;
+        callback(value);
+      };
+      script.async = true;
+      script.src = source;
+      script.onload = () => finish(resolve);
+      script.onerror = () => finish(reject, new Error(`script load failed: ${source}`));
+      document.head.appendChild(script);
+      window.setTimeout(() => finish(reject, new Error(`script load timed out: ${source}`)), 8000);
+    });
+    loadedScripts.set(source, promise);
+    return promise;
+  }
+
+  async function openCameraStream() {
+    const attempts = [
+      { video: { facingMode: { ideal: "environment" } }, audio: false },
+      { video: true, audio: false }
+    ];
+    let lastError = null;
+    for (const constraints of attempts) {
+      try {
+        return await navigator.mediaDevices.getUserMedia(constraints);
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError || new Error("camera unavailable");
+  }
+
+  function cameraErrorMessage(error) {
+    const name = error?.name || "";
+    if (name === "NotAllowedError" || name === "PermissionDeniedError") {
+      return "カメラ権限が許可されませんでした。Safari/ブラウザのサイト設定でカメラを許可してください";
+    }
+    if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+      return "利用できるカメラが見つかりませんでした";
+    }
+    if (name === "NotReadableError" || name === "TrackStartError") {
+      return "カメラを起動できませんでした。別アプリでカメラを使っていないか確認してください";
+    }
+    if (name === "SecurityError") {
+      return "カメラはHTTPSで開いた時だけ使えます。GitHub Pagesのhttps URLで開いてください";
+    }
+    return `カメラを開けませんでした${name ? `: ${name}` : ""}。貼り付け取り込みを使ってください`;
+  }
+
+  function scanWithBarcodeDetector(video, status, session) {
+    const detector = new BarcodeDetector({ formats: ["qr_code"] });
+    let lastValue = "";
+    const tick = async () => {
+      if (!video.srcObject || session !== app.scanSession) return;
+      try {
+        const codes = await detector.detect(video);
+        const value = codes[0]?.rawValue || "";
+        if (value && value !== lastValue) {
+          lastValue = value;
+          await handleQrText(value);
+        }
+      } catch (error) {
+        status.textContent = "読み取り中に失敗しました。もう一度QRを画面に入れてください";
+      }
+      requestAnimationFrame(tick);
+    };
+    tick();
+  }
+
+  function scanWithJsQr(video, status, session) {
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    let lastValue = "";
+    const tick = async () => {
+      if (!video.srcObject || session !== app.scanSession) return;
+      if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video.videoWidth && video.videoHeight) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const image = context.getImageData(0, 0, canvas.width, canvas.height);
+        const code = window.jsQR(image.data, image.width, image.height, { inversionAttempts: "dontInvert" });
+        if (code?.data && code.data !== lastValue) {
+          lastValue = code.data;
+          await handleQrText(code.data);
+        }
+      }
+      requestAnimationFrame(tick);
+    };
+    status.textContent = "読み取り中";
+    tick();
+  }
+
+  async function handleQrText(text, options = {}) {
+    const status = $("#scan-status");
+    const normalized = extractQrFrame(text);
+    if (!normalized) {
+      if (status) status.textContent = options.manual ? "QRの文字列ではありません。PC側のQR表示に出ている文字列を貼ってください" : "QRを読み取れませんでした";
+      return;
+    }
+    text = normalized;
+    try {
+      requirePassword();
+      const parts = text.split(".");
+      const [, sessionId, indexText, totalText, ...chunkParts] = parts;
+      const chunk = chunkParts.join(".");
+      const index = Number(indexText);
+      const total = Number(totalText);
+      if (!sessionId || !index || !total || !chunk) throw new Error("QR形式が違います");
+      if (index < 1 || index > total) throw new Error("QRの番号が正しくありません");
+      if (!app.qrParts.has(sessionId)) app.qrParts.set(sessionId, { total, chunks: new Map() });
+      const session = app.qrParts.get(sessionId);
+      if (session.total !== total) throw new Error("別のQRセットが混ざっています");
+      session.chunks.set(index, chunk);
+      status.textContent = `${session.chunks.size} / ${session.total} 読み取り済み`;
+      toast(`${session.chunks.size} / ${session.total} 読み取り済み`);
+      if (session.chunks.size !== session.total) return;
+      const missing = Array.from({ length: session.total }, (_, i) => i + 1).filter((part) => !session.chunks.has(part));
+      if (missing.length) {
+        status.textContent = `未読: ${missing.join(", ")}`;
+        return;
+      }
+      const payload = Array.from({ length: session.total }, (_, i) => session.chunks.get(i + 1)).join("");
+      const envelope = JSON.parse(decodeUtf8(base64UrlToBytes(payload)));
+      const delta = await decryptObject(envelope, app.settings.syncPassword);
+      if (delta.type !== "today-fragments-delta") throw new Error("取り込みデータが違います");
+      const result = mergeData(delta, { markDirty: false });
+      await persistState();
+      scheduleDriveSave();
+      app.qrParts.delete(sessionId);
+      status.textContent = `取り込みました: ${result.created}件追加 / ${result.updated}件更新`;
+      toast("PC差分を取り込みました");
+      renderAll();
+    } catch (error) {
+      status.textContent = error.message || "取り込みに失敗しました";
+    }
+  }
+
+  function extractQrFrame(text = "") {
+    const compact = String(text).trim();
+    if (!compact) return "";
+    const match = compact.match(/TFQR1\.[A-Za-z0-9]+(?:_[A-Za-z0-9]+)?\.\d+\.\d+\.[A-Za-z0-9_-]+/);
+    return match ? match[0] : "";
+  }
+
+  function mergeData(incoming, options = {}) {
+    const result = { changed: 0, created: 0, updated: 0 };
+    const incomingNotes = Array.isArray(incoming.notes) ? incoming.notes : [];
+    const incomingGroups = Array.isArray(incoming.groups) ? incoming.groups : [];
+    const incomingConnections = Array.isArray(incoming.connections) ? incoming.connections : [];
+    incomingNotes.forEach((note) => {
+      const existing = findNote(note.id);
+      if (!existing) {
+        app.data.notes.push(normalizeData({ notes: [note], groups: [] }).notes[0]);
+        result.changed += 1;
+        result.created += 1;
+        return;
+      }
+      if ((note.updatedAt || "") > (existing.updatedAt || "")) {
+        Object.assign(existing, note);
+        result.changed += 1;
+        result.updated += 1;
+      }
+    });
+    incomingGroups.forEach((group) => {
+      const existing = findGroup(group.id);
+      if (!existing) {
+        app.data.groups.push(normalizeData({ notes: [], groups: [group] }).groups[0]);
+        result.changed += 1;
+        result.created += 1;
+        return;
+      }
+      if ((group.updatedAt || "") > (existing.updatedAt || "")) {
+        Object.assign(existing, group);
+        result.changed += 1;
+        result.updated += 1;
+      }
+    });
+    incomingConnections.forEach((connection) => {
+      const normalized = normalizeData({ notes: [], groups: [], connections: [connection] }).connections[0];
+      const existing = findConnection(connection.id);
+      if (!existing) {
+        app.data.connections.push(normalized);
+        result.changed += 1;
+        result.created += 1;
+        return;
+      }
+      if ((connection.updatedAt || "") > (existing.updatedAt || "")) {
+        Object.assign(existing, normalized);
+        result.changed += 1;
+        result.updated += 1;
+      }
+    });
+    if (result.changed) {
+      app.data.updatedAt = nowIso();
+      updateAllNoteGroups();
+    }
+    if (options.markDirty && app.settings.role === "pc") {
+      incomingNotes.forEach((note) => (app.dirty.notes[note.id] = note.updatedAt || nowIso()));
+      incomingGroups.forEach((group) => (app.dirty.groups[group.id] = group.updatedAt || nowIso()));
+      incomingConnections.forEach((connection) => (app.dirty.connections[connection.id] = connection.updatedAt || nowIso()));
+    }
+    return result;
+  }
+
+  function sanitizeData(data) {
+    return normalizeData(JSON.parse(JSON.stringify(data)));
+  }
+
+  async function encryptObject(object, password) {
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const plain = utf8(JSON.stringify(object));
+    const compressed = await compressBytes(plain);
+    const key = await deriveKey(password, salt);
+    const cipher = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, compressed.bytes));
+    return {
+      app: "Today Fragments",
+      version: 1,
+      createdAt: nowIso(),
+      kdf: {
+        name: "PBKDF2",
+        hash: "SHA-256",
+        iterations: 250000,
+        salt: bytesToBase64Url(salt)
+      },
+      cipher: {
+        name: "AES-GCM",
+        iv: bytesToBase64Url(iv),
+        data: bytesToBase64Url(cipher)
+      },
+      compression: compressed.compression
+    };
+  }
+
+  async function decryptObject(envelope, password) {
+    const salt = base64UrlToBytes(envelope.kdf.salt);
+    const iv = base64UrlToBytes(envelope.cipher.iv);
+    const data = base64UrlToBytes(envelope.cipher.data);
+    const key = await deriveKey(password, salt, envelope.kdf.iterations);
+    const plainCompressed = new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, data));
+    const plain = await decompressBytes(plainCompressed, envelope.compression);
+    return JSON.parse(decodeUtf8(plain));
+  }
+
+  async function deriveKey(password, salt, iterations = 250000) {
+    const material = await crypto.subtle.importKey("raw", utf8(password), "PBKDF2", false, ["deriveKey"]);
+    return crypto.subtle.deriveKey(
+      { name: "PBKDF2", salt, iterations, hash: "SHA-256" },
+      material,
+      { name: "AES-GCM", length: 256 },
+      false,
+      ["encrypt", "decrypt"]
+    );
+  }
+
+  async function compressBytes(bytes) {
+    if (!("CompressionStream" in window)) return { bytes, compression: "none" };
+    const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream("gzip"));
+    const buffer = await new Response(stream).arrayBuffer();
+    return { bytes: new Uint8Array(buffer), compression: "gzip" };
+  }
+
+  async function decompressBytes(bytes, compression) {
+    if (compression !== "gzip") return bytes;
+    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
+    const buffer = await new Response(stream).arrayBuffer();
+    return new Uint8Array(buffer);
+  }
+
+  function initWebGl() {
+    if (app.gl) return;
+    const gl = els.canvas.getContext("webgl", { antialias: false, alpha: false });
+    if (!gl) return;
+    const vertex = `
+      attribute vec2 a_position;
+      void main() {
+        gl_Position = vec4(a_position, 0.0, 1.0);
+      }
+    `;
+    const fragment = `
+      precision mediump float;
+      uniform vec2 u_resolution;
+      uniform vec2 u_view;
+      uniform float u_zoom;
+      uniform float u_time;
+
+      float gridLine(vec2 p, float size, float width) {
+        vec2 g = abs(fract(p / size - 0.5) - 0.5) / fwidth(p / size);
+        float line = min(g.x, g.y);
+        return 1.0 - smoothstep(width, width + 1.0, line);
+      }
+
+      void main() {
+        vec2 uv = gl_FragCoord.xy / u_resolution.xy;
+        vec2 world = (gl_FragCoord.xy - u_view) / max(u_zoom, 0.001);
+        float gridA = gridLine(world + vec2(sin(u_time * 0.25) * 10.0, 0.0), 72.0, 0.46);
+        float gridB = gridLine(world, 288.0, 0.62);
+        float vignette = distance(uv, vec2(0.5));
+        vec3 base = mix(vec3(0.025, 0.035, 0.06), vec3(0.055, 0.065, 0.09), uv.y);
+        vec3 cyan = vec3(0.14, 0.52, 0.58) * (0.22 + 0.14 * sin(u_time * 0.33 + uv.x * 6.0));
+        vec3 rose = vec3(0.52, 0.12, 0.25) * (0.16 + 0.1 * cos(u_time * 0.22 + uv.y * 5.0));
+        vec3 color = base + cyan * smoothstep(0.85, 0.05, distance(uv, vec2(0.12, 0.18)));
+        color += rose * smoothstep(0.9, 0.08, distance(uv, vec2(0.86, 0.18)));
+        color += vec3(0.24, 0.44, 0.36) * smoothstep(0.82, 0.08, distance(uv, vec2(0.52, 0.95))) * 0.24;
+        color += vec3(0.12, 0.19, 0.28) * gridA;
+        color += vec3(0.24, 0.37, 0.44) * gridB;
+        color *= smoothstep(0.86, 0.22, vignette);
+        gl_FragColor = vec4(color, 1.0);
+      }
+    `;
+    const program = makeProgram(gl, vertex, fragment);
+    if (!program) return;
+    const buffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    app.gl = {
+      gl,
+      program,
+      pos: gl.getAttribLocation(program, "a_position"),
+      resolution: gl.getUniformLocation(program, "u_resolution"),
+      view: gl.getUniformLocation(program, "u_view"),
+      zoom: gl.getUniformLocation(program, "u_zoom"),
+      time: gl.getUniformLocation(program, "u_time")
+    };
+    resizeGlCanvas();
+    requestAnimationFrame(drawWebGl);
+  }
+
+  function drawWebGl(time) {
+    if (!app.gl) return;
+    const { gl, program, pos, resolution, view, zoom } = app.gl;
+    const pixelRatio = renderPixelRatio();
+    resizeGlCanvas();
+    gl.useProgram(program);
+    gl.enableVertexAttribArray(pos);
+    gl.vertexAttribPointer(pos, 2, gl.FLOAT, false, 0, 0);
+    gl.uniform2f(resolution, els.canvas.width, els.canvas.height);
+    gl.uniform2f(view, app.view.x * pixelRatio, (window.innerHeight - app.view.y) * pixelRatio);
+    gl.uniform1f(zoom, app.view.zoom * pixelRatio);
+    gl.uniform1f(app.gl.time, time * 0.001);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    requestAnimationFrame(drawWebGl);
+  }
+
+  function resizeGlCanvas() {
+    const pixelRatio = renderPixelRatio();
+    const width = Math.max(1, Math.floor(window.innerWidth * pixelRatio));
+    const height = Math.max(1, Math.floor(window.innerHeight * pixelRatio));
+    if (els.canvas.width !== width || els.canvas.height !== height) {
+      els.canvas.width = width;
+      els.canvas.height = height;
+      app.gl?.gl.viewport(0, 0, width, height);
+    }
+  }
+
+  function renderPixelRatio() {
+    const ratio = window.devicePixelRatio || 1;
+    return Math.min(ratio, useLightweightEffects() ? 1.15 : 1.6);
+  }
+
+  function makeProgram(gl, vertexSource, fragmentSource) {
+    const vertex = compileShader(gl, gl.VERTEX_SHADER, vertexSource);
+    const fragment = compileShader(gl, gl.FRAGMENT_SHADER, fragmentSource);
+    if (!vertex || !fragment) return null;
+    const program = gl.createProgram();
+    gl.attachShader(program, vertex);
+    gl.attachShader(program, fragment);
+    gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      console.warn(gl.getProgramInfoLog(program));
+      return null;
+    }
+    return program;
+  }
+
+  function compileShader(gl, type, source) {
+    const shader = gl.createShader(type);
+    gl.shaderSource(shader, source);
+    gl.compileShader(shader);
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+      console.warn(gl.getShaderInfoLog(shader));
+      return null;
+    }
+    return shader;
+  }
+
+  function openModal(html) {
+    stopScanStream();
+    els.modalRoot.classList.add("active");
+    els.modalRoot.innerHTML = `<div class="modal-backdrop"><section class="modal-panel">${html}</section></div>`;
+    $$("[data-close]", els.modalRoot).forEach((button) => button.addEventListener("click", closeModal));
+    $(".modal-backdrop", els.modalRoot).addEventListener("click", (event) => {
+      if (event.target.classList.contains("modal-backdrop")) closeModal();
+    });
+  }
+
+  function closeModal() {
+    stopScanStream();
+    els.modalRoot.classList.remove("active");
+    els.modalRoot.innerHTML = "";
+  }
+
+  function stopScanStream() {
+    const video = $("#scan-video");
+    const stream = video?.srcObject;
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop());
+      video.srcObject = null;
+    }
+  }
+
+  function updateStatus() {
+    const pendingCount =
+      Object.keys(app.dirty.notes || {}).length +
+      Object.keys(app.dirty.groups || {}).length +
+      Object.keys(app.dirty.connections || {}).length;
+    if (app.settings.role === "pc") {
+      els.syncStatus.textContent = pendingCount ? `未同期 ${pendingCount}件` : "PCローカル保存";
+      return;
+    }
+    if (app.drive.saving) {
+      els.syncStatus.textContent = "Drive保存中";
+    } else if (app.drive.pending) {
+      els.syncStatus.textContent = "Drive未保存";
+    } else if (app.drive.connected) {
+      els.syncStatus.textContent = "Drive保存済み";
+    } else {
+      els.syncStatus.textContent = "ローカル保存";
+    }
+  }
+
+  function schedulePersist() {
+    clearTimeout(app.saveTimer);
+    app.saveTimer = window.setTimeout(persistState, 120);
+  }
+
+  async function persistState() {
+    app.data.updatedAt = app.data.updatedAt || nowIso();
+    await idbSet(STATE_KEY, {
+      settings: app.settings,
+      data: app.data,
+      dirty: app.dirty
+    });
+  }
+
+  function findNote(id) {
+    return app.data.notes.find((note) => note.id === id);
+  }
+
+  function findGroup(id) {
+    return app.data.groups.find((group) => group.id === id);
+  }
+
+  function findConnection(id) {
+    return app.data.connections.find((connection) => connection.id === id);
+  }
+
+  function findEntity(type, id) {
+    if (type === "note") return findNote(id);
+    if (type === "group") return findGroup(id);
+    if (type === "connection") return findConnection(id);
     return null;
   }
 
-  const ids = new Set(getNodePath(state.focusNodeId));
-  walkSubtree(found.node, (node) => ids.add(node.id));
-  return ids;
-}
-
-function getNodePath(id, node = state.tree, path = []) {
-  const nextPath = [...path, node.id];
-  if (node.id === id) return nextPath;
-  for (const child of node.children) {
-    const result = getNodePath(id, child, nextPath);
-    if (result.length) return result;
-  }
-  return [];
-}
-
-function isNodeFocusMuted(id) {
-  const scope = getFocusScopeIds();
-  return Boolean(scope && !scope.has(id));
-}
-
-function isEdgeFocusMuted(edge) {
-  const scope = getFocusScopeIds();
-  return Boolean(scope && (!scope.has(edge.from) || !scope.has(edge.to)));
-}
-
-function getSearchMatches() {
-  const matches = new Set();
-  const query = state.search.trim().toLowerCase();
-  if (!query) return matches;
-  walk(state.tree, (node) => {
-    if (node.text.toLowerCase().includes(query)) matches.add(node.id);
-  });
-  return matches;
-}
-
-function isAncestorOfMatch(node, matches) {
-  if (matches.has(node.id)) return true;
-  return node.children.some((child) => isAncestorOfMatch(child, matches));
-}
-
-function bindRenderedEvents() {
-  document.querySelectorAll(".mind-node").forEach((nodeEl) => {
-    const id = nodeEl.dataset.id;
-    const title = nodeEl.querySelector(".node-title");
-    const toggle = nodeEl.querySelector(".node-toggle");
-    const addChildButton = nodeEl.querySelector(".node-add-child");
-    const deleteButton = nodeEl.querySelector(".node-delete");
-    let editSnapshot = null;
-    let editRecorded = false;
-
-    nodeEl.addEventListener("pointerdown", (event) => {
-      if (state.isLayer3d && event.altKey) return;
-      if (event.button !== 0 || event.target.closest(".node-action")) return;
-      event.stopPropagation();
-      selectNode(id);
-      startNodeDrag(event, id);
+  function trashConnectionsFor(type, id, deleted = false) {
+    app.data.connections.forEach((connection) => {
+      const related = (connection.from.type === type && connection.from.id === id) || (connection.to.type === type && connection.to.id === id);
+      if (!related || connection.deletedAt) return;
+      const timestamp = nowIso();
+      connection.trashedAt = connection.trashedAt || timestamp;
+      if (deleted) connection.deletedAt = timestamp;
+      connection.updatedAt = timestamp;
+      touchEntity("connection", connection.id, { alreadyUpdated: true });
     });
-
-    nodeEl.addEventListener("contextmenu", (event) => {
-      if (state.isLayer3d && event.altKey) {
-        event.preventDefault();
-        return;
-      }
-      event.preventDefault();
-      event.stopPropagation();
-      showNodeContextMenu(event, id);
-    });
-
-    title.addEventListener("focus", () => {
-      editSnapshot = captureSnapshot();
-      editRecorded = false;
-    });
-
-    title.addEventListener("input", () => {
-      const found = findNode(id);
-      if (!found) return;
-      if (!editRecorded) {
-        pushHistory(editSnapshot || captureSnapshot());
-        editRecorded = true;
-      }
-      found.node.text = title.textContent.trim() || "無題";
-      updateLabels();
-      saveTree();
-    });
-
-    title.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") {
-        event.preventDefault();
-        title.blur();
-      }
-    });
-
-    toggle.addEventListener("click", (event) => {
-      if (state.isLayer3d && event.altKey) {
-        event.preventDefault();
-        event.stopPropagation();
-        return;
-      }
-      event.stopPropagation();
-      const found = findNode(id);
-      if (!found || !found.node.children.length) return;
-      pushHistory();
-      found.node.collapsed = !found.node.collapsed;
-      render();
-    });
-
-    addChildButton.addEventListener("click", (event) => {
-      if (state.isLayer3d && event.altKey) {
-        event.preventDefault();
-        event.stopPropagation();
-        return;
-      }
-      event.stopPropagation();
-      state.selectedId = id;
-      addChild();
-    });
-
-    deleteButton.addEventListener("click", (event) => {
-      if (state.isLayer3d && event.altKey) {
-        event.preventDefault();
-        event.stopPropagation();
-        return;
-      }
-      event.stopPropagation();
-      if (deleteButton.disabled) return;
-      state.selectedId = id;
-      deleteSelected();
-    });
-  });
-}
-
-function showNodeContextMenu(event, id) {
-  const found = findNode(id);
-  if (!found || !els.nodeContextMenu) return;
-  selectNode(id);
-
-  els.nodeContextMenu.textContent = "";
-
-  appendContextSection([
-    {
-      label: "子ノードを追加",
-      detail: "+",
-      action: () => addChild(),
-    },
-    {
-      label: "下層に追加",
-      detail: "3D",
-      action: () => addLowerLayerFromContext(id),
-    },
-    {
-      label: state.focusNodeId === id ? "フォーカス解除" : "フォーカス",
-      detail: "◎",
-      action: () => toggleFocusSelected(),
-    },
-    {
-      label: "元ノードへ",
-      detail: "↖",
-      disabled: !found.node.parallelOf || !findNode(found.node.parallelOf),
-      action: () => jumpToSourceNode(id),
-    },
-  ]);
-
-  appendContextSection(
-    Object.entries(NODE_TYPES).map(([type, info]) => ({
-      label: `種類: ${info.label}`,
-      detail: normalizeNodeType(found.node.type) === type ? "✓" : "",
-      action: () => {
-        state.selectedId = id;
-        setSelectedNodeType(type);
-      },
-    })),
-  );
-
-  if (found.parent) {
-    appendContextSection(
-      Object.entries(RELATION_TYPES).map(([type, info]) => ({
-        label: `線: ${info.label}`,
-        detail: normalizeRelationType(found.node.relationType) === type ? "✓" : "",
-        action: () => {
-          state.selectedId = id;
-          setSelectedRelationType(type);
-        },
-      })),
-    );
   }
 
-  appendContextSection([
-    {
-      label: "削除",
-      detail: "×",
-      danger: true,
-      disabled: id === state.tree.id,
-      action: () => {
-        state.selectedId = id;
-        deleteSelected();
-      },
-    },
-  ]);
-
-  positionContextMenu(event.clientX, event.clientY);
-}
-
-function appendContextSection(items) {
-  const section = document.createElement("div");
-  section.className = "context-menu-section";
-  items.forEach((item) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    if (item.danger) button.classList.add("is-danger");
-    button.disabled = Boolean(item.disabled);
-    const label = document.createElement("span");
-    label.textContent = item.label;
-    const detail = document.createElement("span");
-    detail.textContent = item.detail || "";
-    button.append(label, detail);
-    button.addEventListener("click", () => {
-      hideNodeContextMenu();
-      item.action();
-    });
-    section.appendChild(button);
-  });
-  els.nodeContextMenu.appendChild(section);
-}
-
-function positionContextMenu(clientX, clientY) {
-  if (!els.nodeContextMenu) return;
-  els.nodeContextMenu.hidden = false;
-  const rect = els.nodeContextMenu.getBoundingClientRect();
-  const x = Math.min(clientX, window.innerWidth - rect.width - 8);
-  const y = Math.min(clientY, window.innerHeight - rect.height - 8);
-  els.nodeContextMenu.style.left = `${Math.max(8, x)}px`;
-  els.nodeContextMenu.style.top = `${Math.max(8, y)}px`;
-}
-
-function hideNodeContextMenu() {
-  if (!els.nodeContextMenu) return;
-  els.nodeContextMenu.hidden = true;
-}
-
-function addLowerLayerFromContext(id) {
-  state.selectedId = id;
-  if (!state.isLayer3d) {
-    setLayer3dMode(true);
-    window.setTimeout(addLowerLayerNode, 0);
-    return;
-  }
-  addLowerLayerNode();
-}
-
-function startNodeDrag(event, id) {
-  const found = findNode(id);
-  if (!found) return;
-  activeNodeDrag = {
-    id,
-    startX: event.clientX,
-    startY: event.clientY,
-    started: false,
-    snapshot: captureSnapshot(),
-    originalOffsets: collectSubtreeOffsets(found.node),
-    startPosition: clonePosition(state.positions.get(id)),
-  };
-  window.addEventListener("pointermove", handleNodeDragMove);
-  window.addEventListener("pointerup", finishNodeDrag, { once: true });
-}
-
-function handleNodeDragMove(event) {
-  if (!activeNodeDrag) return;
-  const screenDx = event.clientX - activeNodeDrag.startX;
-  const screenDy = event.clientY - activeNodeDrag.startY;
-  const distance = Math.hypot(screenDx, screenDy);
-  if (!activeNodeDrag.started && distance < 4) return;
-
-  event.preventDefault();
-  if (!activeNodeDrag.started) {
-    pushHistory(activeNodeDrag.snapshot);
-    activeNodeDrag.started = true;
-    state.isDraggingNode = true;
-    els.viewport.classList.add("is-node-dragging");
+  function isVisibleEntity(entity) {
+    return entity && !entity.trashedAt && !entity.deletedAt;
   }
 
-  const dx = screenDx / state.zoom;
-  const dy = screenDy / state.zoom;
-  applySubtreeDragOffsets(
-    activeNodeDrag.id,
-    activeNodeDrag.originalOffsets,
-    dx,
-    dy,
-    activeNodeDrag.startPosition,
-  );
-  render();
-}
-
-function finishNodeDrag() {
-  window.removeEventListener("pointermove", handleNodeDragMove);
-  if (activeNodeDrag?.started) {
-    saveTree();
+  function deriveTitle(body = "") {
+    return body.split(/\r?\n/).find(Boolean)?.slice(0, 32) || "";
   }
-  activeNodeDrag = null;
-  state.isDraggingNode = false;
-  state.dragGuide = { x: null, y: null };
-  updateAlignmentGuides();
-  els.viewport.classList.remove("is-node-dragging");
-}
 
-function collectSubtreeOffsets(node, offsets = new Map()) {
-  offsets.set(node.id, normalizeOffset(node.offset));
-  node.children.forEach((child) => {
-    if (child.parallelOf) return;
-    collectSubtreeOffsets(child, offsets);
-  });
-  return offsets;
-}
+  function compactBody(body = "", limit = 120) {
+    const compact = body.replace(/\s+/g, " ").trim();
+    return compact.length > limit ? `${compact.slice(0, limit)}...` : compact;
+  }
 
-function clonePosition(pos) {
-  if (!pos) return null;
-  return {
-    x: pos.x,
-    y: pos.y,
-    baseX: pos.baseX,
-    baseY: pos.baseY,
-  };
-}
+  function localDate(iso = nowIso()) {
+    const date = new Date(iso);
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
 
-function applySubtreeDragOffsets(id, originalOffsets, dx, dy, startPosition = null) {
-  const found = findNode(id);
-  if (!found) return;
-  const dragOriginal = originalOffsets.get(id) || { x: 0, y: 0 };
-  const baseX = Number.isFinite(startPosition?.baseX) ? startPosition.baseX : (startPosition?.x || 0) - dragOriginal.x;
-  const baseY = Number.isFinite(startPosition?.baseY) ? startPosition.baseY : (startPosition?.y || 0) - dragOriginal.y;
-  const startX = Number.isFinite(startPosition?.x) ? startPosition.x : baseX + dragOriginal.x;
-  const startY = Number.isFinite(startPosition?.y) ? startPosition.y : baseY + dragOriginal.y;
-  const excludeIds = collectDragSubtreeIds(found.node);
-  const alignedTarget = getAlignmentSnap(id, snapValue(startX + dx), snapValue(startY + dy), excludeIds);
-  const targetX = alignedTarget.x;
-  const targetY = alignedTarget.y;
-  state.dragGuide = { x: alignedTarget.guideX, y: alignedTarget.guideY };
-  const appliedDx = targetX - baseX - dragOriginal.x;
-  const appliedDy = targetY - baseY - dragOriginal.y;
+  function formatTime(iso) {
+    return new Intl.DateTimeFormat("ja-JP", { hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
+  }
 
-  walkDragSubtree(found.node, (node) => {
-    const original = originalOffsets.get(node.id) || { x: 0, y: 0 };
-    node.offset = {
-      x: Math.round(original.x + appliedDx),
-      y: Math.round(original.y + appliedDy),
-    };
-  });
-}
+  function formatDateTime(iso) {
+    return new Intl.DateTimeFormat("ja-JP", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit"
+    }).format(new Date(iso));
+  }
 
-function walkDragSubtree(node, visitor) {
-  visitor(node);
-  node.children.forEach((child) => {
-    if (child.parallelOf) return;
-    walkDragSubtree(child, visitor);
-  });
-}
+  function uid(prefix) {
+    const raw = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    return `${prefix}_${raw.replace(/[^a-zA-Z0-9]/g, "")}`;
+  }
 
-function walkSubtree(node, visitor) {
-  visitor(node);
-  node.children.forEach((child) => walkSubtree(child, visitor));
-}
+  function escapeHtml(value = "") {
+    return String(value)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
 
-function selectNode(id) {
-  state.selectedId = id;
-  updateLabels();
-  paintSelection();
-}
+  function escapeAttr(value = "") {
+    return escapeHtml(value);
+  }
 
-function paintSelection() {
-  document.querySelectorAll(".mind-node").forEach((nodeEl) => {
-    nodeEl.classList.toggle("is-selected", nodeEl.dataset.id === state.selectedId);
-  });
-  document.querySelectorAll(".edge-path, .edge-3d-line").forEach((edgeEl) => {
-    const from = edgeEl.dataset.from;
-    const to = edgeEl.dataset.to;
-    edgeEl.classList.toggle("is-selected", from === state.selectedId || to === state.selectedId);
-  });
-}
+  function escapeDriveQuery(value) {
+    return String(value).replaceAll("'", "\\'");
+  }
 
-function updateLabels() {
-  const found = findNode(state.selectedId);
-  const selectedText = found ? found.node.text : "未選択";
-  const visibleCount = state.layerFilterDepth === null ? state.visibleIds.size : state.renderedIds.size;
-  const layerText =
-    state.layerFilterDepth === null || state.layerFilterDepth === 0 ? "" : ` / 階層 ${state.layerFilterDepth}のみ`;
-  const focusText = state.focusNodeId ? " / フォーカス中" : "";
-  els.selectionLabel.textContent = selectedText;
-  els.statusText.textContent = `${state.mapName}${layerText}${focusText} / ${visibleCount}件を表示中。編集内容は自動保存されます。`;
-  updateNodeDetailPanel(found?.node);
-}
+  function utf8(value) {
+    return new TextEncoder().encode(value);
+  }
 
-function updateNodeDetailPanel(node) {
-  if (!els.nodeDetailTitle || !els.nodeNoteInput) return;
-  els.nodeDetailTitle.textContent = node ? node.text : "未選択";
-  els.nodeNoteInput.disabled = !node;
-  if (els.nodeTypeSelect) {
-    els.nodeTypeSelect.disabled = !node;
-    if (node && document.activeElement !== els.nodeTypeSelect) {
-      els.nodeTypeSelect.value = normalizeNodeType(node.type);
+  function decodeUtf8(bytes) {
+    return new TextDecoder().decode(bytes);
+  }
+
+  function bytesToBase64(bytes) {
+    let binary = "";
+    const chunk = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunk) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+    }
+    return btoa(binary);
+  }
+
+  function base64ToBytes(value) {
+    const binary = atob(value);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  }
+
+  function bytesToBase64Url(bytes) {
+    return bytesToBase64(bytes).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+  }
+
+  function base64UrlToBytes(value) {
+    const padded = value.replaceAll("-", "+").replaceAll("_", "/").padEnd(Math.ceil(value.length / 4) * 4, "=");
+    return base64ToBytes(padded);
+  }
+
+  function chunkString(value, size) {
+    const chunks = [];
+    for (let i = 0; i < value.length; i += size) chunks.push(value.slice(i, i + size));
+    return chunks;
+  }
+
+  function toast(message) {
+    const node = document.createElement("div");
+    node.className = "toast";
+    node.textContent = message;
+    document.body.appendChild(node);
+    window.setTimeout(() => node.remove(), 2600);
+  }
+
+  function registerServiceWorker() {
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker
+        .register("./service-worker.js")
+        .then((registration) => {
+          registration.update?.();
+          if (registration.waiting) registration.waiting.postMessage({ type: "SKIP_WAITING" });
+        })
+        .catch(() => {});
     }
   }
-  if (els.relationTypeSelect) {
-    els.relationTypeSelect.disabled = !node || node.id === state.tree.id;
-    if (node && document.activeElement !== els.relationTypeSelect) {
-      els.relationTypeSelect.value = normalizeRelationType(node.relationType);
-    }
-  }
-  if (els.focusNodeButton) {
-    els.focusNodeButton.disabled = !node;
-    els.focusNodeButton.textContent = node && state.focusNodeId === node.id ? "解除" : "フォーカス";
-  }
-  if (els.jumpSourceButton) {
-    const sourceExists = Boolean(node?.parallelOf && findNode(node.parallelOf));
-    els.jumpSourceButton.disabled = !sourceExists;
-  }
-  if (document.activeElement !== els.nodeNoteInput) {
-    els.nodeNoteInput.value = node?.memo || "";
-  }
-}
 
-function updateLayerPanel() {
-  if (!els.layerList) return;
-  const stats = getLayerStats();
-  els.layerList.textContent = "";
-
-  stats.forEach((item) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "layer-item";
-    const isActive = state.isLayer3d
-      ? item.layer === state.focusLayerDepth
-      : item.layer === state.layerFilterDepth;
-    if (isActive) button.classList.add("is-active");
-
-    const label = document.createElement("strong");
-    label.textContent = item.layer === 0 ? "通常階層" : `階層 ${item.layer}`;
-    const count = document.createElement("span");
-    count.textContent = item.ghostCount ? `${item.count}件 / ゴースト${item.ghostCount}` : `${item.count}件`;
-    button.append(label, count);
-    button.addEventListener("click", () => activateLayerFromPanel(item.layer));
-    els.layerList.appendChild(button);
-  });
-}
-
-function getLayerStats() {
-  const stats = new Map();
-  walk(state.tree, (node) => {
-    const layer = getNodeLayer(node);
-    if (!stats.has(layer)) stats.set(layer, { layer, count: 0, ghostCount: 0 });
-    const item = stats.get(layer);
-    item.count += 1;
-    if (node.parallelOf) item.ghostCount += 1;
-  });
-  return [...stats.values()].sort((a, b) => a.layer - b.layer);
-}
-
-function activateLayerFromPanel(layer) {
-  if (state.isLayer3d) {
-    state.focusLayerDepth = layer;
-    render();
-    return;
-  }
-
-  if (layer === 0) {
-    clearLayerFilter();
-    return;
-  }
-
-  state.layerFilterDepth = layer;
-  state.focusLayerDepth = layer;
-  state.isLayer3d = false;
-  document.body.classList.remove("layer-3d");
-  els.viewport.classList.remove("is-layer-3d");
-  ensureSelectedNodeVisible();
-  render();
-  requestAnimationFrame(fitToView);
-}
-
-function updateAlignmentGuides() {
-  if (!els.guideLayer || !els.guideVertical || !els.guideHorizontal) return;
-  const x = Number.isFinite(state.dragGuide.x) ? state.dragGuide.x : null;
-  const y = Number.isFinite(state.dragGuide.y) ? state.dragGuide.y : null;
-  els.guideLayer.classList.toggle("has-x", x !== null);
-  els.guideLayer.classList.toggle("has-y", y !== null);
-  if (x !== null) els.guideVertical.style.left = `${x}px`;
-  if (y !== null) els.guideHorizontal.style.top = `${y}px`;
-}
-
-function setSelectedNodeType(type) {
-  const found = findNode(state.selectedId);
-  if (!found) return;
-  const nextType = normalizeNodeType(type);
-  if (normalizeNodeType(found.node.type) === nextType) return;
-  pushHistory();
-  found.node.type = nextType;
-  render();
-}
-
-function setSelectedRelationType(type) {
-  const found = findNode(state.selectedId);
-  if (!found || !found.parent) return;
-  const nextType = normalizeRelationType(type);
-  if (normalizeRelationType(found.node.relationType) === nextType) return;
-  pushHistory();
-  found.node.relationType = nextType;
-  render();
-}
-
-function toggleFocusSelected() {
-  const found = findNode(state.selectedId);
-  if (!found) return;
-  state.focusNodeId = state.focusNodeId === found.node.id ? "" : found.node.id;
-  render();
-}
-
-function jumpToSourceNode(id = state.selectedId) {
-  const found = findNode(id);
-  const sourceId = found?.node.parallelOf;
-  const source = sourceId ? findNode(sourceId) : null;
-  if (!source) return;
-
-  const sourceLayer = getNodeLayer(source.node);
-  if (state.isLayer3d) {
-    state.focusLayerDepth = sourceLayer;
-  } else if (state.layerFilterDepth !== sourceLayer) {
-    state.layerFilterDepth = sourceLayer;
-    state.focusLayerDepth = sourceLayer;
-  }
-
-  state.selectedId = source.node.id;
-  render();
-  requestAnimationFrame(() => centerNode(source.node.id));
-}
-
-function centerNode(id) {
-  const pos = state.positions.get(id);
-  if (!pos) return;
-  const rect = els.viewport.getBoundingClientRect();
-  state.pan.x = rect.width / 2 - pos.x * state.zoom;
-  state.pan.y = rect.height / 2 - pos.y * state.zoom;
-  updateTransform();
-}
-
-function updateTransform() {
-  els.world.style.transform = `translate(${state.pan.x}px, ${state.pan.y}px) scale(${state.zoom})`;
-  const perspective = state.isLayer3d ? VIEW_PERSPECTIVE / Math.max(state.zoom, 0.0001) : VIEW_PERSPECTIVE;
-  els.world.style.setProperty("--view-perspective", `${perspective}px`);
-  if (els.view) {
-    const viewTransform = state.isLayer3d
-      ? `rotateX(${state.view3d.pitch}deg) rotateZ(${state.view3d.yaw}deg)`
-      : "none";
-    els.view.style.transform = viewTransform;
-  }
-  document.getElementById("zoomResetButton").textContent = `${Math.round(state.zoom * 100)}%`;
-}
-
-function fitToView() {
-  const rect = els.viewport.getBoundingClientRect();
-  const positions = [...state.positions.values()].filter((pos) => shouldRenderLayer(pos.layer));
-  if (!positions.length) return;
-  const minX = Math.min(...positions.map((p) => p.x)) - 180;
-  const maxX = Math.max(...positions.map((p) => p.x)) + 180;
-  const minY = Math.min(...positions.map((p) => p.y)) - 120;
-  const maxY = Math.max(...positions.map((p) => p.y)) + 120;
-  const mapWidth = maxX - minX;
-  const mapHeight = maxY - minY;
-  state.zoom = Math.min(1.1, Math.max(0.35, Math.min(rect.width / mapWidth, rect.height / mapHeight) * 0.92));
-  state.pan.x = (rect.width - mapWidth * state.zoom) / 2 - minX * state.zoom;
-  state.pan.y = (rect.height - mapHeight * state.zoom) / 2 - minY * state.zoom;
-  updateTransform();
-}
-
-function optimizeLayout() {
-  const snapshot = captureSnapshot();
-  const resetCount = resetManualOffsets();
-  if (resetCount) pushHistory(snapshot);
-  render();
-  requestAnimationFrame(fitToView);
-  els.statusText.textContent = resetCount
-    ? `自動整列しました。${resetCount}件の手動位置を初期化しました。`
-    : "すでに自動レイアウトです。";
-}
-
-function resetManualOffsets() {
-  let resetCount = 0;
-  walk(state.tree, (node) => {
-    const offset = normalizeOffset(node.offset);
-    if (!offset.x && !offset.y) return;
-    node.offset = { x: 0, y: 0 };
-    resetCount += 1;
-  });
-  return resetCount;
-}
-
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
-}
-
-function snapValue(value, step = state.snapStep) {
-  const snapStep = clamp(Math.round(Number(step) || DEFAULT_SNAP_STEP), 8, 96);
-  return Math.round(value / snapStep) * snapStep;
-}
-
-function collectDragSubtreeIds(node) {
-  const ids = new Set();
-  walkDragSubtree(node, (item) => ids.add(item.id));
-  return ids;
-}
-
-function getAlignmentSnap(id, x, y, excludeIds) {
-  const sourcePos = state.positions.get(id);
-  const tolerance = clamp(18 / state.zoom, 10, 30);
-  let guideX = null;
-  let guideY = null;
-  let bestDx = tolerance + 1;
-  let bestDy = tolerance + 1;
-
-  state.positions.forEach((pos, nodeId) => {
-    if (excludeIds.has(nodeId)) return;
-    if (!shouldRenderLayer(pos.layer)) return;
-    if (sourcePos && pos.layer !== sourcePos.layer) return;
-
-    const dx = Math.abs(pos.x - x);
-    if (dx <= tolerance && dx < bestDx) {
-      bestDx = dx;
-      x = pos.x;
-      guideX = pos.x;
-    }
-
-    const dy = Math.abs(pos.y - y);
-    if (dy <= tolerance && dy < bestDy) {
-      bestDy = dy;
-      y = pos.y;
-      guideY = pos.y;
-    }
-  });
-
-  return { x, y, guideX, guideY };
-}
-
-function updateSnapStepValue() {
-  if (!els.snapStepValue) return;
-  els.snapStepValue.textContent = `${state.snapStep}px`;
-}
-
-function addChild() {
-  const found = findNode(state.selectedId);
-  if (!found) return;
-  pushHistory();
-  found.node.collapsed = false;
-  const child = normalizeNode({
-    text: "新しいアイデア",
-    layer: getNodeLayer(found.node),
-    offset: normalizeOffset(found.node.offset),
-    children: [],
-  });
-  found.node.children.push(child);
-  state.selectedId = child.id;
-  state.flashId = child.id;
-  render();
-}
-
-function addSibling() {
-  const found = findNode(state.selectedId);
-  if (!found || !found.parent) return;
-  pushHistory();
-  const sibling = normalizeNode({
-    text: "新しいトピック",
-    layer: getNodeLayer(found.node),
-    offset: normalizeOffset(found.node.offset),
-    children: [],
-  });
-  const index = found.parent.children.findIndex((child) => child.id === found.node.id);
-  found.parent.children.splice(index + 1, 0, sibling);
-  state.selectedId = sibling.id;
-  state.flashId = sibling.id;
-  render();
-}
-
-function deleteSelected() {
-  const found = findNode(state.selectedId);
-  if (!found || !found.parent) return;
-  pushHistory();
-  const targetId = state.selectedId;
-  state.removingId = targetId;
-  document.querySelector(`.mind-node[data-id="${CSS.escape(targetId)}"]`)?.classList.add("is-removing");
-  window.clearTimeout(removeTimer);
-  removeTimer = window.setTimeout(() => {
-    const current = findNode(targetId);
-    if (!current || !current.parent) {
-      state.removingId = null;
-      render();
-      return;
-    }
-    current.parent.children = current.parent.children.filter((child) => child.id !== targetId);
-    state.selectedId = current.parent.id;
-    state.removingId = null;
-    render();
-  }, ANIMATION_MS);
-}
-
-function toggleSelected() {
-  const found = findNode(state.selectedId);
-  if (!found || !found.node.children.length) return;
-  pushHistory();
-  found.node.collapsed = !found.node.collapsed;
-  render();
-}
-
-function parseOutline(text) {
-  return parseMapDocument(text).tree;
-}
-
-function parseMapDocument(text) {
-  const extracted = extractMarkdownState(text);
-  const trimmed = extracted.text.trim();
-  if (!trimmed) return { tree: clone(sampleTree), settings: extracted.settings };
-  if (trimmed.startsWith("{")) {
-    const parsed = JSON.parse(trimmed);
-    if (parsed.tree) {
-      return {
-        tree: normalizeNode(parsed.tree),
-        settings: parsed.settings ? normalizeSettings(parsed.settings) : extracted.settings,
+  function idbOpen() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(DB_NAME, DB_VERSION);
+      request.onupgradeneeded = () => {
+        request.result.createObjectStore("kv");
       };
-    }
-    return { tree: normalizeNode(parsed), settings: extracted.settings };
-  }
-
-  const lines = trimmed
-    .split(/\r?\n/)
-    .map((line) => line.replace(/\t/g, "  "))
-    .filter((line) => line.trim().length && !line.trim().startsWith("<!--"));
-
-  const root = normalizeNode({ text: lines[0].replace(/^[-*#\s]+/, ""), children: [] });
-  const stack = [{ indent: -1, node: root }];
-
-  lines.slice(1).forEach((line) => {
-    const indent = line.match(/^\s*/)[0].length;
-    const textValue = line.trim().replace(/^[-*]\s*/, "").replace(/^\d+\.\s*/, "");
-    const node = normalizeNode({ text: textValue, children: [] });
-    while (stack.length > 1 && indent <= stack[stack.length - 1].indent) stack.pop();
-    stack[stack.length - 1].node.children.push(node);
-    stack.push({ indent, node });
-  });
-
-  if (extracted.metadata?.nodes) applyNodeMetadata(root, extracted.metadata.nodes);
-  return { tree: root, settings: extracted.metadata?.settings ? normalizeSettings(extracted.metadata.settings) : null };
-}
-
-function toMarkdown(node, options = {}) {
-  const lines = toMarkdownLines(node);
-  if (!options.includeMeta) return lines;
-  return [makeStateComment(), "", ...lines];
-}
-
-function toMarkdownLines(node, depth = 0) {
-  const prefix = depth === 0 ? "# " : `${"  ".repeat(depth - 1)}- `;
-  return [prefix + node.text, ...node.children.flatMap((child) => toMarkdownLines(child, depth + 1))];
-}
-
-function prettyOutline(node, depth = 0) {
-  const prefix = depth === 0 ? "" : `${"  ".repeat(depth - 1)}- `;
-  return [prefix + node.text, ...node.children.flatMap((child) => prettyOutline(child, depth + 1))];
-}
-
-function summarizeTree(root) {
-  const summary = analyzeTree(root);
-  const background = makeSummaryBackground(summary);
-  const actions = makeSummaryActions(summary);
-
-  return [
-    "今の課題：",
-    makeSummaryIssue(summary),
-    "",
-    "背景：",
-    ...background,
-    "",
-    "まずやること：",
-    ...actions.map((action, index) => `${index + 1}. ${action}`),
-  ].join("\n");
-}
-
-function analyzeTree(root) {
-  const children = root.children || [];
-  const goalBranch = findSummaryBranch(children, ["ゴール", "目的", "目標"]);
-  const handoverBranch = findSummaryBranch(children, ["引継ぎ", "引き継ぎ", "引継", "やること", "対応"]);
-  const exclusionBranch = findSummaryBranch(children, ["やらない", "対象外", "しない", "除外"]);
-  const goals = branchChildren(goalBranch);
-  const handovers = branchChildren(handoverBranch);
-  const exclusions = branchChildren(exclusionBranch);
-  const allTexts = collectSummaryTexts(root);
-
-  return {
-    rootText: cleanSummaryText(root.text),
-    assignee: extractAssignee(root.text),
-    theme: extractTheme(root.text),
-    goals,
-    handovers,
-    exclusions,
-    topItems: children.map((child) => cleanSummaryText(child.text)).filter(Boolean),
-    allTexts,
-  };
-}
-
-function findSummaryBranch(children, keywords) {
-  return children.find((child) => keywords.some((keyword) => cleanSummaryKey(child.text).includes(keyword)));
-}
-
-function branchChildren(node) {
-  if (!node) return [];
-  return (node.children || []).map((child) => cleanSummaryText(child.text)).filter(Boolean);
-}
-
-function collectSummaryTexts(node) {
-  const texts = [];
-  walkSummaryTree(node, (item) => {
-    const text = cleanSummaryText(item.text);
-    if (text) texts.push(text);
-  });
-  return texts;
-}
-
-function walkSummaryTree(node, visitor) {
-  visitor(node);
-  (node.children || []).forEach((child) => walkSummaryTree(child, visitor));
-}
-
-function makeSummaryIssue(summary) {
-  const lead = makeSummaryLead(summary);
-  if (summary.exclusions.length) {
-    return `${lead}、任せる範囲と最終判断が必要な範囲を切り分ける。`;
-  }
-  if (summary.handovers.length) {
-    return `${lead}、引継ぎ項目と次に進める順番を整理する。`;
-  }
-  return `${summary.rootText || "このマインドマップ"}について、課題と次にやることを整理する。`;
-}
-
-function makeSummaryLead(summary) {
-  const goal = pickGoal(summary.goals);
-  if (summary.assignee && goal) {
-    return `${summary.assignee}が${goalToLead(goal)}`;
-  }
-  if (goal) return goalToLead(goal);
-  if (summary.assignee && summary.theme) return `${summary.assignee}が${summary.theme}を進められるように`;
-  return summary.rootText || "このマインドマップ";
-}
-
-function pickGoal(goals) {
-  return (
-    goals.find((goal) => /自走|担う|管理|把握|確認/.test(goal)) ||
-    goals.find((goal) => goal.length <= 34) ||
-    goals[0] ||
-    ""
-  );
-}
-
-function goalToLead(goal) {
-  const cleanGoal = cleanSummaryText(goal).replace(/[。.]$/, "");
-  if (/できる$|担う$|握れている$|進められる$|回せる$/.test(cleanGoal)) return `${cleanGoal}ように`;
-  return `${cleanGoal}を進められるように`;
-}
-
-function makeSummaryBackground(summary) {
-  const lines = [];
-  const scopes = summarizeScopeItems(summary);
-  if (scopes.length) {
-    lines.push(`引継ぎ対象は、${joinJapaneseList(scopes)}など${summary.handovers.length > 4 ? "広い" : "が中心"}。`);
-  } else if (summary.topItems.length) {
-    lines.push(`論点は、${joinJapaneseList(summary.topItems.slice(0, 5))}が中心。`);
-  } else {
-    lines.push("論点がまだ分散しているため、全体像を短く整理する。");
-  }
-
-  if (summary.exclusions.length) {
-    lines.push(`一方で、${joinJapaneseList(summarizeExclusions(summary.exclusions))}の判断は担当外にする。`);
-  } else if (summary.goals.length) {
-    lines.push(`目指す状態は、${joinJapaneseList(summary.goals.slice(0, 3))}。`);
-  }
-
-  return lines.slice(0, 2);
-}
-
-function makeSummaryActions(summary) {
-  const actions = [];
-  if (summary.handovers.length) {
-    actions.push("引継ぎ項目を「日次運用」「定例」「判断が必要なもの」に分ける");
-  } else {
-    actions.push("ノードを「課題」「背景」「次にやること」に分ける");
-  }
-
-  if (summary.exclusions.length || summary.goals.length) {
-    const subject = summary.assignee ? `${summary.assignee}が` : "";
-    actions.push(`${subject}判断してよい範囲と、相談すべき範囲を明文化する`);
-  } else {
-    actions.push("優先度が高いものを1つ選ぶ");
-  }
-
-  const operatingTools = summarizeOperatingTools(summary.handovers);
-  if (operatingTools.length) {
-    const subject = summary.assignee ? `${summary.assignee}が` : "";
-    actions.push(`${joinJapaneseList(operatingTools)}を、${subject}回せる形に整える`);
-  } else {
-    actions.push("次に試す小さなアクションを1つ決める");
-  }
-
-  return actions.slice(0, 3);
-}
-
-function summarizeScopeItems(summary) {
-  const texts = [...summary.handovers, ...summary.goals];
-  const items = [];
-  addSummaryItem(items, texts, /スケジュール|ガント|進捗/, "スケジュール管理");
-  addSummaryItem(items, texts, /課題/, "課題整理");
-  addSummaryItem(items, texts, /スプシ|spreadsheet/i, "スプシ運用");
-  addSummaryItem(items, texts, /定例/, "各定例");
-  addSummaryItem(items, texts, /2D|3D/i, "2D・3D確認");
-  addSummaryItem(items, texts, /ID/, "ID整理");
-  summary.handovers.forEach((item) => {
-    if (items.length < 5 && !items.some((existing) => item.includes(existing))) items.push(item);
-  });
-  return items.slice(0, 5);
-}
-
-function summarizeExclusions(exclusions) {
-  const items = [];
-  addSummaryItem(items, exclusions, /品質|クオリティ/, "品質");
-  addSummaryItem(items, exclusions, /表現/, "表現");
-  addSummaryItem(items, exclusions, /工数/, "工数増");
-  addSummaryItem(items, exclusions, /レギュレーション/, "レギュレーション更新");
-  exclusions.forEach((item) => {
-    if (items.length < 4 && !items.includes(item)) items.push(item.replace(/判断|最終決定/g, ""));
-  });
-  return items.slice(0, 4);
-}
-
-function summarizeOperatingTools(handovers) {
-  const tools = [];
-  addSummaryItem(tools, handovers, /ガント/, "ガント");
-  addSummaryItem(tools, handovers, /スプシ|spreadsheet/i, "スプシ");
-  addSummaryItem(tools, handovers, /課題/, "課題一覧");
-  addSummaryItem(tools, handovers, /定例/, "定例");
-  return tools.slice(0, 3);
-}
-
-function addSummaryItem(items, texts, pattern, label) {
-  if (texts.some((text) => pattern.test(text)) && !items.includes(label)) items.push(label);
-}
-
-function joinJapaneseList(items) {
-  return items.filter(Boolean).join("、");
-}
-
-function extractAssignee(text) {
-  const match = cleanSummaryText(text).match(/([^\s　#-]+さん)/);
-  return match ? match[1] : "";
-}
-
-function extractTheme(text) {
-  return cleanSummaryText(text)
-    .replace(/^#+\s*/, "")
-    .replace(/([^\s　#-]+さん)/, "")
-    .replace(/オンボーディング|オンボ|onboarding/gi, "")
-    .trim();
-}
-
-function cleanSummaryText(text) {
-  return String(text || "").replace(/^[-*#\s　]+/, "").trim();
-}
-
-function cleanSummaryKey(text) {
-  return cleanSummaryText(text).replace(/\s|　/g, "");
-}
-
-function makeStateComment() {
-  const metadata = {
-    version: 1,
-    settings: currentSettings(),
-    nodes: collectNodeMetadata(state.tree),
-  };
-  return `<!-- kmc:${encodeBase64Unicode(JSON.stringify(metadata))} -->`;
-}
-
-function collectNodeMetadata(node, path = []) {
-  const key = path.join(".");
-  const nodes = {
-    [key]: {
-      collapsed: Boolean(node.collapsed),
-      memo: node.memo || "",
-      type: normalizeNodeType(node.type),
-      relationType: normalizeRelationType(node.relationType),
-      layer: getNodeLayer(node),
-      parallelOf: node.parallelOf || "",
-      offset: normalizeOffset(node.offset),
-    },
-  };
-  node.children.forEach((child, index) => {
-    Object.assign(nodes, collectNodeMetadata(child, [...path, index]));
-  });
-  return nodes;
-}
-
-function applyNodeMetadata(node, metadata, path = []) {
-  const item = metadata[path.join(".")];
-  if (item) {
-    node.collapsed = Boolean(item.collapsed);
-    node.memo = String(item.memo || "");
-    node.type = normalizeNodeType(item.type);
-    node.relationType = normalizeRelationType(item.relationType);
-    node.layer = normalizeLayer(item.layer);
-    node.parallelOf = typeof item.parallelOf === "string" ? item.parallelOf : "";
-    node.offset = normalizeOffset(item.offset);
-  }
-  node.children.forEach((child, index) => applyNodeMetadata(child, metadata, [...path, index]));
-}
-
-function extractMarkdownState(text) {
-  const match = text.match(/<!--\s*kmc:([A-Za-z0-9+/=_-]+)\s*-->/);
-  if (!match) return { text, metadata: null, settings: null };
-  try {
-    const metadata = JSON.parse(decodeBase64Unicode(match[1]));
-    return {
-      text: text.replace(match[0], "").trim(),
-      metadata,
-      settings: normalizeSettings(metadata.settings),
-    };
-  } catch {
-    return { text: text.replace(match[0], "").trim(), metadata: null, settings: null };
-  }
-}
-
-function encodeBase64Unicode(text) {
-  const bytes = new TextEncoder().encode(text);
-  let binary = "";
-  bytes.forEach((byte) => {
-    binary += String.fromCharCode(byte);
-  });
-  return btoa(binary);
-}
-
-function decodeBase64Unicode(text) {
-  const binary = atob(text);
-  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
-  return new TextDecoder().decode(bytes);
-}
-
-function updateMapSelect() {
-  if (!els.mapSelect) return;
-  els.mapSelect.textContent = "";
-  state.maps.forEach((map) => {
-    const option = document.createElement("option");
-    option.value = map.id;
-    option.textContent = map.name;
-    els.mapSelect.appendChild(option);
-  });
-  els.mapSelect.value = state.mapId;
-}
-
-function setActiveMap(map, shouldFit = true, resetHistory = true) {
-  state.mapId = map.id;
-  state.mapName = map.name;
-  state.tree = normalizeNode(map.tree);
-  const settings = normalizeSettings(map.settings);
-  state.maxDepth = settings.maxDepth;
-  state.horizontalSpacing = settings.horizontalSpacing;
-  state.verticalSpacing = settings.verticalSpacing;
-  state.snapStep = settings.snapStep;
-  state.selectedId = state.tree.id;
-  state.flashId = null;
-  state.removingId = null;
-  state.search = "";
-  state.isLayer3d = false;
-  state.layerFilterDepth = 0;
-  state.focusLayerDepth = 0;
-  state.focusNodeId = "";
-  state.dragGuide = { x: null, y: null };
-  document.body.classList.remove("layer-3d");
-  els.viewport.classList.remove("is-layer-3d");
-  if (resetHistory) {
-    state.undoStack = [];
-    state.redoStack = [];
-  }
-  els.searchInput.value = "";
-  els.depthSlider.value = state.maxDepth;
-  els.horizontalSpacingSlider.value = state.horizontalSpacing;
-  els.verticalSpacingSlider.value = state.verticalSpacing;
-  els.snapStepSlider.value = state.snapStep;
-  updateSnapStepValue();
-  els.outlineInput.value = toMarkdown(state.tree).join("\n");
-  render();
-  if (shouldFit) requestAnimationFrame(fitToView);
-}
-
-function createBlankTree(name) {
-  return normalizeNode({
-    id: makeId("root"),
-    text: name || "新しいマップ",
-    collapsed: false,
-    children: [],
-  });
-}
-
-function fileBaseName(fileName) {
-  return fileName.replace(/\.[^.]+$/, "") || "読み込みマップ";
-}
-
-function safeFileName(name) {
-  return String(name || "mind-map")
-    .trim()
-    .replace(/[\\/:*?"<>|]+/g, "-")
-    .replace(/\s+/g, "-")
-    .slice(0, 80);
-}
-
-async function openMarkdownFile(file) {
-  if (!file) return;
-  const text = await file.text();
-  const parsed = parseMapDocument(text);
-  const map = makeMapItem(fileBaseName(file.name), parsed.tree, parsed.settings || defaultSettings());
-  state.maps.push(map);
-  setActiveMap(map);
-  els.exportOutput.value = toMarkdown(state.tree).join("\n");
-}
-
-async function saveMarkdownFile() {
-  const markdown = toMarkdown(state.tree, { includeMeta: true }).join("\n");
-  const fileName = `${safeFileName(state.mapName || state.tree.text)}.md`;
-  if ("showSaveFilePicker" in window) {
-    const handle = await window.showSaveFilePicker({
-      suggestedName: fileName,
-      types: [{ description: "Markdown", accept: { "text/markdown": [".md"] } }],
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
     });
-    const writable = await handle.createWritable();
-    await writable.write(markdown);
-    await writable.close();
-    els.statusText.textContent = `${fileName} を保存しました。`;
-    return;
   }
 
-  const url = URL.createObjectURL(new Blob([markdown], { type: "text/markdown;charset=utf-8" }));
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = fileName;
-  link.click();
-  URL.revokeObjectURL(url);
-  els.statusText.textContent = `${fileName} を保存しました。`;
-}
-
-async function savePngFile() {
-  const { canvas, width, height } = renderPngCanvas();
-  const fileName = `${safeFileName(state.mapName || state.tree.text)}.png`;
-  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
-  if (!blob) throw new Error("PNGを作成できませんでした。");
-
-  if ("showSaveFilePicker" in window) {
-    const handle = await window.showSaveFilePicker({
-      suggestedName: fileName,
-      types: [{ description: "PNG", accept: { "image/png": [".png"] } }],
+  async function idbGet(key) {
+    const db = await idbOpen();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("kv", "readonly");
+      const request = tx.objectStore("kv").get(key);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
     });
-    const writable = await handle.createWritable();
-    await writable.write(blob);
-    await writable.close();
-  } else {
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = fileName;
-    link.click();
-    URL.revokeObjectURL(url);
   }
 
-  els.statusText.textContent = `${fileName} を保存しました。${width}×${height}px / 100%`;
-}
-
-function renderPngCanvas() {
-  layoutTree();
-  const bounds = getPngExportBounds();
-  if (!bounds) throw new Error("保存できるノードがありません。");
-  if (
-    bounds.width > PNG_EXPORT_MAX_SIDE ||
-    bounds.height > PNG_EXPORT_MAX_SIDE ||
-    bounds.width * bounds.height > PNG_EXPORT_MAX_PIXELS
-  ) {
-    throw new Error(`PNGが大きすぎます。現在 ${bounds.width}×${bounds.height}px です。`);
+  async function idbSet(key, value) {
+    const db = await idbOpen();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("kv", "readwrite");
+      tx.objectStore("kv").put(value, key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
   }
-
-  const canvas = document.createElement("canvas");
-  canvas.width = bounds.width;
-  canvas.height = bounds.height;
-  const ctx = canvas.getContext("2d");
-  const palette = getPngPalette();
-  drawPngBackground(ctx, bounds, palette);
-  drawPngEdges(ctx, bounds);
-  drawPngNodes(ctx, bounds, palette);
-  return { canvas, width: bounds.width, height: bounds.height };
-}
-
-function getPngExportBounds() {
-  const positions = [...state.positions.values()].filter((pos) => shouldRenderLayer(pos.layer));
-  if (!positions.length) return null;
-  const minX = Math.floor(Math.min(...positions.map((pos) => pos.x - pos.width / 2)) - PNG_EXPORT_PADDING);
-  const maxX = Math.ceil(Math.max(...positions.map((pos) => pos.x + pos.width / 2)) + PNG_EXPORT_PADDING);
-  const minY = Math.floor(Math.min(...positions.map((pos) => pos.y - pos.height / 2)) - PNG_EXPORT_PADDING);
-  const maxY = Math.ceil(Math.max(...positions.map((pos) => pos.y + pos.height / 2)) + PNG_EXPORT_PADDING);
-  return {
-    minX,
-    minY,
-    width: Math.max(1, maxX - minX),
-    height: Math.max(1, maxY - minY),
-  };
-}
-
-function getPngPalette() {
-  const style = getComputedStyle(document.documentElement);
-  return {
-    canvas: readCssColor(style, "--canvas", "#101820"),
-    line: readCssColor(style, "--line", "#2b3948"),
-    surface: readCssColor(style, "--surface", "#171f29"),
-    nodeBg: readCssColor(style, "--node-bg", "#182331"),
-    ink: readCssColor(style, "--ink", "#edf2f7"),
-    muted: readCssColor(style, "--muted", "#a7b3c4"),
-    danger: readCssColor(style, "--danger", "#ff8a80"),
-    shadow: document.documentElement.dataset.theme === "dark" ? "rgba(0,0,0,0.28)" : "rgba(20,32,48,0.12)",
-  };
-}
-
-function readCssColor(style, name, fallback) {
-  return style.getPropertyValue(name).trim() || fallback;
-}
-
-function drawPngBackground(ctx, bounds, palette) {
-  ctx.fillStyle = palette.canvas;
-  ctx.fillRect(0, 0, bounds.width, bounds.height);
-  ctx.strokeStyle = palette.line;
-  ctx.lineWidth = 1;
-  ctx.globalAlpha = 0.9;
-
-  const grid = 44;
-  const startX = Math.floor(bounds.minX / grid) * grid;
-  const startY = Math.floor(bounds.minY / grid) * grid;
-  for (let x = startX; x <= bounds.minX + bounds.width; x += grid) {
-    const localX = Math.round(x - bounds.minX) - 0.5;
-    ctx.beginPath();
-    ctx.moveTo(localX, 0);
-    ctx.lineTo(localX, bounds.height);
-    ctx.stroke();
-  }
-  for (let y = startY; y <= bounds.minY + bounds.height; y += grid) {
-    const localY = Math.round(y - bounds.minY) - 0.5;
-    ctx.beginPath();
-    ctx.moveTo(0, localY);
-    ctx.lineTo(bounds.width, localY);
-    ctx.stroke();
-  }
-  ctx.globalAlpha = 1;
-}
-
-function drawPngEdges(ctx, bounds) {
-  const matches = getSearchMatches();
-  const hasSearch = state.search.trim().length > 0;
-  state.edgeList.forEach((edge) => {
-    if (!shouldRenderEdge(edge)) return;
-    const from = state.positions.get(edge.from);
-    const to = state.positions.get(edge.to);
-    if (!from || !to) return;
-    const isConnector = isLayerConnectorEdge(edge);
-    const fromSide = isConnector ? 0 : to.x >= from.x ? from.width / 2 : -from.width / 2;
-    const toSide = isConnector ? 0 : to.x >= from.x ? -to.width / 2 : to.width / 2;
-    const connectorDirection = isConnector && to.y < from.y ? -1 : 1;
-    const startX = from.x + fromSide - bounds.minX;
-    const endX = to.x + toSide - bounds.minX;
-    const startY = from.y + (isConnector ? (from.height / 2) * connectorDirection : 0) - bounds.minY;
-    const endY = to.y - (isConnector ? (to.height / 2) * connectorDirection : 0) - bounds.minY;
-    const curve = isConnector ? Math.abs(endY - startY) / 2 : Math.max(82, Math.abs(endX - startX) * 0.42);
-    const direction = to.x >= from.x ? 1 : -1;
-    const className = edgeClass(edge, matches, hasSearch);
-    const relationType = normalizeRelationType(edge.relationType);
-    const isMuted = className.includes("is-muted") || className.includes("is-focus-muted");
-    ctx.save();
-    ctx.globalAlpha = isMuted ? 0.12 : isConnector ? 0.58 : 0.72;
-    ctx.strokeStyle = relationType === "risk" ? "#f59e0b" : edge.color;
-    ctx.lineWidth = relationType === "risk" ? 3 : isConnector ? 2 : 2.4;
-    ctx.lineCap = "round";
-    if (isConnector) {
-      ctx.setLineDash([8, 7]);
-    } else if (relationType === "note") {
-      ctx.setLineDash([4, 6]);
-    } else if (relationType === "dependency") {
-      ctx.setLineDash([12, 6, 3, 6]);
-    } else if (relationType === "risk") {
-      ctx.setLineDash([7, 5]);
-    }
-    ctx.beginPath();
-    ctx.moveTo(startX, startY);
-    if (isConnector) {
-      const midY = (startY + endY) / 2;
-      ctx.bezierCurveTo(startX, midY, endX, midY, endX, endY);
-    } else {
-      ctx.bezierCurveTo(startX + curve * direction, startY, endX - curve * direction, endY, endX, endY);
-    }
-    ctx.stroke();
-    ctx.restore();
-  });
-}
-
-function drawPngNodes(ctx, bounds, palette) {
-  const matches = getSearchMatches();
-  const hasSearch = state.search.trim().length > 0;
-  walk(state.tree, (node) => {
-    const pos = state.positions.get(node.id);
-    if (!pos) return;
-    if (!shouldRenderLayer(pos.layer)) return;
-    const className = nodeClass(node, pos, matches, hasSearch);
-    const isMuted = className.includes("is-muted") || className.includes("is-focus-muted");
-    const isMatch = className.includes("is-match");
-    ctx.save();
-    ctx.globalAlpha = isMuted ? 0.18 : 1;
-    drawPngNode(ctx, node, pos, bounds, palette, isMatch);
-    ctx.restore();
-  });
-}
-
-function drawPngNode(ctx, node, pos, bounds, palette, isMatch) {
-  const x = pos.x - bounds.minX - pos.width / 2;
-  const y = pos.y - bounds.minY - pos.height / 2;
-  const branch = pos.color;
-  const isGhost = Boolean(node.parallelOf);
-  const fill = isGhost ? mixColors(palette.nodeBg, branch, 0.04) : mixColors(palette.nodeBg, branch, pos.depth === 0 ? 0.16 : 0.08);
-  const border = mixColors(branch, palette.line, pos.depth === 0 ? 0.2 : 0.38);
-
-  ctx.shadowColor = palette.shadow;
-  ctx.shadowBlur = 24;
-  ctx.shadowOffsetY = 10;
-  roundedRectPath(ctx, x, y, pos.width, pos.height, 8);
-  ctx.fillStyle = fill;
-  ctx.fill();
-  ctx.shadowColor = "transparent";
-
-  ctx.strokeStyle = border;
-  ctx.lineWidth = 1;
-  if (isGhost) ctx.setLineDash([7, 5]);
-  roundedRectPath(ctx, x, y, pos.width, pos.height, 8);
-  ctx.stroke();
-  ctx.setLineDash([]);
-
-  if (pos.depth > 0) {
-    roundedLeftRectPath(ctx, x, y, 6, pos.height, 8);
-    ctx.fillStyle = branch;
-    ctx.fill();
-  }
-
-  if (isMatch) {
-    roundedRectPath(ctx, x - 4, y - 4, pos.width + 8, pos.height + 8, 10);
-    ctx.strokeStyle = "rgba(255,209,102,0.72)";
-    ctx.lineWidth = 4;
-    ctx.stroke();
-  }
-
-  if (isGhost) {
-    roundedRectPath(ctx, x + 8, y + 8, pos.width - 16, pos.height - 16, 6);
-    ctx.setLineDash([5, 5]);
-    ctx.strokeStyle = mixColors(branch, palette.canvas, 0.44);
-    ctx.lineWidth = 1;
-    ctx.stroke();
-    ctx.setLineDash([]);
-  }
-
-  drawPngNodeTypeBadge(ctx, node, x, y, pos, palette);
-  drawPngNodeText(ctx, node.text, x, y, pos, palette);
-  drawPngNodeActions(ctx, node, x, y, pos, palette);
-}
-
-function drawPngNodeTypeBadge(ctx, node, x, y, pos, palette) {
-  const type = normalizeNodeType(node.type);
-  const badgeX = x + 14;
-  const badgeY = y + pos.height / 2 - 12;
-  roundedRectPath(ctx, badgeX, badgeY, 24, 24, 7);
-  ctx.fillStyle = getPngNodeTypeFill(type, pos.color, palette);
-  ctx.fill();
-  ctx.strokeStyle = mixColors(pos.color, palette.line, 0.32);
-  ctx.lineWidth = 1;
-  ctx.stroke();
-  ctx.fillStyle = palette.ink;
-  ctx.font = '800 12px "Segoe UI", "Yu Gothic UI", sans-serif';
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(NODE_TYPES[type].icon, badgeX + 12, badgeY + 12);
-}
-
-function drawPngNodeText(ctx, text, x, y, pos, palette) {
-  const isRoot = pos.depth === 0;
-  const fontSize = isRoot ? 17 : 14;
-  const lineHeight = isRoot ? 22 : 19;
-  const textX = x + 46;
-  const textWidth = Math.max(64, pos.width - 152);
-  const lines = wrapCanvasText(ctx, text, textWidth, fontSize, isRoot);
-  const maxLines = Math.max(1, Math.floor((pos.height - 20) / lineHeight));
-  const visibleLines = lines.slice(0, maxLines);
-  if (lines.length > maxLines) {
-    visibleLines[visibleLines.length - 1] = trimCanvasText(ctx, `${visibleLines[visibleLines.length - 1]}...`, textWidth);
-  }
-  const textBlockHeight = visibleLines.length * lineHeight;
-  let textY = y + (pos.height - textBlockHeight) / 2 + fontSize;
-
-  ctx.fillStyle = palette.ink;
-  ctx.font = `${isRoot ? "700 " : ""}${fontSize}px "Segoe UI", "Yu Gothic UI", "Hiragino Sans", sans-serif`;
-  ctx.textAlign = "left";
-  ctx.textBaseline = "alphabetic";
-  visibleLines.forEach((line) => {
-    ctx.fillText(line, textX, textY);
-    textY += lineHeight;
-  });
-}
-
-function getPngNodeTypeFill(type, branch, palette) {
-  const typeColor =
-    type === "task"
-      ? "#0e9f6e"
-      : type === "decision"
-        ? "#7c3aed"
-        : type === "risk"
-          ? "#f59e0b"
-          : type === "question"
-            ? "#008a9a"
-            : branch;
-  return mixColors(typeColor, palette.surface, type === "idea" ? 0.76 : 0.58);
-}
-
-function wrapCanvasText(ctx, text, maxWidth, fontSize, isRoot) {
-  ctx.font = `${isRoot ? "700 " : ""}${fontSize}px "Segoe UI", "Yu Gothic UI", "Hiragino Sans", sans-serif`;
-  const chars = [...String(text || "無題")];
-  const lines = [];
-  let current = "";
-  chars.forEach((char) => {
-    const next = `${current}${char}`;
-    if (current && ctx.measureText(next).width > maxWidth) {
-      lines.push(current);
-      current = char.trimStart();
-    } else {
-      current = next;
-    }
-  });
-  if (current) lines.push(current);
-  return lines.length ? lines : ["無題"];
-}
-
-function trimCanvasText(ctx, text, maxWidth) {
-  const ellipsis = "...";
-  if (ctx.measureText(ellipsis).width > maxWidth) return "";
-  let value = text;
-  while (value.length > ellipsis.length && ctx.measureText(value).width > maxWidth) {
-    value = `${value.slice(0, -(ellipsis.length + 1))}${ellipsis}`;
-  }
-  return value;
-}
-
-function drawPngNodeActions(ctx, node, x, y, pos, palette) {
-  const startX = x + pos.width - 88;
-  const buttonY = y + pos.height / 2 - 13;
-  const labels = ["+", "×", node.children.length ? (node.collapsed ? "▸" : "▾") : ""];
-  labels.forEach((label, index) => {
-    if (!label) return;
-    const buttonX = startX + index * 31;
-    const disabled = node.id === state.tree.id && index === 1;
-    ctx.save();
-    ctx.globalAlpha *= disabled ? 0.32 : 0.72;
-    roundedRectPath(ctx, buttonX, buttonY, 26, 26, 7);
-    ctx.fillStyle = mixColors(pos.color, palette.surface, 0.78);
-    ctx.fill();
-    ctx.strokeStyle = mixColors(pos.color, palette.line, 0.48);
-    ctx.lineWidth = 1;
-    ctx.stroke();
-    ctx.fillStyle = index === 1 ? palette.danger : palette.ink;
-    ctx.font = '700 14px "Segoe UI", "Yu Gothic UI", sans-serif';
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(label, buttonX + 13, buttonY + 13);
-    ctx.restore();
-  });
-}
-
-function roundedRectPath(ctx, x, y, width, height, radius) {
-  const r = Math.min(radius, width / 2, height / 2);
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + width - r, y);
-  ctx.quadraticCurveTo(x + width, y, x + width, y + r);
-  ctx.lineTo(x + width, y + height - r);
-  ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
-  ctx.lineTo(x + r, y + height);
-  ctx.quadraticCurveTo(x, y + height, x, y + height - r);
-  ctx.lineTo(x, y + r);
-  ctx.quadraticCurveTo(x, y, x + r, y);
-  ctx.closePath();
-}
-
-function roundedLeftRectPath(ctx, x, y, width, height, radius) {
-  const r = Math.min(radius, width, height / 2);
-  ctx.beginPath();
-  ctx.moveTo(x + width, y);
-  ctx.lineTo(x + width, y + height);
-  ctx.lineTo(x + r, y + height);
-  ctx.quadraticCurveTo(x, y + height, x, y + height - r);
-  ctx.lineTo(x, y + r);
-  ctx.quadraticCurveTo(x, y, x + r, y);
-  ctx.closePath();
-}
-
-function mixColors(first, second, secondWeight) {
-  const a = parseCssColor(first);
-  const b = parseCssColor(second);
-  const w2 = clamp(secondWeight, 0, 1);
-  const w1 = 1 - w2;
-  return `rgba(${Math.round(a.r * w1 + b.r * w2)}, ${Math.round(a.g * w1 + b.g * w2)}, ${Math.round(
-    a.b * w1 + b.b * w2,
-  )}, ${(a.a * w1 + b.a * w2).toFixed(3)})`;
-}
-
-function parseCssColor(color) {
-  const value = String(color || "").trim();
-  const hex = value.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
-  if (hex) {
-    const raw = hex[1].length === 3 ? [...hex[1]].map((char) => `${char}${char}`).join("") : hex[1];
-    return {
-      r: parseInt(raw.slice(0, 2), 16),
-      g: parseInt(raw.slice(2, 4), 16),
-      b: parseInt(raw.slice(4, 6), 16),
-      a: 1,
-    };
-  }
-  const rgb = value.match(/^rgba?\(([^)]+)\)$/i);
-  if (rgb) {
-    const parts = rgb[1].split(",").map((part) => Number(part.trim()));
-    return { r: parts[0] || 0, g: parts[1] || 0, b: parts[2] || 0, a: Number.isFinite(parts[3]) ? parts[3] : 1 };
-  }
-  return { r: 0, g: 0, b: 0, a: 1 };
-}
-
-function wireControls() {
-  document.getElementById("sampleButton").addEventListener("click", () => {
-    els.outlineInput.value = toMarkdown(sampleTree).join("\n");
-  });
-
-  document.getElementById("importButton").addEventListener("click", () => {
-    try {
-      const parsed = parseMapDocument(els.outlineInput.value);
-      pushHistory();
-      state.tree = parsed.tree;
-      const settings = parsed.settings ? normalizeSettings(parsed.settings) : currentSettings();
-      state.maxDepth = settings.maxDepth;
-      state.horizontalSpacing = settings.horizontalSpacing;
-      state.verticalSpacing = settings.verticalSpacing;
-      state.snapStep = settings.snapStep;
-      els.depthSlider.value = state.maxDepth;
-      els.horizontalSpacingSlider.value = state.horizontalSpacing;
-      els.verticalSpacingSlider.value = state.verticalSpacing;
-      els.snapStepSlider.value = state.snapStep;
-      updateSnapStepValue();
-      state.selectedId = state.tree.id;
-      state.mapName = state.mapName || state.tree.text;
-      state.isLayer3d = false;
-      state.layerFilterDepth = 0;
-      state.focusLayerDepth = 0;
-      state.focusNodeId = "";
-      state.dragGuide = { x: null, y: null };
-      document.body.classList.remove("layer-3d");
-      els.viewport.classList.remove("is-layer-3d");
-      render();
-      fitToView();
-    } catch (error) {
-      els.statusText.textContent = `反映に失敗しました: ${error.message}`;
-    }
-  });
-
-  let noteSnapshot = null;
-  let noteRecorded = false;
-  els.nodeNoteInput.addEventListener("focus", () => {
-    noteSnapshot = captureSnapshot();
-    noteRecorded = false;
-  });
-
-  els.nodeNoteInput.addEventListener("input", () => {
-    const found = findNode(state.selectedId);
-    if (!found) return;
-    if (!noteRecorded) {
-      pushHistory(noteSnapshot || captureSnapshot());
-      noteRecorded = true;
-    }
-    found.node.memo = els.nodeNoteInput.value;
-    saveTree();
-  });
-
-  els.nodeTypeSelect.addEventListener("change", () => {
-    setSelectedNodeType(els.nodeTypeSelect.value);
-  });
-
-  els.relationTypeSelect.addEventListener("change", () => {
-    setSelectedRelationType(els.relationTypeSelect.value);
-  });
-
-  els.focusNodeButton.addEventListener("click", () => {
-    toggleFocusSelected();
-  });
-
-  els.jumpSourceButton.addEventListener("click", () => {
-    jumpToSourceNode();
-  });
-
-  els.mapSelect.addEventListener("change", () => {
-    const selectedMapId = els.mapSelect.value;
-    saveTree();
-    const next = state.maps.find((map) => map.id === selectedMapId);
-    if (next) setActiveMap(next);
-  });
-
-  document.getElementById("newMapButton").addEventListener("click", () => {
-    saveTree();
-    const name = window.prompt("新しいマップ名", "新しいマップ");
-    if (name === null) return;
-    const map = makeMapItem(name.trim() || "新しいマップ", createBlankTree(name.trim() || "新しいマップ"));
-    state.maps.push(map);
-    setActiveMap(map);
-  });
-
-  document.getElementById("saveMapButton").addEventListener("click", () => {
-    const name = window.prompt("マップ名", state.mapName || state.tree.text || "無題のマップ");
-    if (name === null) return;
-    state.mapName = name.trim() || state.tree.text || "無題のマップ";
-    saveTree();
-    els.statusText.textContent = `${state.mapName} を保存しました。`;
-  });
-
-  document.getElementById("openMarkdownButton").addEventListener("click", () => {
-    els.markdownFileInput.click();
-  });
-
-  els.markdownFileInput.addEventListener("change", async () => {
-    try {
-      await openMarkdownFile(els.markdownFileInput.files[0]);
-      els.markdownFileInput.value = "";
-    } catch (error) {
-      els.statusText.textContent = `Markdownを開けませんでした: ${error.message}`;
-    }
-  });
-
-  document.getElementById("saveMarkdownButton").addEventListener("click", async () => {
-    try {
-      await saveMarkdownFile();
-    } catch (error) {
-      els.statusText.textContent = `Markdown保存を中止しました。`;
-    }
-  });
-
-  document.getElementById("optimizeLayoutButton").addEventListener("click", optimizeLayout);
-  document.getElementById("fitButton").addEventListener("click", fitToView);
-
-  document.getElementById("showAllLayersButton").addEventListener("click", () => {
-    setLayer3dMode(true);
-  });
-
-  document.getElementById("exportJsonButton").addEventListener("click", () => {
-    els.exportOutput.value = JSON.stringify({ tree: state.tree, settings: currentSettings() }, null, 2);
-  });
-
-  document.getElementById("exportMarkdownButton").addEventListener("click", () => {
-    els.exportOutput.value = toMarkdown(state.tree, { includeMeta: true }).join("\n");
-  });
-
-  document.getElementById("savePngButton").addEventListener("click", async () => {
-    try {
-      await savePngFile();
-    } catch (error) {
-      els.statusText.textContent =
-        error.name === "AbortError" ? "PNG保存を中止しました。" : `PNG保存に失敗しました: ${error.message}`;
-    }
-  });
-
-  document.getElementById("summaryButton").addEventListener("click", () => {
-    els.summaryOutput.value = summarizeTree(state.tree);
-    els.statusText.textContent = "要約を作成しました。";
-  });
-
-  els.searchInput.addEventListener("input", () => {
-    state.search = els.searchInput.value;
-    render();
-  });
-
-  els.depthSlider.addEventListener("input", () => {
-    state.maxDepth = Number(els.depthSlider.value);
-    render();
-  });
-
-  els.horizontalSpacingSlider.addEventListener("input", () => {
-    state.horizontalSpacing = Number(els.horizontalSpacingSlider.value);
-    render();
-  });
-
-  els.verticalSpacingSlider.addEventListener("input", () => {
-    state.verticalSpacing = Number(els.verticalSpacingSlider.value);
-    render();
-  });
-
-  els.snapStepSlider.addEventListener("input", () => {
-    state.snapStep = Number(els.snapStepSlider.value);
-    updateSnapStepValue();
-    saveTree();
-  });
-
-  document.getElementById("zoomOutButton").addEventListener("click", () => setZoom(state.zoom * 0.86));
-  document.getElementById("zoomInButton").addEventListener("click", () => setZoom(state.zoom * 1.16));
-  document.getElementById("zoomResetButton").addEventListener("click", () => {
-    state.zoom = 1;
-    centerRoot();
-  });
-
-  document.getElementById("view3dButton").addEventListener("click", () => {
-    setLayer3dMode(true);
-  });
-
-  document.getElementById("clearLayerButton").addEventListener("click", () => {
-    clearLayerFilter();
-  });
-
-  const layer3dControls = document.getElementById("layer3dControls");
-  layer3dControls.addEventListener("pointerdown", (event) => {
-    event.stopPropagation();
-  });
-
-  document.getElementById("layerUpButton").addEventListener("click", () => {
-    changeFocusLayer(-1);
-  });
-
-  document.getElementById("layerDownButton").addEventListener("click", () => {
-    changeFocusLayer(1);
-  });
-
-  document.getElementById("addLowerLayerButton").addEventListener("click", () => {
-    addLowerLayerNode();
-  });
-
-  document.getElementById("commitLayerButton").addEventListener("click", () => {
-    commitFocusedLayerTo2d();
-  });
-
-  document.getElementById("exit3dButton").addEventListener("click", () => {
-    setLayer3dMode(false);
-  });
-
-  document.getElementById("maximizeMapButton").addEventListener("click", () => {
-    setMapMaximized(true);
-  });
-
-  const restoreMapButton = document.getElementById("restoreMapButton");
-  restoreMapButton.addEventListener("pointerdown", (event) => {
-    event.stopPropagation();
-  });
-  restoreMapButton.addEventListener("click", (event) => {
-    event.stopPropagation();
-    setMapMaximized(false);
-  });
-
-  document.getElementById("themeToggle").addEventListener("click", () => {
-    const root = document.documentElement;
-    root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
-  });
-
-  document.addEventListener("pointerdown", (event) => {
-    if (els.nodeContextMenu?.hidden) return;
-    if (els.nodeContextMenu.contains(event.target)) return;
-    hideNodeContextMenu();
-  });
-
-  window.addEventListener("blur", hideNodeContextMenu);
-}
-
-function wireKeyboardShortcuts() {
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && els.nodeContextMenu && !els.nodeContextMenu.hidden) {
-      event.preventDefault();
-      hideNodeContextMenu();
-      return;
-    }
-
-    if (event.key === "Escape" && state.isLayer3d) {
-      event.preventDefault();
-      setLayer3dMode(false);
-      return;
-    }
-
-    if (event.key === "Escape" && document.body.classList.contains("map-maximized")) {
-      event.preventDefault();
-      setMapMaximized(false);
-      return;
-    }
-
-    const target = event.target;
-    const tagName = target?.tagName;
-    const isTextControl =
-      tagName === "TEXTAREA" ||
-      tagName === "SELECT" ||
-      (tagName === "INPUT" && target.type !== "range");
-    if (isTextControl && !target.isContentEditable) return;
-
-    const isUndoKey = (event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "z";
-    if (!isUndoKey) return;
-
-    event.preventDefault();
-    if (event.shiftKey) {
-      redo();
-    } else {
-      undo();
-    }
-  });
-}
-
-function setLayer3dMode(isEnabled) {
-  if (state.isLayer3d === isEnabled) return;
-  if (isEnabled) {
-    state.layerFilterDepth = null;
-    state.focusLayerDepth = getNodeLayer(findNode(state.selectedId)?.node);
-  } else {
-    state.layerFilterDepth = 0;
-    state.focusLayerDepth = 0;
-    ensureSelectedNodeVisible();
-  }
-
-  state.isLayer3d = isEnabled;
-  document.body.classList.toggle("layer-3d", isEnabled);
-  els.viewport.classList.toggle("is-layer-3d", isEnabled);
-  render();
-  requestAnimationFrame(fitToView);
-}
-
-function changeFocusLayer(delta) {
-  if (!state.isLayer3d) return;
-  state.focusLayerDepth = clamp(state.focusLayerDepth + delta, 0, getMaxRenderedLayer());
-  render();
-}
-
-function addLowerLayerNode() {
-  if (!state.isLayer3d) return;
-  const found = findNode(state.selectedId);
-  if (!found) return;
-  pushHistory();
-  found.node.collapsed = false;
-  const layer = getNodeLayer(found.node) + 1;
-  const child = normalizeNode({
-    text: found.node.text,
-    type: normalizeNodeType(found.node.type),
-    relationType: "note",
-    layer,
-    parallelOf: found.node.id,
-    offset: { x: 0, y: 0 },
-    children: [],
-  });
-  found.node.children.push(child);
-  state.selectedId = child.id;
-  state.focusLayerDepth = layer;
-  state.flashId = child.id;
-  render();
-}
-
-function commitFocusedLayerTo2d() {
-  if (!state.isLayer3d) return;
-  state.layerFilterDepth = state.focusLayerDepth;
-  state.isLayer3d = false;
-  document.body.classList.remove("layer-3d");
-  els.viewport.classList.remove("is-layer-3d");
-  render();
-  requestAnimationFrame(fitToView);
-  els.statusText.textContent = `階層 ${state.layerFilterDepth} のみを2D表示にしました。`;
-}
-
-function clearLayerFilter() {
-  if (state.layerFilterDepth === 0 && !state.isLayer3d) return;
-  state.isLayer3d = false;
-  state.layerFilterDepth = 0;
-  state.focusLayerDepth = 0;
-  ensureSelectedNodeVisible();
-  document.body.classList.remove("layer-3d");
-  els.viewport.classList.remove("is-layer-3d");
-  render();
-  requestAnimationFrame(fitToView);
-  els.statusText.textContent = "通常の2D表示に戻しました。";
-}
-
-function ensureSelectedNodeVisible() {
-  const found = findNode(state.selectedId);
-  if (!found || !shouldRenderLayer(getNodeLayer(found.node))) {
-    state.selectedId = state.tree.id;
-  }
-}
-
-function ensureFocusNodeVisible() {
-  if (!state.focusNodeId) return;
-  const found = findNode(state.focusNodeId);
-  if (!found || !shouldRenderLayer(getNodeLayer(found.node))) {
-    state.focusNodeId = "";
-  }
-}
-
-function updateLayerControls() {
-  const controls = document.getElementById("layer3dControls");
-  const view3dButton = document.getElementById("view3dButton");
-  const clearLayerButton = document.getElementById("clearLayerButton");
-  const layerLabel = document.getElementById("layerLevelLabel");
-  const layerUpButton = document.getElementById("layerUpButton");
-  const layerDownButton = document.getElementById("layerDownButton");
-  const maxLayer = getMaxRenderedLayer();
-
-  controls.hidden = !state.isLayer3d;
-  view3dButton.hidden = state.isLayer3d;
-  clearLayerButton.hidden = state.isLayer3d || state.layerFilterDepth === 0;
-  layerLabel.textContent = `アクティブ ${state.focusLayerDepth}`;
-  layerUpButton.disabled = state.focusLayerDepth <= 0;
-  layerDownButton.disabled = state.focusLayerDepth >= maxLayer;
-}
-
-function setMapMaximized(isMaximized) {
-  const alreadyMaximized = document.body.classList.contains("map-maximized");
-  if (isMaximized === alreadyMaximized) return;
-
-  const maximizeButton = document.getElementById("maximizeMapButton");
-  const restoreButton = document.getElementById("restoreMapButton");
-
-  if (isMaximized) {
-    viewBeforeMapMaximize = {
-      zoom: state.zoom,
-      pan: { ...state.pan },
-    };
-  }
-
-  document.body.classList.toggle("map-maximized", isMaximized);
-  maximizeButton.hidden = isMaximized;
-  restoreButton.hidden = !isMaximized;
-
-  requestAnimationFrame(() => {
-    if (isMaximized) {
-      fitToView();
-      return;
-    }
-
-    if (viewBeforeMapMaximize) {
-      state.zoom = viewBeforeMapMaximize.zoom;
-      state.pan = { ...viewBeforeMapMaximize.pan };
-      viewBeforeMapMaximize = null;
-      updateTransform();
-    } else {
-      fitToView();
-    }
-  });
-}
-
-function setZoom(nextZoom) {
-  state.zoom = Math.min(1.8, Math.max(0.28, nextZoom));
-  updateTransform();
-}
-
-function setZoomAtPoint(nextZoom, clientX, clientY, options = {}) {
-  const rect = els.viewport.getBoundingClientRect();
-  const viewportX = clientX - rect.left;
-  const viewportY = clientY - rect.top;
-  const previousZoom = state.zoom;
-  const zoom = options.unbounded ? Math.max(0.0001, nextZoom) : Math.min(1.8, Math.max(0.28, nextZoom));
-  if (zoom === previousZoom) return;
-
-  const factor = zoom / previousZoom;
-  state.zoom = zoom;
-  state.pan.x = viewportX - (viewportX - state.pan.x) * factor;
-  state.pan.y = viewportY - (viewportY - state.pan.y) * factor;
-  updateTransform();
-}
-
-function centerRoot() {
-  const rect = els.viewport.getBoundingClientRect();
-  state.pan.x = rect.width / 2 - WORLD.cx * state.zoom;
-  state.pan.y = rect.height / 2 - WORLD.cy * state.zoom;
-  updateTransform();
-}
-
-function wirePanZoom() {
-  let viewDrag = null;
-  let last = { x: 0, y: 0 };
-  let suppressContextMenu = false;
-
-  els.viewport.addEventListener("pointerdown", (event) => {
-    const mayaMode = getMayaNavigationMode(event);
-    if (mayaMode) {
-      event.preventDefault();
-      hideNodeContextMenu();
-      suppressContextMenu = mayaMode === "zoom";
-      viewDrag = {
-        mode: mayaMode,
-        className:
-          mayaMode === "orbit" ? "is-orbiting" : mayaMode === "zoom" ? "is-zoom-dragging" : "is-maya-panning",
-      };
-      last = { x: event.clientX, y: event.clientY };
-      els.viewport.classList.add(viewDrag.className);
-      els.viewport.setPointerCapture(event.pointerId);
-      return;
-    }
-
-    if (event.target.closest(".mind-node") || event.button !== 0) return;
-    viewDrag = { mode: "pan", className: "is-panning" };
-    last = { x: event.clientX, y: event.clientY };
-    els.viewport.classList.add(viewDrag.className);
-    els.viewport.setPointerCapture(event.pointerId);
-  });
-
-  els.viewport.addEventListener("pointermove", (event) => {
-    if (!viewDrag) return;
-    event.preventDefault();
-    const dx = event.clientX - last.x;
-    const dy = event.clientY - last.y;
-
-    if (viewDrag.mode === "orbit") {
-      state.view3d.yaw -= dx * 0.22;
-      state.view3d.pitch -= dy * 0.18;
-      updateTransform();
-    } else if (viewDrag.mode === "zoom") {
-      const factor = Math.exp(dx * 0.006);
-      setZoomAtPoint(state.zoom * factor, event.clientX, event.clientY, { unbounded: true });
-    } else {
-      state.pan.x += dx;
-      state.pan.y += dy;
-      updateTransform();
-    }
-
-    last = { x: event.clientX, y: event.clientY };
-  });
-
-  const finishViewDrag = () => {
-    if (!viewDrag) return;
-    els.viewport.classList.remove(viewDrag.className);
-    viewDrag = null;
-  };
-
-  els.viewport.addEventListener("pointerup", finishViewDrag);
-  els.viewport.addEventListener("pointercancel", finishViewDrag);
-
-  els.viewport.addEventListener("contextmenu", (event) => {
-    if (suppressContextMenu || (state.isLayer3d && event.altKey)) {
-      event.preventDefault();
-      suppressContextMenu = false;
-    }
-  });
-
-  els.viewport.addEventListener(
-    "wheel",
-    (event) => {
-      event.preventDefault();
-      const factor = event.deltaY > 0 ? 0.9 : 1.1;
-      setZoomAtPoint(state.zoom * factor, event.clientX, event.clientY);
-    },
-    { passive: false },
-  );
-}
-
-function getMayaNavigationMode(event) {
-  if (!state.isLayer3d) return "";
-  const isAltNavigation = event.altKey;
-  const isUiTarget = Boolean(
-    event.target.closest(
-      ".mind-node, .node-action, .layer-3d-controls, .context-menu, .restore-map-button, button, input, textarea, select",
-    ),
-  );
-  if (!isAltNavigation && isUiTarget) return "";
-  if (event.button === 0) return "orbit";
-  if (event.button === 2) return "zoom";
-  if (event.button === 1) return "pan";
-  return "";
-}
-
-function init() {
-  els.outlineInput.value = toMarkdown(state.tree).join("\n");
-  els.exportOutput.value = toMarkdown(state.tree).join("\n");
-  els.depthSlider.value = state.maxDepth;
-  els.horizontalSpacingSlider.value = state.horizontalSpacing;
-  els.verticalSpacingSlider.value = state.verticalSpacing;
-  els.snapStepSlider.value = state.snapStep;
-  updateSnapStepValue();
-  updateMapSelect();
-  wireControls();
-  wireKeyboardShortcuts();
-  wirePanZoom();
-  render();
-  requestAnimationFrame(fitToView);
-}
-
-init();
+})();
