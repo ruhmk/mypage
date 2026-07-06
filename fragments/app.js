@@ -9,7 +9,7 @@
   const DRIVE_FILE = "today-fragments.json";
   const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
   const GROUP_COLORS = ["#67e8f9", "#ff7aa8", "#ffd166", "#8ff0c4", "#a78bfa"];
-  const APP_VERSION = "25";
+  const APP_VERSION = "26";
   const NOTE_CARD_WIDTH = 210;
   const NOTE_CARD_HEIGHT = 62;
   const GROUP_FIT_PADDING = 52;
@@ -404,7 +404,7 @@
     document.addEventListener("drop", guardNativeWorkspaceDrag, true);
     document.addEventListener("dragover", guardNativeWorkspaceDrag, true);
     els.workspace.addEventListener("wheel", onWheel, { passive: false });
-    els.workspace.addEventListener("pointerdown", onWorkspacePointerDown);
+    els.workspace.addEventListener("pointerdown", onWorkspacePointerDown, true);
     window.addEventListener("pointermove", onWorkspacePointerMove, true);
     window.addEventListener("pointerup", onWorkspacePointerUp, true);
     window.addEventListener("pointercancel", onWorkspacePointerUp, true);
@@ -1243,7 +1243,8 @@
     const target = note || group;
     if (!target) return;
     if (isEntityMovementBlocked(target)) return;
-    const node = event.currentTarget;
+    const node = getEntityNode(type, id) || event.currentTarget;
+    if (!node?.classList) return;
     const historySnapshot = makeHistorySnapshot();
     try {
       node.setPointerCapture(event.pointerId);
@@ -1360,6 +1361,11 @@
     active.finish();
   }
 
+  function getEntityNode(type, id) {
+    const layer = type === "note" ? els.cardLayer : els.groupLayer;
+    return Array.from(layer.querySelectorAll(type === "note" ? ".note-card" : ".group-node")).find((node) => node.dataset.id === id) || null;
+  }
+
   function updateAllNoteGroups(markTouched = false) {
     app.data.notes.filter((note) => isVisibleEntity(note)).forEach((note) => {
       const changed = updateNoteGroups(note);
@@ -1444,8 +1450,27 @@
 
   function onWorkspacePointerDown(event) {
     if (app.selected && isInspectorDismissTarget(event.target)) clearSelection();
+    if (shouldLetTargetHandlePointer(event.target)) return;
+    const group = pickGroupAt(event.clientX, event.clientY);
+    if (group) {
+      const resizeHandle = event.target.closest?.(".resize-handle");
+      const handleGroupId = resizeHandle?.closest?.(".group-node")?.dataset?.id;
+      const mode = resizeHandle && handleGroupId === group.id ? "resize-group" : "group";
+      if (handleEntityPointerDown(event, "group", group.id)) {
+        beginEntityDrag(event, mode, group.id);
+      }
+      return;
+    }
     if (!isViewportPanTarget(event.target)) return;
     beginViewportInteraction(event);
+  }
+
+  function shouldLetTargetHandlePointer(target) {
+    return Boolean(
+      target?.closest?.(
+        ".note-card, .connection-node, .connection-path, .inspector, .composer, .toolbar, .topbar, .modal-root, button, input, textarea, select, a"
+      )
+    );
   }
 
   function beginViewportInteraction(event, tapTarget = null) {
