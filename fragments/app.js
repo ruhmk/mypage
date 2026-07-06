@@ -9,7 +9,7 @@
   const DRIVE_FILE = "today-fragments.json";
   const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
   const GROUP_COLORS = ["#67e8f9", "#ff7aa8", "#ffd166", "#8ff0c4", "#a78bfa"];
-  const APP_VERSION = "17";
+  const APP_VERSION = "18";
   const NOTE_CARD_WIDTH = 210;
   const NOTE_CARD_HEIGHT = 62;
   const GROUP_FIT_PADDING = 52;
@@ -42,7 +42,8 @@
     entityTapCandidates: new Map(),
     connectionDraft: null,
     panelsCollapsed: false,
-    history: { undo: [], redo: [], restoring: false }
+    history: { undo: [], redo: [], restoring: false },
+    particles: { x: 0, y: 0, targetX: 0, targetY: 0, raf: 0, initialized: false }
   };
 
   const $ = (selector, root = document) => root.querySelector(selector);
@@ -401,6 +402,7 @@
     window.addEventListener("resize", () => {
       resizeGlCanvas();
       initParticles();
+      updateParticleTarget(true);
       renderAll();
     });
     document.addEventListener("keydown", onKeyDown);
@@ -1538,6 +1540,44 @@
 
   function updateWorldTransform() {
     els.world.style.transform = `translate(${app.view.x}px, ${app.view.y}px) scale(${app.view.zoom})`;
+    updateParticleTarget();
+  }
+
+  function updateParticleTarget(force = false) {
+    if (!els.particleLayer) return;
+    const depth = useLightweightEffects() ? 0.12 : 0.16;
+    app.particles.targetX = app.view.x * depth;
+    app.particles.targetY = app.view.y * depth;
+    if (force || !app.particles.initialized) {
+      app.particles.initialized = true;
+      app.particles.x = app.particles.targetX;
+      app.particles.y = app.particles.targetY;
+      applyParticlePan(app.particles.x, app.particles.y);
+      return;
+    }
+    if (!app.particles.raf) {
+      app.particles.raf = requestAnimationFrame(animateParticlePan);
+    }
+  }
+
+  function animateParticlePan() {
+    app.particles.raf = 0;
+    const ease = useLightweightEffects() ? 0.16 : 0.12;
+    app.particles.x += (app.particles.targetX - app.particles.x) * ease;
+    app.particles.y += (app.particles.targetY - app.particles.y) * ease;
+    if (Math.abs(app.particles.targetX - app.particles.x) < 0.08 && Math.abs(app.particles.targetY - app.particles.y) < 0.08) {
+      app.particles.x = app.particles.targetX;
+      app.particles.y = app.particles.targetY;
+      applyParticlePan(app.particles.x, app.particles.y);
+      return;
+    }
+    applyParticlePan(app.particles.x, app.particles.y);
+    app.particles.raf = requestAnimationFrame(animateParticlePan);
+  }
+
+  function applyParticlePan(x, y) {
+    els.particleLayer.style.setProperty("--particle-pan-x", `${x.toFixed(2)}px`);
+    els.particleLayer.style.setProperty("--particle-pan-y", `${y.toFixed(2)}px`);
   }
 
   function screenToWorld(x, y) {

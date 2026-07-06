@@ -310,6 +310,8 @@ html.setup-mode .setup-screen {
   --particle-image: none;
   --particle-opacity: 0.8;
   --particle-duration: 34s;
+  --particle-pan-x: 0px;
+  --particle-pan-y: 0px;
   --particle-drift-x: 28px;
   --particle-drift-y: -18px;
   --particle-return-x: -14px;
@@ -496,13 +498,21 @@ html.setup-mode .setup-screen {
 @keyframes particle-tile-float {
   0%,
   100% {
-    transform: translate3d(0, 0, 0);
+    transform: translate3d(var(--particle-pan-x), var(--particle-pan-y), 0);
   }
   45% {
-    transform: translate3d(var(--particle-drift-x), var(--particle-drift-y), 0);
+    transform: translate3d(
+      calc(var(--particle-pan-x) + var(--particle-drift-x)),
+      calc(var(--particle-pan-y) + var(--particle-drift-y)),
+      0
+    );
   }
   72% {
-    transform: translate3d(var(--particle-return-x), var(--particle-return-y), 0);
+    transform: translate3d(
+      calc(var(--particle-pan-x) + var(--particle-return-x)),
+      calc(var(--particle-pan-y) + var(--particle-return-y)),
+      0
+    );
   }
 }
 
