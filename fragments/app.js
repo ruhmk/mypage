@@ -9,7 +9,7 @@
   const DRIVE_FILE = "today-fragments.json";
   const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
   const GROUP_COLORS = ["#67e8f9", "#ff7aa8", "#ffd166", "#8ff0c4", "#a78bfa"];
-  const APP_VERSION = "24";
+  const APP_VERSION = "25";
   const NOTE_CARD_WIDTH = 210;
   const NOTE_CARD_HEIGHT = 62;
   const GROUP_FIT_PADDING = 52;

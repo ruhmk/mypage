@@ -368,10 +368,12 @@ body.dragging-entity .workspace * {
 
 .group-layer {
   z-index: 3;
+  pointer-events: none;
 }
 
 .card-layer {
   z-index: 5;
+  pointer-events: none;
 }
 
 .connection-node {
@@ -715,6 +717,7 @@ body.dragging-entity .workspace * {
 
 .group-node {
   position: absolute;
+  pointer-events: auto;
   border: 1px solid color-mix(in oklab, var(--group-color), white 18%);
   background:
     radial-gradient(circle at 24% 20%, color-mix(in srgb, var(--group-color), transparent 72%), transparent 34%),
@@ -806,6 +809,7 @@ body.dragging-entity .workspace * {
 
 .note-card {
   position: absolute;
+  pointer-events: auto;
   width: 210px;
   min-height: 62px;
   display: flex;
