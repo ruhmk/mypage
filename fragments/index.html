@@ -6,10 +6,10 @@
     <meta name="theme-color" content="#07090f" />
     <title>Today Fragments</title>
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=18" />
+    <link rel="stylesheet" href="styles.css?v=21" />
     <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <script src="vendor/qrcode-generator.js?v=18" defer></script>
-    <script src="vendor/jsQR.js?v=18" defer></script>
+    <script src="vendor/qrcode-generator.js?v=21" defer></script>
+    <script src="vendor/jsQR.js?v=21" defer></script>
   </head>
   <body>
     <noscript>Today Fragmentsを使うにはJavaScriptを有効にしてください。</noscript>
@@ -39,6 +39,9 @@
             </button>
             <button id="redo-action" class="icon-button" title="進む" aria-label="進む" disabled>
               <span>↷</span>
+            </button>
+            <button id="reset-view" class="icon-button" title="視点リセット" aria-label="視点リセット">
+              <span>⌖</span>
             </button>
             <button id="movement-lock" class="icon-button" title="全体の位置ロック" aria-label="全体の位置ロック">
               <span>止</span>
@@ -78,6 +81,6 @@
     </main>
 
     <div id="modal-root" class="modal-root" aria-live="polite"></div>
-    <script src="app.js?v=18" defer></script>
+    <script src="app.js?v=21" defer></script>
   </body>
 </html>

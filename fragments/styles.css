@@ -713,6 +713,7 @@ html.setup-mode .setup-screen {
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-user-drag: none;
   transition:
     translate var(--fast),
     left 180ms ease,
@@ -762,6 +763,9 @@ html.setup-mode .setup-screen {
   font-size: 15px;
   text-shadow: 0 1px 12px rgba(0, 0, 0, 0.45);
   pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
 }
 
 .resize-handle {
@@ -801,6 +805,7 @@ html.setup-mode .setup-screen {
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-user-drag: none;
   transition:
     translate var(--fast),
     transform var(--fast),
@@ -880,6 +885,10 @@ html.setup-mode .setup-screen {
   -webkit-box-orient: vertical;
   overflow: hidden;
   overflow-wrap: anywhere;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
 }
 
 .note-body {

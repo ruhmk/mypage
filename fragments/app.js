@@ -9,7 +9,7 @@
   const DRIVE_FILE = "today-fragments.json";
   const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
   const GROUP_COLORS = ["#67e8f9", "#ff7aa8", "#ffd166", "#8ff0c4", "#a78bfa"];
-  const APP_VERSION = "18";
+  const APP_VERSION = "21";
   const NOTE_CARD_WIDTH = 210;
   const NOTE_CARD_HEIGHT = 62;
   const GROUP_FIT_PADDING = 52;
@@ -43,7 +43,8 @@
     connectionDraft: null,
     panelsCollapsed: false,
     history: { undo: [], redo: [], restoring: false },
-    particles: { x: 0, y: 0, targetX: 0, targetY: 0, raf: 0, initialized: false }
+    particles: { x: 0, y: 0, targetX: 0, targetY: 0, raf: 0, initialized: false },
+    activeEntityDrag: null
   };
 
   const $ = (selector, root = document) => root.querySelector(selector);
@@ -90,6 +91,7 @@
     els.panelToggle = $("#panel-toggle");
     els.undoAction = $("#undo-action");
     els.redoAction = $("#redo-action");
+    els.resetView = $("#reset-view");
     els.movementLock = $("#movement-lock");
     els.particleLayer = $(".particle-layer");
   }
@@ -390,15 +392,21 @@
     els.panelToggle.addEventListener("click", togglePanels);
     els.undoAction.addEventListener("click", undo);
     els.redoAction.addEventListener("click", redo);
+    els.resetView?.addEventListener("click", resetViewToContent);
     els.movementLock.addEventListener("click", toggleMovementLock);
     els.workspace.addEventListener("contextmenu", (event) => {
       if (event.target.closest?.(".note-card, .group-node, .connection-path, .line-layer")) event.preventDefault();
     });
+    els.workspace.addEventListener("dragstart", (event) => event.preventDefault());
     els.workspace.addEventListener("wheel", onWheel, { passive: false });
     els.workspace.addEventListener("pointerdown", onWorkspacePointerDown);
-    els.workspace.addEventListener("pointermove", onWorkspacePointerMove);
-    els.workspace.addEventListener("pointerup", onWorkspacePointerUp);
-    els.workspace.addEventListener("pointercancel", onWorkspacePointerUp);
+    window.addEventListener("pointermove", onWorkspacePointerMove, true);
+    window.addEventListener("pointerup", onWorkspacePointerUp, true);
+    window.addEventListener("pointercancel", onWorkspacePointerUp, true);
+    window.addEventListener("blur", () => {
+      finishActiveEntityDrag();
+      resetViewportInteraction();
+    });
     window.addEventListener("resize", () => {
       resizeGlCanvas();
       initParticles();
@@ -408,6 +416,8 @@
     document.addEventListener("keydown", onKeyDown);
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "hidden") {
+        finishActiveEntityDrag();
+        resetViewportInteraction();
         persistState();
         if (app.settings.role === "phone") saveDriveNow();
       }
@@ -1160,6 +1170,8 @@
   }
 
   function beginEntityDrag(event, type, id) {
+    finishActiveEntityDrag();
+    resetViewportInteraction();
     const note = type === "note" ? findNote(id) : null;
     const group = type === "group" || type === "resize-group" ? findGroup(id) : null;
     const target = note || group;
@@ -1179,6 +1191,8 @@
       id,
       sx: event.clientX,
       sy: event.clientY,
+      wx: screenToWorld(event.clientX, event.clientY).x,
+      wy: screenToWorld(event.clientX, event.clientY).y,
       x: target.x,
       y: target.y,
       w: target.w,
@@ -1186,32 +1200,57 @@
       groupIds: note ? [...(note.groupIds || [])] : [],
       moved: false
     };
-    const onMove = (moveEvent) => {
-      if (moveEvent.pointerId !== start.pointerId) return;
-      moveEvent.preventDefault();
-      const dx = (moveEvent.clientX - start.sx) / app.view.zoom;
-      const dy = (moveEvent.clientY - start.sy) / app.view.zoom;
-      start.moved = Math.abs(dx) + Math.abs(dy) > 1;
+    let lastClientX = event.clientX;
+    let lastClientY = event.clientY;
+    let autoPanFrame = 0;
+    const placeTarget = (clientX, clientY) => {
+      const current = screenToWorld(clientX, clientY);
+      const dx = current.x - start.wx;
+      const dy = current.y - start.wy;
+      start.moved = start.moved || Math.abs(clientX - start.sx) + Math.abs(clientY - start.sy) > 3;
       if (type === "resize-group") {
         group.w = Math.round(clamp(start.w + dx, 180, 1200));
         group.h = Math.round(clamp(start.h + dy, 140, 900));
         node.style.width = `${group.w}px`;
         node.style.height = `${group.h}px`;
         renderConnections();
-      } else {
-        target.x = Math.round(start.x + dx);
-        target.y = Math.round(start.y + dy);
-        node.style.left = `${target.x}px`;
-        node.style.top = `${target.y}px`;
-        if (type === "note") updateDropHighlight(note);
-        renderConnections();
+        return;
       }
+      target.x = Math.round(start.x + dx);
+      target.y = Math.round(start.y + dy);
+      node.style.left = `${target.x}px`;
+      node.style.top = `${target.y}px`;
+      if (type === "note") updateDropHighlight(note);
+      renderConnections();
     };
-    const onUp = (upEvent) => {
-      if (upEvent.pointerId !== start.pointerId) return;
+    const autoPan = () => {
+      autoPanFrame = 0;
+      const pan = viewportEdgePan(lastClientX, lastClientY);
+      if (!pan.x && !pan.y) return;
+      start.moved = true;
+      app.view.x += pan.x;
+      app.view.y += pan.y;
+      updateWorldTransform();
+      placeTarget(lastClientX, lastClientY);
+      autoPanFrame = requestAnimationFrame(autoPan);
+    };
+    const ensureAutoPan = () => {
+      const pan = viewportEdgePan(lastClientX, lastClientY);
+      if ((pan.x || pan.y) && !autoPanFrame) autoPanFrame = requestAnimationFrame(autoPan);
+    };
+    const finish = () => {
       window.removeEventListener("pointermove", onMove, true);
       window.removeEventListener("pointerup", onUp, true);
       window.removeEventListener("pointercancel", onUp, true);
+      if (autoPanFrame) {
+        cancelAnimationFrame(autoPanFrame);
+        autoPanFrame = 0;
+      }
+      try {
+        node.releasePointerCapture(start.pointerId);
+      } catch {
+        // Ignore browsers that already released capture.
+      }
       node.classList.remove("dragging");
       clearDropHighlights();
       if (start.moved) {
@@ -1225,11 +1264,32 @@
           updateAllNoteGroups(true);
         }
       }
+      app.activeEntityDrag = null;
       renderAll();
     };
+    const onMove = (moveEvent) => {
+      if (moveEvent.pointerId !== start.pointerId) return;
+      moveEvent.preventDefault();
+      lastClientX = moveEvent.clientX;
+      lastClientY = moveEvent.clientY;
+      placeTarget(lastClientX, lastClientY);
+      ensureAutoPan();
+    };
+    const onUp = (upEvent) => {
+      if (upEvent.pointerId !== start.pointerId) return;
+      upEvent.preventDefault();
+      finish();
+    };
+    app.activeEntityDrag = { pointerId: start.pointerId, finish };
     window.addEventListener("pointermove", onMove, true);
     window.addEventListener("pointerup", onUp, true);
     window.addEventListener("pointercancel", onUp, true);
+  }
+
+  function finishActiveEntityDrag() {
+    const active = app.activeEntityDrag;
+    if (!active) return;
+    active.finish();
   }
 
   function updateAllNoteGroups(markTouched = false) {
@@ -1300,13 +1360,32 @@
     }
   }
 
+  function viewportEdgePan(clientX, clientY) {
+    const margin = useLightweightEffects() ? 86 : 72;
+    const maxSpeed = useLightweightEffects() ? 9 : 14;
+    const edgeSpeed = (distance) => {
+      if (distance >= margin) return 0;
+      const amount = 1 - clamp(distance / margin, 0, 1);
+      return Math.round(maxSpeed * amount * amount * 100) / 100;
+    };
+    return {
+      x: edgeSpeed(clientX) - edgeSpeed(window.innerWidth - clientX),
+      y: edgeSpeed(clientY) - edgeSpeed(window.innerHeight - clientY)
+    };
+  }
+
   function onWorkspacePointerDown(event) {
     if (app.selected && isInspectorDismissTarget(event.target)) clearSelection();
-    if (!isBackgroundTarget(event.target)) return;
+    if (!isViewportPanTarget(event.target)) return;
     beginViewportInteraction(event);
   }
 
   function beginViewportInteraction(event, tapTarget = null) {
+    event.preventDefault();
+    const shouldResetStalePointers = event.pointerType !== "touch" || event.isPrimary;
+    if (shouldResetStalePointers && app.pointers.size && !app.pointers.has(event.pointerId)) {
+      resetViewportInteraction();
+    }
     try {
       els.workspace.setPointerCapture(event.pointerId);
     } catch {
@@ -1330,6 +1409,7 @@
 
   function onWorkspacePointerMove(event) {
     if (!app.pointers.has(event.pointerId)) return;
+    event.preventDefault();
     app.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
     if (app.pointers.size === 2 && app.pinchStart) {
       const current = makePinchState();
@@ -1348,6 +1428,8 @@
   }
 
   function onWorkspacePointerUp(event) {
+    if (!app.pointers.has(event.pointerId)) return;
+    event.preventDefault();
     const tapTarget = app.entityTapCandidates.get(event.pointerId);
     if (tapTarget && Math.hypot(event.clientX - tapTarget.x, event.clientY - tapTarget.y) < 10) {
       handleEntityTap(tapTarget.type, tapTarget.id, event);
@@ -1355,7 +1437,14 @@
     app.entityTapCandidates.delete(event.pointerId);
     app.pointers.delete(event.pointerId);
     if (app.pointers.size < 2) app.pinchStart = null;
-    if (app.pointers.size === 0) app.panStart = null;
+    if (app.pointers.size === 0) resetViewportInteraction();
+  }
+
+  function resetViewportInteraction() {
+    app.pointers.clear();
+    app.entityTapCandidates.clear();
+    app.panStart = null;
+    app.pinchStart = null;
   }
 
   function handleEntityTap(type, id, event) {
@@ -1460,6 +1549,11 @@
     const key = event.key.toLowerCase();
     const modifier = event.ctrlKey || event.metaKey;
     if (!modifier) return;
+    if (key === "0") {
+      event.preventDefault();
+      resetViewToContent();
+      return;
+    }
     if (key === "z" && event.shiftKey) {
       event.preventDefault();
       redo();
@@ -1517,7 +1611,19 @@
   }
 
   function isBackgroundTarget(target) {
-    return target === els.workspace || target === els.canvas || target === els.world || target.classList.contains("layer");
+    return target === els.workspace || target === els.canvas || target === els.world || Boolean(target?.classList?.contains("layer"));
+  }
+
+  function isViewportPanTarget(target) {
+    if (!target?.closest || !target.closest(".workspace")) return false;
+    if (
+      target.closest(
+        ".note-card, .group-node, .connection-node, .connection-path, .inspector, .composer, .toolbar, .topbar, .modal-root, button, input, textarea, select, a"
+      )
+    ) {
+      return false;
+    }
+    return true;
   }
 
   function isInspectorDismissTarget(target) {
@@ -1541,6 +1647,43 @@
   function updateWorldTransform() {
     els.world.style.transform = `translate(${app.view.x}px, ${app.view.y}px) scale(${app.view.zoom})`;
     updateParticleTarget();
+  }
+
+  function resetViewToContent() {
+    const bounds = contentBounds();
+    app.view.zoom = 1;
+    if (!bounds) {
+      app.view.x = Math.round(window.innerWidth / 2);
+      app.view.y = Math.round(window.innerHeight / 2);
+    } else {
+      app.view.x = Math.round(window.innerWidth / 2 - (bounds.x + bounds.w / 2));
+      app.view.y = Math.round(window.innerHeight / 2 - (bounds.y + bounds.h / 2));
+    }
+    updateWorldTransform();
+    toast("視点を中央に戻しました");
+  }
+
+  function contentBounds() {
+    const rects = [
+      ...app.data.notes.filter((note) => isVisibleEntity(note)).map(noteBounds),
+      ...app.data.groups.filter((group) => isVisibleEntity(group)).map((group) => ({
+        x: group.x,
+        y: group.y,
+        w: group.w,
+        h: group.h
+      }))
+    ];
+    if (!rects.length) return null;
+    const minX = Math.min(...rects.map((rect) => rect.x));
+    const minY = Math.min(...rects.map((rect) => rect.y));
+    const maxX = Math.max(...rects.map((rect) => rect.x + rect.w));
+    const maxY = Math.max(...rects.map((rect) => rect.y + rect.h));
+    return {
+      x: minX,
+      y: minY,
+      w: maxX - minX,
+      h: maxY - minY
+    };
   }
 
   function updateParticleTarget(force = false) {
