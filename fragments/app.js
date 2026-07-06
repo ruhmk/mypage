@@ -9,7 +9,7 @@
   const DRIVE_FILE = "today-fragments.json";
   const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
   const GROUP_COLORS = ["#67e8f9", "#ff7aa8", "#ffd166", "#8ff0c4", "#a78bfa"];
-  const APP_VERSION = "27";
+  const APP_VERSION = "29";
   const NOTE_CARD_WIDTH = 210;
   const NOTE_CARD_HEIGHT = 62;
   const GROUP_FIT_PADDING = 52;
@@ -364,6 +364,7 @@
       app.view.x = Math.round(window.innerWidth / 2);
       app.view.y = Math.round(window.innerHeight / 2);
     }
+    applyPerformanceMode();
     initWebGl();
     initParticles();
     updateWorldTransform();
@@ -413,6 +414,8 @@
       resetViewportInteraction();
     });
     window.addEventListener("resize", () => {
+      applyPerformanceMode();
+      if (!useLightweightEffects()) initWebGl();
       resizeGlCanvas();
       initParticles();
       updateParticleTarget(true);
@@ -437,17 +440,26 @@
   function initParticles() {
     if (!els.particleLayer) return;
     const mobile = useLightweightEffects();
+    if (mobile) {
+      const key = "mobile-off";
+      if (els.particleLayer.dataset.key === key) return;
+      els.particleLayer.dataset.key = key;
+      els.particleLayer.innerHTML = "";
+      els.particleLayer.style.setProperty("--particle-image", "none");
+      els.particleLayer.style.setProperty("--particle-opacity", "0");
+      return;
+    }
     const tileSize = 400;
-    const count = mobile ? 9 : 14;
-    const key = `${mobile ? "m" : "d"}:${tileSize}:${count}`;
+    const count = 14;
+    const key = `d:${tileSize}:${count}`;
     if (els.particleLayer.dataset.key === key) return;
     els.particleLayer.dataset.key = key;
     const colors = ["#aaf5ff", "#67e8f9", "#ff7aa8", "#ffd166", "#8ff0c4", "#a78bfa"];
     const gradients = Array.from({ length: count }, (_, index) => {
       const accent = index % 7 === 0;
-      const size = mobile ? randomBetween(0.85, accent ? 2.45 : 1.65) : randomBetween(1.0, accent ? 3.0 : 2.05);
-      const fade = size * (mobile ? 1.95 : 2.2);
-      const opacity = mobile ? randomBetween(0.34, 0.66) : randomBetween(0.42, 0.78);
+      const size = randomBetween(1.0, accent ? 3.0 : 2.05);
+      const fade = size * 2.2;
+      const opacity = randomBetween(0.42, 0.78);
       const color = colors[Math.floor(Math.random() * colors.length)];
       const x = randomBetween(18, tileSize - 18);
       const y = randomBetween(18, tileSize - 18);
@@ -456,12 +468,12 @@
     els.particleLayer.innerHTML = "";
     els.particleLayer.style.setProperty("--particle-tile-size", `${tileSize}px`);
     els.particleLayer.style.setProperty("--particle-image", gradients.join(","));
-    els.particleLayer.style.setProperty("--particle-opacity", mobile ? "0.7" : "0.82");
-    els.particleLayer.style.setProperty("--particle-duration", mobile ? "28s" : "22s");
-    els.particleLayer.style.setProperty("--particle-drift-x", mobile ? "18px" : "28px");
-    els.particleLayer.style.setProperty("--particle-drift-y", mobile ? "-12px" : "-18px");
-    els.particleLayer.style.setProperty("--particle-return-x", mobile ? "-8px" : "-14px");
-    els.particleLayer.style.setProperty("--particle-return-y", mobile ? "9px" : "12px");
+    els.particleLayer.style.setProperty("--particle-opacity", "0.82");
+    els.particleLayer.style.setProperty("--particle-duration", "22s");
+    els.particleLayer.style.setProperty("--particle-drift-x", "28px");
+    els.particleLayer.style.setProperty("--particle-drift-y", "-18px");
+    els.particleLayer.style.setProperty("--particle-return-x", "-14px");
+    els.particleLayer.style.setProperty("--particle-return-y", "12px");
   }
 
   function randomBetween(min, max) {
@@ -1741,6 +1753,11 @@
     return isSmallViewport() || (hasTouch && compactSide);
   }
 
+  function applyPerformanceMode() {
+    els.workspace?.classList.toggle("mobile-lite", useLightweightEffects());
+    els.canvas?.classList.toggle("disabled", useLightweightEffects());
+  }
+
   function updateWorldTransform() {
     els.world.style.transform = `translate(${app.view.x}px, ${app.view.y}px) scale(${app.view.zoom})`;
     updateParticleTarget();
@@ -2912,7 +2929,18 @@
   }
 
   function initWebGl() {
-    if (app.gl) return;
+    if (useLightweightEffects()) {
+      els.canvas.classList.add("disabled");
+      return;
+    }
+    els.canvas.classList.remove("disabled");
+    if (app.gl?.running) return;
+    if (app.gl) {
+      app.gl.running = true;
+      resizeGlCanvas();
+      requestAnimationFrame(drawWebGl);
+      return;
+    }
     const gl = els.canvas.getContext("webgl", { antialias: false, alpha: false });
     if (!gl) return;
     const vertex = `
@@ -2964,7 +2992,8 @@
       resolution: gl.getUniformLocation(program, "u_resolution"),
       view: gl.getUniformLocation(program, "u_view"),
       zoom: gl.getUniformLocation(program, "u_zoom"),
-      time: gl.getUniformLocation(program, "u_time")
+      time: gl.getUniformLocation(program, "u_time"),
+      running: true
     };
     resizeGlCanvas();
     requestAnimationFrame(drawWebGl);
@@ -2972,6 +3001,13 @@
 
   function drawWebGl(time) {
     if (!app.gl) return;
+    if (useLightweightEffects()) {
+      app.gl.running = false;
+      els.canvas.classList.add("disabled");
+      return;
+    }
+    app.gl.running = true;
+    els.canvas.classList.remove("disabled");
     const { gl, program, pos, resolution, view, zoom } = app.gl;
     const pixelRatio = renderPixelRatio();
     resizeGlCanvas();
@@ -2987,6 +3023,7 @@
   }
 
   function resizeGlCanvas() {
+    if (useLightweightEffects()) return;
     const pixelRatio = renderPixelRatio();
     const width = Math.max(1, Math.floor(window.innerWidth * pixelRatio));
     const height = Math.max(1, Math.floor(window.innerHeight * pixelRatio));

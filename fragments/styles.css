@@ -315,6 +315,10 @@ body.dragging-entity .workspace * {
   height: 100%;
 }
 
+.gl-canvas.disabled {
+  display: none;
+}
+
 .particle-layer {
   position: absolute;
   inset: 0;
@@ -344,6 +348,56 @@ body.dragging-entity .workspace * {
   animation: particle-tile-float var(--particle-duration) ease-in-out infinite;
   transform: translate3d(0, 0, 0);
   will-change: transform;
+}
+
+.workspace.mobile-lite {
+  background:
+    radial-gradient(circle at 20% 0%, rgba(39, 77, 92, 0.42), transparent 34%),
+    radial-gradient(circle at 90% 8%, rgba(78, 36, 62, 0.3), transparent 32%),
+    #07090f;
+}
+
+.workspace.mobile-lite .gl-canvas,
+.workspace.mobile-lite .particle-layer {
+  display: none;
+}
+
+.workspace.mobile-lite .note-card,
+.workspace.mobile-lite .group-node,
+.workspace.mobile-lite .connection-flow,
+.workspace.mobile-lite .connection-draft {
+  animation: none !important;
+}
+
+.workspace.mobile-lite .note-card,
+.workspace.mobile-lite .note-card.grouped,
+.workspace.mobile-lite .note-card.selected {
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.32);
+}
+
+.workspace.mobile-lite .group-node,
+.workspace.mobile-lite .group-node.selected,
+.workspace.mobile-lite .group-node.drop-target {
+  border-radius: 18px;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.26);
+}
+
+.workspace.mobile-lite .connection-main,
+.workspace.mobile-lite .connection-node:hover .connection-main,
+.workspace.mobile-lite .connection-node.selected .connection-main,
+.workspace.mobile-lite .connection-point {
+  filter: none;
+}
+
+.workspace.mobile-lite .connection-flow {
+  display: none;
+}
+
+.workspace.mobile-lite .topbar,
+.workspace.mobile-lite .composer,
+.workspace.mobile-lite .inspector,
+.workspace.mobile-lite .panel-toggle {
+  backdrop-filter: none;
 }
 
 .world {
@@ -1212,7 +1266,7 @@ body.dragging-entity .workspace * {
   .composer {
     position: absolute;
     left: 10px;
-    right: 10px;
+    right: 64px;
     bottom: max(10px, env(safe-area-inset-bottom));
     top: auto;
     width: auto;
@@ -1239,6 +1293,8 @@ body.dragging-entity .workspace * {
   .panel-toggle {
     display: grid;
     place-items: center;
+    right: 10px;
+    bottom: max(10px, env(safe-area-inset-bottom));
   }
 
   .workspace.panels-collapsed .composer,
