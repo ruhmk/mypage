@@ -9,7 +9,7 @@
   const DRIVE_FILE = "today-fragments.json";
   const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
   const GROUP_COLORS = ["#67e8f9", "#ff7aa8", "#ffd166", "#8ff0c4", "#a78bfa"];
-  const APP_VERSION = "23";
+  const APP_VERSION = "24";
   const NOTE_CARD_WIDTH = 210;
   const NOTE_CARD_HEIGHT = 62;
   const GROUP_FIT_PADDING = 52;
@@ -485,7 +485,14 @@
   }
 
   function renderGroups() {
-    const groups = app.data.groups.filter((group) => isVisibleEntity(group));
+    const groups = app.data.groups
+      .filter((group) => isVisibleEntity(group))
+      .sort((a, b) => {
+        const aSelected = app.selected?.type === "group" && app.selected.id === a.id;
+        const bSelected = app.selected?.type === "group" && app.selected.id === b.id;
+        if (aSelected !== bSelected) return aSelected ? 1 : -1;
+        return b.w * b.h - a.w * a.h || app.data.groups.indexOf(a) - app.data.groups.indexOf(b);
+      });
     els.groupLayer.innerHTML = groups
       .map((group) => {
         const selected = app.selected?.type === "group" && app.selected.id === group.id;
@@ -506,9 +513,10 @@
     $$(".group-node", els.groupLayer).forEach((node) => {
       const id = node.dataset.id;
       node.addEventListener("pointerdown", (event) => {
-        if (!handleEntityPointerDown(event, "group", id)) return;
+        const targetId = pickGroupAt(event.clientX, event.clientY)?.id || id;
+        if (!handleEntityPointerDown(event, "group", targetId)) return;
         const isResize = event.target.closest(".resize-handle");
-        beginEntityDrag(event, isResize ? "resize-group" : "group", id);
+        beginEntityDrag(event, isResize && targetId === id ? "resize-group" : "group", targetId);
       });
     });
   }
@@ -1196,6 +1204,14 @@
       .filter((group) => isVisibleEntity(group))
       .filter((group) => center.x >= group.x && center.x <= group.x + group.w && center.y >= group.y && center.y <= group.y + group.h)
       .sort((a, b) => a.w * a.h - b.w * b.h);
+  }
+
+  function pickGroupAt(clientX, clientY) {
+    const point = screenToWorld(clientX, clientY);
+    return app.data.groups
+      .filter((group) => isVisibleEntity(group))
+      .filter((group) => point.x >= group.x && point.x <= group.x + group.w && point.y >= group.y && point.y <= group.y + group.h)
+      .sort((a, b) => a.w * a.h - b.w * b.h || app.data.groups.indexOf(b) - app.data.groups.indexOf(a))[0];
   }
 
   function groupRadius(group, cardCount) {
