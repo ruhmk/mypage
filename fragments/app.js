@@ -9,7 +9,7 @@
   const DRIVE_FILE = "today-fragments.json";
   const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
   const GROUP_COLORS = ["#67e8f9", "#ff7aa8", "#ffd166", "#8ff0c4", "#a78bfa"];
-  const APP_VERSION = "26";
+  const APP_VERSION = "27";
   const NOTE_CARD_WIDTH = 210;
   const NOTE_CARD_HEIGHT = 62;
   const GROUP_FIT_PADDING = 52;
@@ -445,8 +445,8 @@
     const colors = ["#aaf5ff", "#67e8f9", "#ff7aa8", "#ffd166", "#8ff0c4", "#a78bfa"];
     const gradients = Array.from({ length: count }, (_, index) => {
       const accent = index % 7 === 0;
-      const size = mobile ? randomBetween(1.15, accent ? 3.2 : 2.2) : randomBetween(1.35, accent ? 3.9 : 2.7);
-      const fade = size * (mobile ? 2.05 : 2.35);
+      const size = mobile ? randomBetween(0.85, accent ? 2.45 : 1.65) : randomBetween(1.0, accent ? 3.0 : 2.05);
+      const fade = size * (mobile ? 1.95 : 2.2);
       const opacity = mobile ? randomBetween(0.34, 0.66) : randomBetween(0.42, 0.78);
       const color = colors[Math.floor(Math.random() * colors.length)];
       const x = randomBetween(18, tileSize - 18);
