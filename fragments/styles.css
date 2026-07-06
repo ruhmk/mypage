@@ -316,9 +316,8 @@ html.setup-mode .setup-screen {
   background: var(--particle-color);
   mix-blend-mode: screen;
   opacity: var(--particle-opacity);
-  filter:
-    blur(var(--particle-blur))
-    drop-shadow(0 0 8px color-mix(in srgb, var(--particle-color), transparent 34%));
+  filter: blur(var(--particle-blur));
+  box-shadow: 0 0 9px color-mix(in srgb, var(--particle-color), transparent 48%);
   animation: particle-float var(--particle-duration) ease-in-out infinite;
   animation-delay: var(--particle-delay);
   transform: translate3d(0, 0, 0) scale(0.82);
@@ -1110,6 +1109,24 @@ html.setup-mode .setup-screen {
   100% {
     opacity: 0;
     transform: translateX(-50%) translateY(8px);
+  }
+}
+
+@media (pointer: coarse) {
+  .particle-dot {
+    mix-blend-mode: normal;
+    filter: none;
+    box-shadow: 0 0 5px rgba(103, 232, 249, 0.24);
+  }
+
+  .connection-main,
+  .connection-node:hover .connection-main,
+  .connection-node.selected .connection-main {
+    filter: none;
+  }
+
+  .connection-point {
+    filter: drop-shadow(0 0 7px var(--connection-color));
   }
 }
 

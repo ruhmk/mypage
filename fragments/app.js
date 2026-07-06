@@ -9,7 +9,7 @@
   const DRIVE_FILE = "today-fragments.json";
   const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
   const GROUP_COLORS = ["#67e8f9", "#ff7aa8", "#ffd166", "#8ff0c4", "#a78bfa"];
-  const APP_VERSION = "15";
+  const APP_VERSION = "16";
   const NOTE_CARD_WIDTH = 210;
   const NOTE_CARD_HEIGHT = 62;
   const GROUP_FIT_PADDING = 52;
@@ -419,19 +419,22 @@
 
   function initParticles() {
     if (!els.particleLayer) return;
-    const count = Math.round(clamp((window.innerWidth * window.innerHeight) / 7600, 90, 170));
-    const key = `${count}:${Math.round(window.innerWidth / 80)}:${Math.round(window.innerHeight / 80)}`;
+    const mobile = useLightweightEffects();
+    const area = window.innerWidth * window.innerHeight;
+    const count = Math.round(mobile ? clamp(area / 18000, 28, 56) : clamp(area / 11000, 70, 120));
+    const key = `${mobile ? "m" : "d"}:${count}:${Math.round(window.innerWidth / 90)}:${Math.round(window.innerHeight / 90)}`;
     if (els.particleLayer.dataset.key === key) return;
     els.particleLayer.dataset.key = key;
     const colors = ["#aaf5ff", "#67e8f9", "#ff7aa8", "#ffd166", "#8ff0c4", "#a78bfa"];
     const particles = Array.from({ length: count }, (_, index) => {
-      const size = randomBetween(2.2, index % 9 === 0 ? 7.6 : 5.4);
-      const dx = randomBetween(-46, 46);
-      const dy = randomBetween(-38, 52);
-      const duration = randomBetween(10, 24);
-      const delay = randomBetween(-24, 0);
-      const opacity = randomBetween(0.34, 0.92);
-      const blur = randomBetween(0, 1.2);
+      const accent = index % 10 === 0;
+      const size = mobile ? randomBetween(1.8, accent ? 4.8 : 3.4) : randomBetween(2.1, accent ? 6.4 : 4.8);
+      const dx = mobile ? randomBetween(-24, 24) : randomBetween(-42, 42);
+      const dy = mobile ? randomBetween(-24, 30) : randomBetween(-34, 46);
+      const duration = mobile ? randomBetween(18, 34) : randomBetween(12, 26);
+      const delay = randomBetween(-duration, 0);
+      const opacity = mobile ? randomBetween(0.26, 0.68) : randomBetween(0.3, 0.84);
+      const blur = mobile ? 0 : randomBetween(0, 0.8);
       const color = colors[Math.floor(Math.random() * colors.length)];
       return `<span class="particle-dot" style="left:${randomBetween(-4, 104).toFixed(2)}%;top:${randomBetween(-4, 104).toFixed(2)}%;--particle-size:${size.toFixed(2)}px;--particle-dx:${dx.toFixed(1)}px;--particle-dy:${dy.toFixed(1)}px;--particle-duration:${duration.toFixed(2)}s;--particle-delay:${delay.toFixed(2)}s;--particle-opacity:${opacity.toFixed(2)};--particle-blur:${blur.toFixed(2)}px;--particle-color:${color}"></span>`;
     });
@@ -1511,6 +1514,12 @@
 
   function isSmallViewport() {
     return window.matchMedia?.("(max-width: 760px)").matches || window.innerWidth <= 760;
+  }
+
+  function useLightweightEffects() {
+    const hasTouch = (navigator.maxTouchPoints || 0) > 0;
+    const compactSide = Math.min(window.innerWidth, window.innerHeight) <= 760;
+    return isSmallViewport() || (hasTouch && compactSide);
   }
 
   function updateWorldTransform() {
@@ -2659,8 +2668,8 @@
         color += vec3(0.24, 0.44, 0.36) * smoothstep(0.82, 0.08, distance(uv, vec2(0.52, 0.95))) * 0.24;
         color += vec3(0.12, 0.19, 0.28) * gridA;
         color += vec3(0.24, 0.37, 0.44) * gridB;
-        float particles = particleField(uv, 22.0, 0.018, 0.13) + particleField(uv + 0.37, 34.0, -0.012, 0.1) * 0.72;
-        color += vec3(0.48, 0.88, 0.96) * particles * 0.32;
+        float particles = particleField(uv, 20.0, 0.014, 0.12);
+        color += vec3(0.48, 0.88, 0.96) * particles * 0.22;
         color *= smoothstep(0.86, 0.22, vignette);
         gl_FragColor = vec4(color, 1.0);
       }
@@ -2686,26 +2695,33 @@
   function drawWebGl(time) {
     if (!app.gl) return;
     const { gl, program, pos, resolution, view, zoom } = app.gl;
+    const pixelRatio = renderPixelRatio();
     resizeGlCanvas();
     gl.useProgram(program);
     gl.enableVertexAttribArray(pos);
     gl.vertexAttribPointer(pos, 2, gl.FLOAT, false, 0, 0);
     gl.uniform2f(resolution, els.canvas.width, els.canvas.height);
-    gl.uniform2f(view, app.view.x * devicePixelRatio, (window.innerHeight - app.view.y) * devicePixelRatio);
-    gl.uniform1f(zoom, app.view.zoom * devicePixelRatio);
+    gl.uniform2f(view, app.view.x * pixelRatio, (window.innerHeight - app.view.y) * pixelRatio);
+    gl.uniform1f(zoom, app.view.zoom * pixelRatio);
     gl.uniform1f(app.gl.time, time * 0.001);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     requestAnimationFrame(drawWebGl);
   }
 
   function resizeGlCanvas() {
-    const width = Math.max(1, Math.floor(window.innerWidth * devicePixelRatio));
-    const height = Math.max(1, Math.floor(window.innerHeight * devicePixelRatio));
+    const pixelRatio = renderPixelRatio();
+    const width = Math.max(1, Math.floor(window.innerWidth * pixelRatio));
+    const height = Math.max(1, Math.floor(window.innerHeight * pixelRatio));
     if (els.canvas.width !== width || els.canvas.height !== height) {
       els.canvas.width = width;
       els.canvas.height = height;
       app.gl?.gl.viewport(0, 0, width, height);
     }
+  }
+
+  function renderPixelRatio() {
+    const ratio = window.devicePixelRatio || 1;
+    return Math.min(ratio, useLightweightEffects() ? 1.15 : 1.6);
   }
 
   function makeProgram(gl, vertexSource, fragmentSource) {
