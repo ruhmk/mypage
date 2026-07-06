@@ -9,7 +9,7 @@
   const DRIVE_FILE = "today-fragments.json";
   const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
   const GROUP_COLORS = ["#67e8f9", "#ff7aa8", "#ffd166", "#8ff0c4", "#a78bfa"];
-  const APP_VERSION = "16";
+  const APP_VERSION = "17";
   const NOTE_CARD_WIDTH = 210;
   const NOTE_CARD_HEIGHT = 62;
   const GROUP_FIT_PADDING = 52;
@@ -420,29 +420,43 @@
   function initParticles() {
     if (!els.particleLayer) return;
     const mobile = useLightweightEffects();
-    const area = window.innerWidth * window.innerHeight;
-    const count = Math.round(mobile ? clamp(area / 18000, 28, 56) : clamp(area / 11000, 70, 120));
-    const key = `${mobile ? "m" : "d"}:${count}:${Math.round(window.innerWidth / 90)}:${Math.round(window.innerHeight / 90)}`;
+    const tileSize = 400;
+    const count = mobile ? 9 : 14;
+    const key = `${mobile ? "m" : "d"}:${tileSize}:${count}`;
     if (els.particleLayer.dataset.key === key) return;
     els.particleLayer.dataset.key = key;
     const colors = ["#aaf5ff", "#67e8f9", "#ff7aa8", "#ffd166", "#8ff0c4", "#a78bfa"];
-    const particles = Array.from({ length: count }, (_, index) => {
-      const accent = index % 10 === 0;
-      const size = mobile ? randomBetween(1.8, accent ? 4.8 : 3.4) : randomBetween(2.1, accent ? 6.4 : 4.8);
-      const dx = mobile ? randomBetween(-24, 24) : randomBetween(-42, 42);
-      const dy = mobile ? randomBetween(-24, 30) : randomBetween(-34, 46);
-      const duration = mobile ? randomBetween(18, 34) : randomBetween(12, 26);
-      const delay = randomBetween(-duration, 0);
-      const opacity = mobile ? randomBetween(0.26, 0.68) : randomBetween(0.3, 0.84);
-      const blur = mobile ? 0 : randomBetween(0, 0.8);
+    const gradients = Array.from({ length: count }, (_, index) => {
+      const accent = index % 7 === 0;
+      const size = mobile ? randomBetween(1.7, accent ? 4.4 : 3.0) : randomBetween(1.9, accent ? 5.2 : 3.5);
+      const fade = size * (mobile ? 2.2 : 2.6);
+      const opacity = mobile ? randomBetween(0.34, 0.66) : randomBetween(0.42, 0.78);
       const color = colors[Math.floor(Math.random() * colors.length)];
-      return `<span class="particle-dot" style="left:${randomBetween(-4, 104).toFixed(2)}%;top:${randomBetween(-4, 104).toFixed(2)}%;--particle-size:${size.toFixed(2)}px;--particle-dx:${dx.toFixed(1)}px;--particle-dy:${dy.toFixed(1)}px;--particle-duration:${duration.toFixed(2)}s;--particle-delay:${delay.toFixed(2)}s;--particle-opacity:${opacity.toFixed(2)};--particle-blur:${blur.toFixed(2)}px;--particle-color:${color}"></span>`;
+      const x = randomBetween(18, tileSize - 18);
+      const y = randomBetween(18, tileSize - 18);
+      return `radial-gradient(circle at ${x.toFixed(1)}px ${y.toFixed(1)}px, ${hexToRgba(color, opacity)} 0 ${size.toFixed(2)}px, transparent ${fade.toFixed(2)}px)`;
     });
-    els.particleLayer.innerHTML = particles.join("");
+    els.particleLayer.innerHTML = "";
+    els.particleLayer.style.setProperty("--particle-tile-size", `${tileSize}px`);
+    els.particleLayer.style.setProperty("--particle-image", gradients.join(","));
+    els.particleLayer.style.setProperty("--particle-opacity", mobile ? "0.7" : "0.82");
+    els.particleLayer.style.setProperty("--particle-duration", mobile ? "42s" : "34s");
+    els.particleLayer.style.setProperty("--particle-drift-x", mobile ? "18px" : "28px");
+    els.particleLayer.style.setProperty("--particle-drift-y", mobile ? "-12px" : "-18px");
+    els.particleLayer.style.setProperty("--particle-return-x", mobile ? "-8px" : "-14px");
+    els.particleLayer.style.setProperty("--particle-return-y", mobile ? "9px" : "12px");
   }
 
   function randomBetween(min, max) {
     return min + Math.random() * (max - min);
+  }
+
+  function hexToRgba(hex, alpha) {
+    const value = hex.replace("#", "");
+    const red = parseInt(value.slice(0, 2), 16);
+    const green = parseInt(value.slice(2, 4), 16);
+    const blue = parseInt(value.slice(4, 6), 16);
+    return `rgba(${red}, ${green}, ${blue}, ${alpha.toFixed(2)})`;
   }
 
   function renderAll() {
@@ -2640,20 +2654,6 @@
         return 1.0 - smoothstep(width, width + 1.0, line);
       }
 
-      float hash(vec2 p) {
-        return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
-      }
-
-      float particleField(vec2 uv, float scale, float speed, float size) {
-        vec2 p = uv * scale + vec2(u_time * speed, -u_time * speed * 0.64);
-        vec2 cell = floor(p);
-        vec2 local = fract(p) - 0.5;
-        float n = hash(cell);
-        vec2 drift = vec2(sin(u_time * 0.7 + n * 6.28), cos(u_time * 0.48 + n * 5.3)) * 0.2;
-        float dotShape = 1.0 - smoothstep(size * 0.45, size, length(local + drift));
-        return dotShape * smoothstep(0.46, 1.0, n);
-      }
-
       void main() {
         vec2 uv = gl_FragCoord.xy / u_resolution.xy;
         vec2 world = (gl_FragCoord.xy - u_view) / max(u_zoom, 0.001);
@@ -2668,8 +2668,6 @@
         color += vec3(0.24, 0.44, 0.36) * smoothstep(0.82, 0.08, distance(uv, vec2(0.52, 0.95))) * 0.24;
         color += vec3(0.12, 0.19, 0.28) * gridA;
         color += vec3(0.24, 0.37, 0.44) * gridB;
-        float particles = particleField(uv, 20.0, 0.014, 0.12);
-        color += vec3(0.48, 0.88, 0.96) * particles * 0.22;
         color *= smoothstep(0.86, 0.22, vignette);
         gl_FragColor = vec4(color, 1.0);
       }

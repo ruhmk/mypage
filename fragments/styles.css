@@ -306,21 +306,28 @@ html.setup-mode .setup-screen {
   inset: 0;
   overflow: hidden;
   pointer-events: none;
+  --particle-tile-size: 400px;
+  --particle-image: none;
+  --particle-opacity: 0.8;
+  --particle-duration: 34s;
+  --particle-drift-x: 28px;
+  --particle-drift-y: -18px;
+  --particle-return-x: -14px;
+  --particle-return-y: 12px;
 }
 
-.particle-dot {
+.particle-layer::before {
+  content: "";
   position: absolute;
-  width: var(--particle-size);
-  height: var(--particle-size);
-  border-radius: 50%;
-  background: var(--particle-color);
-  mix-blend-mode: screen;
+  inset: -420px;
+  background-image: var(--particle-image);
+  background-position: center;
+  background-repeat: repeat;
+  background-size: var(--particle-tile-size) var(--particle-tile-size);
   opacity: var(--particle-opacity);
-  filter: blur(var(--particle-blur));
-  box-shadow: 0 0 9px color-mix(in srgb, var(--particle-color), transparent 48%);
-  animation: particle-float var(--particle-duration) ease-in-out infinite;
-  animation-delay: var(--particle-delay);
-  transform: translate3d(0, 0, 0) scale(0.82);
+  animation: particle-tile-float var(--particle-duration) ease-in-out infinite;
+  transform: translate3d(0, 0, 0);
+  will-change: transform;
 }
 
 .world {
@@ -486,16 +493,16 @@ html.setup-mode .setup-screen {
   }
 }
 
-@keyframes particle-float {
+@keyframes particle-tile-float {
   0%,
   100% {
-    transform: translate3d(0, 0, 0) scale(0.82);
+    transform: translate3d(0, 0, 0);
   }
   45% {
-    transform: translate3d(var(--particle-dx), var(--particle-dy), 0) scale(1.22);
+    transform: translate3d(var(--particle-drift-x), var(--particle-drift-y), 0);
   }
   72% {
-    transform: translate3d(calc(var(--particle-dx) * -0.42), calc(var(--particle-dy) * 0.34), 0) scale(0.96);
+    transform: translate3d(var(--particle-return-x), var(--particle-return-y), 0);
   }
 }
 
@@ -1113,10 +1120,8 @@ html.setup-mode .setup-screen {
 }
 
 @media (pointer: coarse) {
-  .particle-dot {
-    mix-blend-mode: normal;
-    filter: none;
-    box-shadow: 0 0 5px rgba(103, 232, 249, 0.24);
+  .particle-layer::before {
+    inset: -410px;
   }
 
   .connection-main,
