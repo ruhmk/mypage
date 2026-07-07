@@ -6,10 +6,10 @@
     <meta name="theme-color" content="#07090f" />
     <title>Today Fragments</title>
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=29" />
+    <link rel="stylesheet" href="styles.css?v=32" />
     <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <script src="vendor/qrcode-generator.js?v=29" defer></script>
-    <script src="vendor/jsQR.js?v=29" defer></script>
+    <script src="vendor/qrcode-generator.js?v=32" defer></script>
+    <script src="vendor/jsQR.js?v=32" defer></script>
   </head>
   <body>
     <noscript>Today Fragmentsを使うにはJavaScriptを有効にしてください。</noscript>
@@ -25,13 +25,13 @@
         </div>
 
         <header class="topbar">
-          <div class="brand">
+          <button id="project-switcher" class="brand project-switcher" type="button" aria-label="案件一覧を開く">
             <span class="brand-mark"></span>
-            <div>
-              <strong>Today Fragments</strong>
+            <span class="brand-text">
+              <strong id="project-title">Today Fragments</strong>
               <span id="role-label">未設定</span>
-            </div>
-          </div>
+            </span>
+          </button>
           <div id="sync-status" class="sync-status">ローカル保存</div>
           <nav class="toolbar" aria-label="ツール">
             <button id="undo-action" class="icon-button" title="戻る" aria-label="戻る" disabled>
@@ -48,6 +48,9 @@
             </button>
             <button id="add-group" class="icon-button" title="グループ追加" aria-label="グループ追加">
               <span>□</span>
+            </button>
+            <button id="list-mode-toggle" class="icon-button hidden-pc" title="一覧表示" aria-label="一覧表示">
+              <span>☰</span>
             </button>
             <button id="export-ai" class="icon-button" title="AI用に書き出し" aria-label="AI用に書き出し">
               <span>⇩</span>
@@ -76,11 +79,12 @@
         </form>
 
         <aside id="inspector" class="inspector" aria-live="polite"></aside>
+        <aside id="mobile-list" class="mobile-list" aria-live="polite"></aside>
         <button id="panel-toggle" class="panel-toggle" type="button" title="入力と詳細を開閉" aria-label="入力と詳細を開閉">▤</button>
       </section>
     </main>
 
     <div id="modal-root" class="modal-root" aria-live="polite"></div>
-    <script src="app.js?v=29" defer></script>
+    <script src="app.js?v=32" defer></script>
   </body>
 </html>

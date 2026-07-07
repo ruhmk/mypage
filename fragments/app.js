@@ -9,11 +9,19 @@
   const DRIVE_FILE = "today-fragments.json";
   const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
   const GROUP_COLORS = ["#67e8f9", "#ff7aa8", "#ffd166", "#8ff0c4", "#a78bfa"];
-  const APP_VERSION = "29";
+  const APP_VERSION = "32";
+  const DEFAULT_PROJECT_ID = "project_main";
+  const DEFAULT_PROJECT_NAME = "メイン";
   const NOTE_CARD_WIDTH = 210;
   const NOTE_CARD_HEIGHT = 62;
   const GROUP_FIT_PADDING = 52;
   const CONNECTION_STYLES = ["solid", "dotted", "dashed", "wavy"];
+  const PROJECT_TEMPLATES = [
+    { id: "blank", label: "空の案件", groups: [] },
+    { id: "thinking", label: "思考整理", groups: ["事実", "疑問", "仮説", "次に見る"] },
+    { id: "decision", label: "意思決定", groups: ["背景", "選択肢", "判断材料", "決定事項", "次アクション"] },
+    { id: "retro", label: "振り返り", groups: ["よかったこと", "気になること", "学び", "次に試す"] }
+  ];
   const CONNECTION_KINDS = [
     { id: "related", label: "関連", color: "#67e8f9" },
     { id: "cause", label: "原因", color: "#ffd166" }
@@ -24,6 +32,9 @@
   const app = {
     data: null,
     settings: null,
+    projects: null,
+    projectStore: {},
+    activeProjectId: "",
     dirty: { notes: {}, groups: {}, connections: {} },
     selected: null,
     view: { x: 0, y: 0, zoom: 1 },
@@ -75,6 +86,8 @@
     els.lineLayer = $("#line-layer");
     els.cardLayer = $("#card-layer");
     els.roleLabel = $("#role-label");
+    els.projectTitle = $("#project-title");
+    els.projectSwitcher = $("#project-switcher");
     els.syncStatus = $("#sync-status");
     els.toolbar = $(".toolbar");
     els.composer = $("#composer");
@@ -88,7 +101,9 @@
     els.phoneImport = $("#phone-import");
     els.trashOpen = $("#trash-open");
     els.settingsOpen = $("#settings-open");
+    els.listModeToggle = $("#list-mode-toggle");
     els.panelToggle = $("#panel-toggle");
+    els.mobileList = $("#mobile-list");
     els.undoAction = $("#undo-action");
     els.redoAction = $("#redo-action");
     els.resetView = $("#reset-view");
@@ -100,17 +115,51 @@
     const stored = await idbGet(STATE_KEY).catch(() => null);
     app.settings = mergeSettings(stored?.settings || {});
     app.panelsCollapsed = Boolean(app.settings.panelsCollapsed);
-    app.data = normalizeData(stored?.data || createEmptyData());
-    app.dirty = { notes: {}, groups: {}, connections: {}, ...(stored?.dirty || {}) };
+    setupProjectsFromStoredState(stored || {});
     if (!app.settings.deviceId) app.settings.deviceId = uid("device");
     if (!app.data.deviceId) app.data.deviceId = app.settings.deviceId;
   }
 
-  function createEmptyData() {
+  function setupProjectsFromStoredState(stored) {
+    const legacyData = stored.data || createEmptyData({ id: DEFAULT_PROJECT_ID, name: DEFAULT_PROJECT_NAME });
+    const legacyProject = legacyData.project || {};
+    const fallbackId = legacyProject.id || stored.activeProjectId || DEFAULT_PROJECT_ID;
+    const fallbackName = legacyProject.name || DEFAULT_PROJECT_NAME;
+    app.projects = normalizeProjectsIndex(stored.projects || {
+      activeProjectId: fallbackId,
+      items: [createProjectItem({ id: fallbackId, name: fallbackName, data: legacyData })]
+    });
+    app.activeProjectId = app.projects.activeProjectId || fallbackId;
+    app.projectStore = normalizeProjectStore(stored.projectStore || {
+      [app.activeProjectId]: {
+        data: legacyData,
+        dirty: stored.dirty || createEmptyDirty(),
+        view: stored.view || app.view
+      }
+    });
+    if (!app.projectStore[app.activeProjectId]) {
+      const project = currentProject() || createProjectItem({ id: app.activeProjectId, name: fallbackName });
+      app.projectStore[app.activeProjectId] = {
+        data: createEmptyData(project),
+        dirty: createEmptyDirty(),
+        view: { ...app.view }
+      };
+    }
+    activateProject(app.activeProjectId, { render: false, persist: false });
+  }
+
+  function createEmptyData(project = {}) {
     const timestamp = nowIso();
+    const projectId = project.id || app.activeProjectId || DEFAULT_PROJECT_ID;
+    const projectName = project.name || DEFAULT_PROJECT_NAME;
     return {
-      schemaVersion: 1,
+      schemaVersion: 2,
       app: "Today Fragments",
+      project: {
+        id: projectId,
+        name: projectName,
+        createdAt: project.createdAt || timestamp
+      },
       createdAt: timestamp,
       updatedAt: timestamp,
       deviceId: "",
@@ -121,8 +170,12 @@
   }
 
   function normalizeData(data) {
-    const base = createEmptyData();
+    const base = createEmptyData(data?.project || currentProject() || {});
     const merged = { ...base, ...data };
+    merged.schemaVersion = Math.max(2, Number(merged.schemaVersion) || 1);
+    merged.project = { ...base.project, ...(data.project || {}) };
+    merged.project.id ||= app.activeProjectId || DEFAULT_PROJECT_ID;
+    merged.project.name ||= currentProject()?.name || DEFAULT_PROJECT_NAME;
     merged.notes = Array.isArray(data.notes) ? data.notes : [];
     merged.groups = Array.isArray(data.groups) ? data.groups : [];
     merged.connections = Array.isArray(data.connections) ? data.connections : [];
@@ -165,6 +218,80 @@
     };
   }
 
+  function createProjectItem(options = {}) {
+    const timestamp = nowIso();
+    const data = options.data || {};
+    return {
+      id: options.id || uid("project"),
+      name: options.name || data.project?.name || DEFAULT_PROJECT_NAME,
+      createdAt: options.createdAt || data.project?.createdAt || data.createdAt || timestamp,
+      updatedAt: options.updatedAt || data.updatedAt || timestamp,
+      lastOpenedAt: options.lastOpenedAt || timestamp,
+      archivedAt: options.archivedAt || "",
+      noteCount: Number.isFinite(options.noteCount) ? options.noteCount : (Array.isArray(data.notes) ? data.notes.filter(isVisibleEntity).length : 0),
+      groupCount: Number.isFinite(options.groupCount) ? options.groupCount : (Array.isArray(data.groups) ? data.groups.filter(isVisibleEntity).length : 0),
+      connectionCount: Number.isFinite(options.connectionCount)
+        ? options.connectionCount
+        : (Array.isArray(data.connections) ? data.connections.filter(isVisibleEntity).length : 0)
+    };
+  }
+
+  function normalizeProjectsIndex(projects = {}) {
+    const timestamp = nowIso();
+    const items = Array.isArray(projects.items) ? projects.items : [];
+    const normalized = items
+      .map((item) => createProjectItem(item))
+      .filter((item, index, all) => item.id && all.findIndex((candidate) => candidate.id === item.id) === index);
+    if (!normalized.length) normalized.push(createProjectItem({ id: DEFAULT_PROJECT_ID, name: DEFAULT_PROJECT_NAME }));
+    const activeProjectId = normalized.some((item) => item.id === projects.activeProjectId) ? projects.activeProjectId : normalized[0].id;
+    return {
+      type: "today-fragments-project-index",
+      schemaVersion: 1,
+      app: "Today Fragments",
+      createdAt: projects.createdAt || timestamp,
+      updatedAt: projects.updatedAt || timestamp,
+      activeProjectId,
+      items: normalized
+    };
+  }
+
+  function normalizeProjectStore(store = {}) {
+    return Object.fromEntries(
+      Object.entries(store).map(([projectId, entry]) => {
+        const project = app.projects?.items?.find((item) => item.id === projectId) || { id: projectId, name: DEFAULT_PROJECT_NAME };
+        return [
+          projectId,
+          {
+            data: normalizeData(entry?.data || createEmptyData(project)),
+            dirty: normalizeDirty(entry?.dirty || createEmptyDirty()),
+            view: normalizeView(entry?.view),
+            selected: entry?.selected || null
+          }
+        ];
+      })
+    );
+  }
+
+  function createEmptyDirty() {
+    return { notes: {}, groups: {}, connections: {} };
+  }
+
+  function normalizeDirty(dirty = {}) {
+    return {
+      notes: { ...(dirty.notes || {}) },
+      groups: { ...(dirty.groups || {}) },
+      connections: { ...(dirty.connections || {}) }
+    };
+  }
+
+  function normalizeView(view = {}) {
+    return {
+      x: Number.isFinite(view.x) ? view.x : 0,
+      y: Number.isFinite(view.y) ? view.y : 0,
+      zoom: Number.isFinite(view.zoom) ? view.zoom : 1
+    };
+  }
+
   function mergeSettings(settings) {
     return {
       role: "",
@@ -173,6 +300,7 @@
       syncPassword: "",
       movementLocked: false,
       panelsCollapsed: false,
+      mobileListMode: false,
       drive: {
         clientId: "",
         folderName: DRIVE_FOLDER,
@@ -191,6 +319,86 @@
       },
       ...settings
     };
+  }
+
+  function currentProject() {
+    return app.projects?.items?.find((project) => project.id === app.activeProjectId) || null;
+  }
+
+  function ensureProjectExists(projectId, name = DEFAULT_PROJECT_NAME) {
+    let project = app.projects.items.find((item) => item.id === projectId);
+    if (!project) {
+      project = createProjectItem({ id: projectId, name });
+      app.projects.items.unshift(project);
+    }
+    if (!app.projectStore[projectId]) {
+      app.projectStore[projectId] = {
+        data: createEmptyData(project),
+        dirty: createEmptyDirty(),
+        view: { x: 0, y: 0, zoom: 1 },
+        selected: null
+      };
+    }
+    return project;
+  }
+
+  function updateProjectMeta() {
+    const project = currentProject();
+    if (!project || !app.data) return;
+    project.name = app.data.project?.name || project.name || DEFAULT_PROJECT_NAME;
+    project.updatedAt = app.data.updatedAt || project.updatedAt || nowIso();
+    project.noteCount = app.data.notes.filter(isVisibleEntity).length;
+    project.groupCount = app.data.groups.filter(isVisibleEntity).length;
+    project.connectionCount = app.data.connections.filter(isVisibleEntity).length;
+    app.data.project = {
+      id: project.id,
+      name: project.name,
+      createdAt: project.createdAt
+    };
+    app.projects.activeProjectId = project.id;
+    app.projects.updatedAt = nowIso();
+  }
+
+  function saveActiveProjectToStore() {
+    if (!app.activeProjectId || !app.data) return;
+    updateProjectMeta();
+    app.projectStore[app.activeProjectId] = {
+      data: sanitizeData(app.data),
+      dirty: normalizeDirty(app.dirty),
+      view: { ...app.view },
+      selected: app.selected ? { ...app.selected } : null
+    };
+  }
+
+  function activateProject(projectId, options = {}) {
+    const project = app.projects.items.find((item) => item.id === projectId) || app.projects.items[0];
+    app.activeProjectId = project.id;
+    app.projects.activeProjectId = project.id;
+    project.lastOpenedAt = nowIso();
+    const stored = app.projectStore[project.id] || {
+      data: createEmptyData(project),
+      dirty: createEmptyDirty(),
+      view: { x: 0, y: 0, zoom: 1 },
+      selected: null
+    };
+    app.data = normalizeData(stored.data || createEmptyData(project));
+    app.data.project = { id: project.id, name: project.name, createdAt: project.createdAt };
+    app.dirty = normalizeDirty(stored.dirty || createEmptyDirty());
+    app.view = normalizeView(stored.view || app.view);
+    app.selected = validateSelection(stored.selected) || null;
+    app.history = { undo: [], redo: [], restoring: false };
+    updateProjectMeta();
+    if (options.render !== false) {
+      updateWorldTransform();
+      updateUndoRedoButtons();
+      renderAll();
+    }
+    if (options.persist !== false) schedulePersist();
+  }
+
+  function updateProjectTitle() {
+    if (!els.projectTitle) return;
+    els.projectTitle.textContent = currentProject()?.name || DEFAULT_PROJECT_NAME;
   }
 
   function renderSetup() {
@@ -360,6 +568,7 @@
     document.body.classList.toggle("role-phone", app.settings.role === "phone");
     document.body.classList.toggle("role-pc", app.settings.role === "pc");
     els.roleLabel.textContent = app.settings.role === "phone" ? "スマホ本体" : "PCローカル";
+    updateProjectTitle();
     if (!app.view.x && !app.view.y) {
       app.view.x = Math.round(window.innerWidth / 2);
       app.view.y = Math.round(window.innerHeight / 2);
@@ -369,6 +578,7 @@
     initParticles();
     updateWorldTransform();
     applyPanelState();
+    applyMobileListMode();
     applyMovementLockState();
     updateUndoRedoButtons();
     renderAll();
@@ -392,6 +602,8 @@
     els.phoneImport.addEventListener("click", openImportModal);
     els.trashOpen.addEventListener("click", openTrashModal);
     els.settingsOpen.addEventListener("click", openSettingsModal);
+    els.projectSwitcher?.addEventListener("click", () => openProjectsModal(false));
+    els.listModeToggle?.addEventListener("click", toggleMobileListMode);
     els.panelToggle.addEventListener("click", togglePanels);
     els.undoAction.addEventListener("click", undo);
     els.redoAction.addEventListener("click", redo);
@@ -415,6 +627,7 @@
     });
     window.addEventListener("resize", () => {
       applyPerformanceMode();
+      applyMobileListMode();
       if (!useLightweightEffects()) initWebGl();
       resizeGlCanvas();
       initParticles();
@@ -489,9 +702,11 @@
   }
 
   function renderAll() {
+    updateProjectTitle();
     renderGroups();
     renderConnections();
     renderCards();
+    renderMobileList();
     renderInspector();
     updateStatus();
   }
@@ -556,6 +771,49 @@
       node.addEventListener("pointerdown", (event) => {
         if (!handleEntityPointerDown(event, "note", id)) return;
         beginEntityDrag(event, "note", id);
+      });
+    });
+  }
+
+  function renderMobileList() {
+    if (!els.mobileList) return;
+    const groups = app.data.groups.filter((group) => isVisibleEntity(group));
+    const groupById = Object.fromEntries(groups.map((group) => [group.id, group]));
+    const notes = app.data.notes
+      .filter((note) => isVisibleEntity(note))
+      .sort((a, b) => (b.updatedAt || b.createdAt || "").localeCompare(a.updatedAt || a.createdAt || ""));
+    els.mobileList.innerHTML = `
+      <div class="mobile-list-head">
+        <strong>${escapeHtml(currentProject()?.name || DEFAULT_PROJECT_NAME)}</strong>
+        <span>${notes.length}件</span>
+      </div>
+      <div class="mobile-list-items">
+        ${
+          notes.length
+            ? notes
+                .map((note) => {
+                  const selected = app.selected?.type === "note" && app.selected.id === note.id;
+                  const title = note.title || deriveTitle(note.body) || "無題";
+                  const groupNames = (note.groupIds || []).map((id) => groupById[id]?.title).filter(Boolean);
+                  return `
+                    <button class="mobile-list-item ${selected ? "selected" : ""}" type="button" data-id="${escapeAttr(note.id)}">
+                      <strong>${escapeHtml(title)}</strong>
+                      <span>${escapeHtml(compactBody(note.body || "", 96))}</span>
+                      <small>${formatDateTime(note.createdAt)}${groupNames.length ? ` / ${escapeHtml(groupNames.join("・"))}` : ""}</small>
+                    </button>
+                  `;
+                })
+                .join("")
+            : '<p class="status-line">カードはまだありません。</p>'
+        }
+      </div>
+    `;
+    $$(".mobile-list-item", els.mobileList).forEach((button) => {
+      button.addEventListener("click", () => {
+        app.panelsCollapsed = false;
+        app.settings.panelsCollapsed = false;
+        applyPanelState();
+        selectEntity("note", button.dataset.id);
       });
     });
   }
@@ -717,6 +975,7 @@
       note.title = event.target.value;
       touchEntity("note", note.id);
       renderCards();
+      renderMobileList();
     });
     $("#inspect-note-body").addEventListener("input", (event) => {
       captureNoteEdit();
@@ -724,6 +983,7 @@
       note.localDate = localDate(note.createdAt);
       touchEntity("note", note.id);
       renderCards();
+      renderMobileList();
     });
     bindConnectionControls("note", note.id);
     $("#inspect-note-lock").addEventListener("click", () => toggleEntityLock("note", note.id));
@@ -768,6 +1028,7 @@
       group.title = event.target.value;
       touchEntity("group", group.id);
       renderGroups();
+      renderMobileList();
     });
     $("#inspect-group-color").addEventListener("change", (event) => {
       captureHistory();
@@ -775,6 +1036,7 @@
       touchEntity("group", group.id);
       renderGroups();
       renderCards();
+      renderMobileList();
     });
     bindConnectionControls("group", group.id);
     $("#inspect-group-lock").addEventListener("click", () => toggleEntityLock("group", group.id));
@@ -1255,6 +1517,17 @@
     const target = note || group;
     if (!target) return;
     if (isEntityMovementBlocked(target)) return;
+    const childStarts =
+      type === "group"
+        ? app.data.notes
+            .filter((candidate) => isVisibleEntity(candidate) && candidate.groupIds?.includes(id))
+            .map((candidate) => ({
+              note: candidate,
+              x: candidate.x,
+              y: candidate.y,
+              node: getEntityNode("note", candidate.id)
+            }))
+        : [];
     const node = getEntityNode(type, id) || event.currentTarget;
     if (!node?.classList) return;
     const historySnapshot = makeHistorySnapshot();
@@ -1300,6 +1573,16 @@
       target.y = Math.round(start.y + dy);
       node.style.left = `${target.x}px`;
       node.style.top = `${target.y}px`;
+      if (type === "group") {
+        childStarts.forEach((child) => {
+          child.note.x = Math.round(child.x + dx);
+          child.note.y = Math.round(child.y + dy);
+          if (child.node) {
+            child.node.style.left = `${child.note.x}px`;
+            child.node.style.top = `${child.note.y}px`;
+          }
+        });
+      }
       if (type === "note") updateDropHighlight(note);
       renderConnections();
     };
@@ -1341,6 +1624,9 @@
           fitGroupsToCards([...start.groupIds, ...(note.groupIds || [])], { markTouched: true });
           touchEntity("note", id);
         } else {
+          if (type === "group") {
+            childStarts.forEach((child) => touchEntity("note", child.note.id));
+          }
           touchEntity("group", id);
           updateAllNoteGroups(true);
         }
@@ -1579,6 +1865,20 @@
     app.settings.panelsCollapsed = app.panelsCollapsed;
     applyPanelState();
     persistState();
+  }
+
+  function toggleMobileListMode() {
+    app.settings.mobileListMode = !app.settings.mobileListMode;
+    applyMobileListMode();
+    renderMobileList();
+    persistState();
+  }
+
+  function applyMobileListMode() {
+    const active = Boolean(app.settings.mobileListMode && isSmallViewport());
+    els.workspace.classList.toggle("mobile-list-mode", active);
+    els.listModeToggle?.classList.toggle("active", active);
+    els.listModeToggle?.setAttribute("aria-pressed", active ? "true" : "false");
   }
 
   function applyPanelState() {
@@ -1853,6 +2153,7 @@
       const bucket = type === "connection" ? "connections" : type === "note" ? "notes" : "groups";
       app.dirty[bucket][id] = entity.updatedAt;
     }
+    updateProjectMeta();
     schedulePersist();
     if (app.settings.role === "phone") scheduleDriveSave();
     updateStatus();
@@ -1997,6 +2298,7 @@
     const json = JSON.stringify(
       {
         exportedAt: nowIso(),
+        project: currentProject(),
         range,
         notes,
         groups,
@@ -2018,6 +2320,189 @@
       json,
       "```"
     ].join("\n");
+  }
+
+  function openProjectsModal(showArchived = false) {
+    saveActiveProjectToStore();
+    const items = app.projects.items
+      .filter((project) => (showArchived ? Boolean(project.archivedAt) : !project.archivedAt))
+      .sort((a, b) => (b.lastOpenedAt || b.updatedAt || "").localeCompare(a.lastOpenedAt || a.updatedAt || ""));
+    openModal(`
+      <div class="modal-head">
+        <h2>${showArchived ? "アーカイブ済み" : "案件一覧"}</h2>
+        <button class="close-button" data-close type="button">×</button>
+      </div>
+      <div class="project-create">
+        <input id="project-new-name" placeholder="新しい案件名" />
+        <select id="project-template">
+          ${PROJECT_TEMPLATES.map((template) => `<option value="${template.id}">${escapeHtml(template.label)}</option>`).join("")}
+        </select>
+        <button id="project-create" class="primary-button" type="button">作成</button>
+      </div>
+      <div class="project-list">
+        ${
+          items.length
+            ? items.map(renderProjectListItem).join("")
+            : `<p class="status-line">${showArchived ? "アーカイブ済みの案件はありません。" : "案件はまだありません。"}</p>`
+        }
+      </div>
+      <div class="button-row">
+        <button id="project-toggle-archive" class="soft-button" type="button">${showArchived ? "通常の案件を見る" : "アーカイブを見る"}</button>
+      </div>
+    `);
+    $("#project-create").addEventListener("click", () => createProjectFromModal($("#project-new-name").value.trim(), $("#project-template").value));
+    $("#project-new-name").addEventListener("keydown", (event) => {
+      if (event.key === "Enter") createProjectFromModal(event.currentTarget.value.trim(), $("#project-template").value);
+    });
+    $("#project-toggle-archive").addEventListener("click", () => openProjectsModal(!showArchived));
+    $$(".project-open", els.modalRoot).forEach((button) => button.addEventListener("click", () => switchProject(button.dataset.id)));
+    $$(".project-rename", els.modalRoot).forEach((button) => button.addEventListener("click", () => renameProject(button.dataset.id, showArchived)));
+    $$(".project-archive", els.modalRoot).forEach((button) => button.addEventListener("click", () => archiveProject(button.dataset.id, showArchived)));
+    $$(".project-restore", els.modalRoot).forEach((button) => button.addEventListener("click", () => restoreProject(button.dataset.id)));
+    $$(".project-delete", els.modalRoot).forEach((button) => button.addEventListener("click", () => deleteProject(button.dataset.id, showArchived)));
+  }
+
+  function renderProjectListItem(project) {
+    const active = project.id === app.activeProjectId;
+    return `
+      <article class="project-item ${active ? "active" : ""}">
+        <button class="project-open project-main" type="button" data-id="${escapeAttr(project.id)}">
+          <strong>${escapeHtml(project.name || DEFAULT_PROJECT_NAME)}</strong>
+          <span>${projectSummary(project)}</span>
+        </button>
+        <div class="project-actions">
+          <button class="mini-button project-rename" type="button" data-id="${escapeAttr(project.id)}">名前変更</button>
+          ${
+            project.archivedAt
+              ? `<button class="mini-button project-restore" type="button" data-id="${escapeAttr(project.id)}">戻す</button>`
+              : `<button class="mini-button project-archive" type="button" data-id="${escapeAttr(project.id)}">アーカイブ</button>`
+          }
+          <button class="mini-button project-delete danger-text" type="button" data-id="${escapeAttr(project.id)}">削除</button>
+        </div>
+      </article>
+    `;
+  }
+
+  function projectSummary(project) {
+    const updated = project.updatedAt ? formatDateTime(project.updatedAt) : "未更新";
+    return `最終更新 ${updated} / カード ${project.noteCount || 0} / グループ ${project.groupCount || 0}`;
+  }
+
+  function applyProjectTemplate(data, templateId) {
+    const template = PROJECT_TEMPLATES.find((item) => item.id === templateId) || PROJECT_TEMPLATES[0];
+    if (!template.groups.length) return;
+    const timestamp = nowIso();
+    const columns = template.groups.length >= 5 ? 3 : 2;
+    data.groups = template.groups.map((title, index) => {
+      const col = index % columns;
+      const row = Math.floor(index / columns);
+      return {
+        id: uid("group"),
+        title,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        x: col * 390 - Math.round((columns - 1) * 195),
+        y: row * 290 - 150,
+        w: 330,
+        h: 220,
+        color: GROUP_COLORS[index % GROUP_COLORS.length],
+        trashedAt: "",
+        deletedAt: ""
+      };
+    });
+    data.updatedAt = timestamp;
+  }
+
+  async function createProjectFromModal(name, templateId = "blank") {
+    const projectName = name || `案件 ${app.projects.items.length + 1}`;
+    saveActiveProjectToStore();
+    const project = createProjectItem({ name: projectName });
+    const data = createEmptyData(project);
+    applyProjectTemplate(data, templateId);
+    app.projects.items.unshift(project);
+    app.projectStore[project.id] = {
+      data,
+      dirty: createEmptyDirty(),
+      view: { x: Math.round(window.innerWidth / 2), y: Math.round(window.innerHeight / 2), zoom: 1 },
+      selected: null
+    };
+    activateProject(project.id, { render: true, persist: false });
+    await persistState();
+    scheduleDriveSave();
+    closeModal();
+    toast("案件を作成しました");
+  }
+
+  async function switchProject(projectId) {
+    if (!projectId || projectId === app.activeProjectId) {
+      closeModal();
+      return;
+    }
+    saveActiveProjectToStore();
+    await loadProjectFromGithubIfNeeded(projectId).catch((error) => {
+      console.warn(error);
+      toast("ローカルにある内容で開きます");
+    });
+    activateProject(projectId, { render: true, persist: false });
+    await persistState();
+    scheduleDriveSave();
+    closeModal();
+  }
+
+  async function renameProject(projectId, showArchived) {
+    const project = app.projects.items.find((item) => item.id === projectId);
+    if (!project) return;
+    const name = prompt("案件名", project.name || DEFAULT_PROJECT_NAME);
+    if (!name?.trim()) return;
+    project.name = name.trim();
+    project.updatedAt = nowIso();
+    if (projectId === app.activeProjectId) {
+      app.data.project.name = project.name;
+      app.data.updatedAt = nowIso();
+      updateProjectMeta();
+      renderAll();
+    }
+    await persistState();
+    scheduleDriveSave();
+    openProjectsModal(showArchived);
+  }
+
+  async function archiveProject(projectId, showArchived) {
+    const project = app.projects.items.find((item) => item.id === projectId);
+    if (!project) return;
+    project.archivedAt = nowIso();
+    project.updatedAt = nowIso();
+    await persistState();
+    scheduleDriveSave();
+    openProjectsModal(showArchived);
+  }
+
+  async function restoreProject(projectId) {
+    const project = app.projects.items.find((item) => item.id === projectId);
+    if (!project) return;
+    project.archivedAt = "";
+    project.updatedAt = nowIso();
+    await persistState();
+    scheduleDriveSave();
+    openProjectsModal(true);
+  }
+
+  async function deleteProject(projectId, showArchived) {
+    const project = app.projects.items.find((item) => item.id === projectId);
+    if (!project || app.projects.items.length <= 1) {
+      toast("最後の案件は削除できません");
+      return;
+    }
+    if (!confirm(`「${project.name || DEFAULT_PROJECT_NAME}」を完全に削除しますか？`)) return;
+    saveActiveProjectToStore();
+    app.projects.items = app.projects.items.filter((item) => item.id !== projectId);
+    delete app.projectStore[projectId];
+    if (projectId === app.activeProjectId) {
+      activateProject(app.projects.items[0].id, { render: true, persist: false });
+    }
+    await persistState();
+    scheduleDriveSave();
+    openProjectsModal(showArchived);
   }
 
   function openSettingsModal() {
@@ -2320,21 +2805,18 @@
       requireGithubSettings(true);
       requirePassword();
       els.syncStatus.textContent = "GitHub同期中";
-      const envelope = await encryptObject(sanitizeData(app.data), app.settings.syncPassword);
-      const content = bytesToBase64(utf8(JSON.stringify(envelope, null, 2)));
-      const sha = await getGithubFileSha().catch(() => "");
-      const body = {
-        message: `Update Today Fragments sync ${new Date().toISOString()}`,
-        content,
-        branch: app.settings.github.branch || "main"
-      };
-      if (sha) body.sha = sha;
-      const response = await fetch(githubApiUrl(), {
-        method: "PUT",
-        headers: githubHeaders(true),
-        body: JSON.stringify(body)
+      saveActiveProjectToStore();
+      await putGithubEncryptedObject(githubProjectIndexPath(), sanitizeProjectsIndex(), "Update Today Fragments project index");
+      for (const project of app.projects.items) {
+        const entry = app.projectStore[project.id];
+        if (!entry?.data) continue;
+        await putGithubEncryptedObject(githubProjectDataPath(project.id), sanitizeData(entry.data), `Update Today Fragments project ${project.name || project.id}`);
+      }
+      app.dirty = createEmptyDirty();
+      Object.values(app.projectStore).forEach((entry) => {
+        entry.dirty = createEmptyDirty();
       });
-      if (!response.ok) throw await makeGithubError(response);
+      await persistState();
       toast("GitHub同期しました");
     } catch (error) {
       toast(error.message || "GitHub同期に失敗しました");
@@ -2346,6 +2828,8 @@
   async function loadGithubSnapshot() {
     requireGithubSettings(false);
     requirePassword();
+    await loadGithubProjectSnapshot();
+    return;
     const g = app.settings.github;
     const url = `https://raw.githubusercontent.com/${encodeURIComponent(g.owner)}/${encodeURIComponent(g.repo)}/${encodeURIComponent(g.branch || "main")}/${g.path}?t=${Date.now()}`;
     const response = await fetch(url, { cache: "no-store" });
@@ -2353,6 +2837,95 @@
     const envelope = await response.json();
     const remoteData = await decryptObject(envelope, app.settings.syncPassword);
     mergeData(remoteData, { markDirty: false });
+  }
+
+  async function loadGithubProjectSnapshot() {
+    const remoteIndex = await loadGithubEncryptedObject(githubProjectIndexPath()).catch((error) => {
+      if (error.status === 404) return null;
+      throw error;
+    });
+    if (remoteIndex?.type === "today-fragments-project-index") {
+      app.projects = normalizeProjectsIndex(remoteIndex);
+      app.activeProjectId = app.projects.activeProjectId;
+      app.projectStore = normalizeProjectStore(app.projectStore || {});
+      await loadProjectFromGithubIfNeeded(app.activeProjectId, { force: true });
+      activateProject(app.activeProjectId, { render: false, persist: false });
+      return;
+    }
+    const remoteData = await loadGithubEncryptedObject(app.settings.github.path);
+    const project = ensureProjectExists(DEFAULT_PROJECT_ID, remoteData.project?.name || DEFAULT_PROJECT_NAME);
+    app.projects.activeProjectId = project.id;
+    app.projectStore[project.id] = {
+      data: normalizeData({ ...remoteData, project: { id: project.id, name: project.name, createdAt: project.createdAt } }),
+      dirty: createEmptyDirty(),
+      view: { x: 0, y: 0, zoom: 1 },
+      selected: null
+    };
+    activateProject(project.id, { render: false, persist: false });
+  }
+
+  async function loadProjectFromGithubIfNeeded(projectId, options = {}) {
+    if (!projectId) return;
+    if (!options.force && app.projectStore[projectId]?.data) return;
+    requireGithubSettings(false);
+    requirePassword();
+    const project = ensureProjectExists(projectId);
+    const remoteData = await loadGithubEncryptedObject(githubProjectDataPath(projectId));
+    app.projectStore[projectId] = {
+      data: normalizeData({
+        ...remoteData,
+        project: {
+          id: project.id,
+          name: remoteData.project?.name || project.name,
+          createdAt: remoteData.project?.createdAt || project.createdAt
+        }
+      }),
+      dirty: createEmptyDirty(),
+      view: app.projectStore[projectId]?.view || { x: 0, y: 0, zoom: 1 },
+      selected: null
+    };
+  }
+
+  function sanitizeProjectsIndex(projects = app.projects) {
+    return normalizeProjectsIndex(JSON.parse(JSON.stringify(projects)));
+  }
+
+  async function putGithubEncryptedObject(path, object, message) {
+    const envelope = await encryptObject(object, app.settings.syncPassword);
+    const content = bytesToBase64(utf8(JSON.stringify(envelope, null, 2)));
+    const sha = await getGithubPathSha(path).catch(() => "");
+    const body = {
+      message: `${message} ${new Date().toISOString()}`,
+      content,
+      branch: app.settings.github.branch || "main"
+    };
+    if (sha) body.sha = sha;
+    const response = await fetch(githubContentApiUrl(path), {
+      method: "PUT",
+      headers: githubHeaders(true),
+      body: JSON.stringify(body)
+    });
+    if (!response.ok) throw await makeGithubError(response);
+  }
+
+  async function loadGithubEncryptedObject(path) {
+    const response = await fetch(`${githubRawUrl(path)}?t=${Date.now()}`, { cache: "no-store" });
+    if (!response.ok) {
+      const error = new Error(response.status === 404 ? "GitHub上に同期ファイルがまだありません" : `GitHub ${response.status}`);
+      error.status = response.status;
+      throw error;
+    }
+    const envelope = await response.json();
+    return decryptObject(envelope, app.settings.syncPassword);
+  }
+
+  async function getGithubPathSha(path) {
+    const response = await fetch(`${githubContentApiUrl(path)}?ref=${encodeURIComponent(app.settings.github.branch || "main")}`, {
+      headers: githubHeaders(true)
+    });
+    if (!response.ok) return "";
+    const json = await response.json();
+    return json.sha || "";
   }
 
   async function getGithubFileSha() {
@@ -2368,7 +2941,7 @@
     requireGithubSettings(true);
     const g = app.settings.github;
     const branch = g.branch || "main";
-    const checked = `${g.owner}/${g.repo} / ${branch} / ${g.path}`;
+    const checked = `${g.owner}/${g.repo} / ${branch} / ${githubProjectIndexPath()}`;
 
     const repoResponse = await fetch(githubRepoApiUrl(), {
       headers: githubHeaders(true)
@@ -2385,7 +2958,7 @@
       throw await makeGithubError(branchResponse);
     }
 
-    const fileResponse = await fetch(`${githubApiUrl()}?ref=${encodeURIComponent(branch)}`, {
+    const fileResponse = await fetch(`${githubContentApiUrl(githubProjectIndexPath())}?ref=${encodeURIComponent(branch)}`, {
       headers: githubHeaders(true)
     });
     if (fileResponse.ok) return `GitHub確認OK\n確認した設定: ${checked}\n同期ファイルも見つかりました`;
@@ -2432,6 +3005,35 @@
   function githubApiUrl() {
     const g = app.settings.github;
     return `https://api.github.com/repos/${encodeURIComponent(g.owner)}/${encodeURIComponent(g.repo)}/contents/${g.path.split("/").map(encodeURIComponent).join("/")}`;
+  }
+
+  function githubSyncBasePath() {
+    const path = (app.settings.github.path || GITHUB_DEFAULT_PATH).replace(/^\/+|\/+$/g, "");
+    const parts = path.split("/").filter(Boolean);
+    if (parts.length && /\.[a-z0-9]+$/i.test(parts[parts.length - 1])) parts.pop();
+    return parts.join("/") || "daily-fragments-sync";
+  }
+
+  function githubProjectIndexPath() {
+    return `${githubSyncBasePath()}/projects/index.enc.json`;
+  }
+
+  function githubProjectDataPath(projectId) {
+    const safeId = String(projectId || DEFAULT_PROJECT_ID).replace(/[^a-zA-Z0-9_-]/g, "");
+    return `${githubSyncBasePath()}/projects/${safeId}.enc.json`;
+  }
+
+  function githubContentApiUrl(path) {
+    const g = app.settings.github;
+    return `https://api.github.com/repos/${encodeURIComponent(g.owner)}/${encodeURIComponent(g.repo)}/contents/${path.split("/").map(encodeURIComponent).join("/")}`;
+  }
+
+  function githubRawUrl(path) {
+    const g = app.settings.github;
+    return `https://raw.githubusercontent.com/${encodeURIComponent(g.owner)}/${encodeURIComponent(g.repo)}/${encodeURIComponent(g.branch || "main")}/${path
+      .split("/")
+      .map(encodeURIComponent)
+      .join("/")}`;
   }
 
   function githubRepoApiUrl() {
@@ -2562,6 +3164,8 @@
     return {
       type: "today-fragments-delta",
       schemaVersion: 1,
+      projectId: app.activeProjectId,
+      projectName: currentProject()?.name || DEFAULT_PROJECT_NAME,
       createdAt: nowIso(),
       fromDeviceId: app.settings.deviceId,
       notes: app.data.notes.filter((note) => noteIds.has(note.id)),
@@ -2784,6 +3388,11 @@
       const envelope = JSON.parse(decodeUtf8(base64UrlToBytes(payload)));
       const delta = await decryptObject(envelope, app.settings.syncPassword);
       if (delta.type !== "today-fragments-delta") throw new Error("取り込みデータが違います");
+      if (delta.projectId && delta.projectId !== app.activeProjectId) {
+        saveActiveProjectToStore();
+        ensureProjectExists(delta.projectId, delta.projectName || DEFAULT_PROJECT_NAME);
+        activateProject(delta.projectId, { render: false, persist: false });
+      }
       const result = mergeData(delta, { markDirty: false });
       await persistState();
       scheduleDriveSave();
@@ -3117,10 +3726,15 @@
 
   async function persistState() {
     app.data.updatedAt = app.data.updatedAt || nowIso();
+    saveActiveProjectToStore();
     await idbSet(STATE_KEY, {
       settings: app.settings,
+      projects: app.projects,
+      activeProjectId: app.activeProjectId,
+      projectStore: app.projectStore,
       data: app.data,
-      dirty: app.dirty
+      dirty: app.dirty,
+      view: app.view
     });
   }
 
