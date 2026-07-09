@@ -324,22 +324,23 @@ body.dragging-entity .workspace * {
   inset: 0;
   overflow: hidden;
   pointer-events: none;
-  --particle-tile-size: 400px;
+  --particle-tile-size: 320px;
   --particle-image: none;
-  --particle-opacity: 0.8;
-  --particle-duration: 22s;
+  --particle-opacity: 0.68;
+  --particle-duration: 32s;
   --particle-pan-x: 0px;
   --particle-pan-y: 0px;
-  --particle-drift-x: 28px;
-  --particle-drift-y: -18px;
-  --particle-return-x: -14px;
-  --particle-return-y: 12px;
+  --particle-drift-x: 15px;
+  --particle-drift-y: -10px;
+  --particle-return-x: -8px;
+  --particle-return-y: 7px;
+  contain: paint;
 }
 
 .particle-layer::before {
   content: "";
   position: absolute;
-  inset: -420px;
+  inset: -200px;
   background-image: var(--particle-image);
   background-position: center;
   background-repeat: repeat;
@@ -459,7 +460,7 @@ body.dragging-entity .workspace * {
   stroke: #ffffff;
   stroke-width: 1.45;
   stroke-dasharray: 10 28;
-  animation: line-flow 1.05s linear infinite;
+  animation: line-flow 2.4s steps(18, end) infinite;
   opacity: 0.76;
   pointer-events: none;
 }
@@ -505,7 +506,7 @@ body.dragging-entity .workspace * {
   stroke: rgba(238, 244, 255, 0.82);
   stroke-width: 3;
   stroke-dasharray: 12 12;
-  animation: line-flow 0.8s linear infinite;
+  animation: line-flow 1.6s steps(14, end) infinite;
   pointer-events: none;
 }
 
@@ -551,17 +552,17 @@ body.dragging-entity .workspace * {
   100% {
     translate: 0 0;
     rotate: calc(var(--float-rotate, 0deg) * -0.7);
-    border-radius: var(--group-radius, 38% 30% 42% 28% / 26% 42% 28% 40%);
+    scale: 1;
   }
   33% {
-    translate: 1px -7px;
+    translate: 1px -5px;
     rotate: var(--float-rotate, 0.8deg);
-    border-radius: 44% 28% 36% 34% / 31% 45% 25% 39%;
+    scale: 1.002 0.998;
   }
   66% {
     translate: -1px -3px;
     rotate: calc(var(--float-rotate, 0deg) * -1);
-    border-radius: 31% 43% 28% 46% / 43% 27% 42% 30%;
+    scale: 0.999 1.002;
   }
 }
 
@@ -800,7 +801,7 @@ body.dragging-entity .workspace * {
     color-mix(in srgb, var(--group-color), transparent 88%);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.14),
-    0 30px 90px color-mix(in srgb, var(--group-color), transparent 84%);
+    0 22px 56px color-mix(in srgb, var(--group-color), transparent 88%);
   border-radius: var(--group-radius, 38% 30% 42% 28% / 26% 42% 28% 40%);
   cursor: grab;
   touch-action: none;
@@ -898,7 +899,7 @@ body.dragging-entity .workspace * {
     #111827;
   box-shadow:
     0 16px 0 rgba(0, 0, 0, 0.12),
-    0 32px 70px rgba(0, 0, 0, 0.38);
+    0 22px 48px rgba(0, 0, 0, 0.34);
   cursor: grab;
   touch-action: none;
   user-select: none;
@@ -924,7 +925,7 @@ body.dragging-entity .workspace * {
     #111827;
   box-shadow:
     0 14px 0 rgba(0, 0, 0, 0.12),
-    0 30px 70px color-mix(in srgb, var(--card-color), transparent 82%);
+    0 22px 48px color-mix(in srgb, var(--card-color), transparent 86%);
 }
 
 .note-card.dragging,
@@ -1404,7 +1405,7 @@ body.dragging-entity .workspace * {
 
 @media (pointer: coarse) {
   .particle-layer::before {
-    inset: -410px;
+    inset: -200px;
   }
 
   .connection-main,

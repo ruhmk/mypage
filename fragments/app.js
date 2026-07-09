@@ -9,7 +9,7 @@
   const DRIVE_FILE = "today-fragments.json";
   const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
   const GROUP_COLORS = ["#67e8f9", "#ff7aa8", "#ffd166", "#8ff0c4", "#a78bfa"];
-  const APP_VERSION = "32";
+  const APP_VERSION = "33";
   const DEFAULT_PROJECT_ID = "project_main";
   const DEFAULT_PROJECT_NAME = "メイン";
   const NOTE_CARD_WIDTH = 210;
@@ -662,17 +662,18 @@
       els.particleLayer.style.setProperty("--particle-opacity", "0");
       return;
     }
-    const tileSize = 400;
-    const count = 14;
+    // A small, repeating tile keeps the ambient layer inexpensive even on wide screens.
+    const tileSize = 320;
+    const count = 8;
     const key = `d:${tileSize}:${count}`;
     if (els.particleLayer.dataset.key === key) return;
     els.particleLayer.dataset.key = key;
     const colors = ["#aaf5ff", "#67e8f9", "#ff7aa8", "#ffd166", "#8ff0c4", "#a78bfa"];
     const gradients = Array.from({ length: count }, (_, index) => {
-      const accent = index % 7 === 0;
-      const size = randomBetween(1.0, accent ? 3.0 : 2.05);
-      const fade = size * 2.2;
-      const opacity = randomBetween(0.42, 0.78);
+      const accent = index % 6 === 0;
+      const size = randomBetween(0.42, accent ? 1.35 : 0.92);
+      const fade = size * 2.05;
+      const opacity = randomBetween(0.32, 0.64);
       const color = colors[Math.floor(Math.random() * colors.length)];
       const x = randomBetween(18, tileSize - 18);
       const y = randomBetween(18, tileSize - 18);
@@ -681,12 +682,12 @@
     els.particleLayer.innerHTML = "";
     els.particleLayer.style.setProperty("--particle-tile-size", `${tileSize}px`);
     els.particleLayer.style.setProperty("--particle-image", gradients.join(","));
-    els.particleLayer.style.setProperty("--particle-opacity", "0.82");
-    els.particleLayer.style.setProperty("--particle-duration", "22s");
-    els.particleLayer.style.setProperty("--particle-drift-x", "28px");
-    els.particleLayer.style.setProperty("--particle-drift-y", "-18px");
-    els.particleLayer.style.setProperty("--particle-return-x", "-14px");
-    els.particleLayer.style.setProperty("--particle-return-y", "12px");
+    els.particleLayer.style.setProperty("--particle-opacity", "0.68");
+    els.particleLayer.style.setProperty("--particle-duration", "32s");
+    els.particleLayer.style.setProperty("--particle-drift-x", "15px");
+    els.particleLayer.style.setProperty("--particle-drift-y", "-10px");
+    els.particleLayer.style.setProperty("--particle-return-x", "-8px");
+    els.particleLayer.style.setProperty("--particle-return-y", "7px");
   }
 
   function randomBetween(min, max) {
@@ -2133,8 +2134,10 @@
   }
 
   function applyParticlePan(x, y) {
-    els.particleLayer.style.setProperty("--particle-pan-x", `${x.toFixed(2)}px`);
-    els.particleLayer.style.setProperty("--particle-pan-y", `${y.toFixed(2)}px`);
+    const tileSize = 320;
+    const wrap = (value) => ((value + tileSize / 2) % tileSize + tileSize) % tileSize - tileSize / 2;
+    els.particleLayer.style.setProperty("--particle-pan-x", `${wrap(x).toFixed(2)}px`);
+    els.particleLayer.style.setProperty("--particle-pan-y", `${wrap(y).toFixed(2)}px`);
   }
 
   function screenToWorld(x, y) {
@@ -3550,7 +3553,12 @@
       requestAnimationFrame(drawWebGl);
       return;
     }
-    const gl = els.canvas.getContext("webgl", { antialias: false, alpha: false });
+    const gl = els.canvas.getContext("webgl", {
+      antialias: false,
+      alpha: false,
+      desynchronized: true,
+      powerPreference: "low-power"
+    });
     if (!gl) return;
     const vertex = `
       attribute vec2 a_position;
@@ -3602,7 +3610,8 @@
       view: gl.getUniformLocation(program, "u_view"),
       zoom: gl.getUniformLocation(program, "u_zoom"),
       time: gl.getUniformLocation(program, "u_time"),
-      running: true
+      running: true,
+      lastDrawAt: 0
     };
     resizeGlCanvas();
     requestAnimationFrame(drawWebGl);
@@ -3617,6 +3626,12 @@
     }
     app.gl.running = true;
     els.canvas.classList.remove("disabled");
+    // The background remains animated, but 30 fps is visually sufficient and halves GPU work.
+    if (time - app.gl.lastDrawAt < 1000 / 30) {
+      requestAnimationFrame(drawWebGl);
+      return;
+    }
+    app.gl.lastDrawAt = time;
     const { gl, program, pos, resolution, view, zoom } = app.gl;
     const pixelRatio = renderPixelRatio();
     resizeGlCanvas();
@@ -3645,7 +3660,7 @@
 
   function renderPixelRatio() {
     const ratio = window.devicePixelRatio || 1;
-    return Math.min(ratio, useLightweightEffects() ? 1.15 : 1.6);
+    return Math.min(ratio, useLightweightEffects() ? 1.15 : 1.25);
   }
 
   function makeProgram(gl, vertexSource, fragmentSource) {
