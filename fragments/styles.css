@@ -326,7 +326,7 @@ body.dragging-entity .workspace * {
   pointer-events: none;
   --particle-tile-size: 320px;
   --particle-image: none;
-  --particle-opacity: 0.68;
+  --particle-opacity: 0.84;
   --particle-duration: 32s;
   --particle-pan-x: 0px;
   --particle-pan-y: 0px;

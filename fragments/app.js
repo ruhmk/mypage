@@ -9,7 +9,7 @@
   const DRIVE_FILE = "today-fragments.json";
   const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
   const GROUP_COLORS = ["#67e8f9", "#ff7aa8", "#ffd166", "#8ff0c4", "#a78bfa"];
-  const APP_VERSION = "33";
+  const APP_VERSION = "34";
   const DEFAULT_PROJECT_ID = "project_main";
   const DEFAULT_PROJECT_NAME = "メイン";
   const NOTE_CARD_WIDTH = 210;
@@ -668,12 +668,12 @@
     const key = `d:${tileSize}:${count}`;
     if (els.particleLayer.dataset.key === key) return;
     els.particleLayer.dataset.key = key;
-    const colors = ["#aaf5ff", "#67e8f9", "#ff7aa8", "#ffd166", "#8ff0c4", "#a78bfa"];
+    const colors = ["#e9fcff", "#78f3ff", "#ff9fca", "#ffe38a", "#a8ffd7", "#c5adff"];
     const gradients = Array.from({ length: count }, (_, index) => {
       const accent = index % 6 === 0;
       const size = randomBetween(0.42, accent ? 1.35 : 0.92);
       const fade = size * 2.05;
-      const opacity = randomBetween(0.32, 0.64);
+      const opacity = randomBetween(0.52, 0.84);
       const color = colors[Math.floor(Math.random() * colors.length)];
       const x = randomBetween(18, tileSize - 18);
       const y = randomBetween(18, tileSize - 18);
@@ -682,7 +682,7 @@
     els.particleLayer.innerHTML = "";
     els.particleLayer.style.setProperty("--particle-tile-size", `${tileSize}px`);
     els.particleLayer.style.setProperty("--particle-image", gradients.join(","));
-    els.particleLayer.style.setProperty("--particle-opacity", "0.68");
+    els.particleLayer.style.setProperty("--particle-opacity", "0.84");
     els.particleLayer.style.setProperty("--particle-duration", "32s");
     els.particleLayer.style.setProperty("--particle-drift-x", "15px");
     els.particleLayer.style.setProperty("--particle-drift-y", "-10px");
