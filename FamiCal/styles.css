@@ -9,6 +9,14 @@
   --accent: #0f766e;
   --accent-strong: #0b5f59;
   --family: #d9485f;
+  --family-soft: #fff3d8;
+  --family-line: #e3d1a8;
+  --holiday: #c75f55;
+  --holiday-soft: #ffe8e4;
+  --holiday-line: #f2aaa2;
+  --school: #2f8f72;
+  --school-soft: #e1f5ec;
+  --school-line: #9fd6be;
   --personal: #2f77b4;
   --work: #4a9fcb;
   --work-soft: #eaf7ff;
@@ -200,6 +208,46 @@ a.secondary-button {
   border-bottom: 1px solid var(--line);
 }
 
+.next-event-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 9px 18px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(255, 253, 248, 0.98);
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.next-event-kicker {
+  color: var(--muted);
+  font-size: 0.74rem;
+  text-transform: uppercase;
+}
+
+.next-event-source {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--source-line, var(--line));
+  border-radius: 999px;
+  background: var(--source-soft, #fff);
+  color: var(--source);
+  font-size: 0.76rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.next-event-text,
+.next-event-empty {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .source-toggle {
   display: inline-flex;
   align-items: center;
@@ -248,22 +296,54 @@ a.secondary-button {
 .source-dot.family,
 .event-card.family,
 .day-chip.family,
-.timeline-event.family {
+.timeline-event.family,
+.next-event-source.family,
+.day-source-count.family {
   --source: var(--family);
+  --source-soft: var(--family-soft);
+  --source-line: var(--family-line);
+}
+
+.source-dot.holiday,
+.event-card.holiday,
+.day-chip.holiday,
+.timeline-event.holiday,
+.next-event-source.holiday,
+.day-source-count.holiday {
+  --source: var(--holiday);
+  --source-soft: var(--holiday-soft);
+  --source-line: var(--holiday-line);
+}
+
+.source-dot.school,
+.event-card.school,
+.day-chip.school,
+.timeline-event.school,
+.next-event-source.school,
+.day-source-count.school {
+  --source: var(--school);
+  --source-soft: var(--school-soft);
+  --source-line: var(--school-line);
 }
 
 .source-dot.personal,
 .event-card.personal,
 .day-chip.personal,
-.timeline-event.personal {
+.timeline-event.personal,
+.next-event-source.personal,
+.day-source-count.personal {
   --source: var(--personal);
 }
 
 .source-dot.work,
 .event-card.work,
 .day-chip.work,
-.timeline-event.work {
+.timeline-event.work,
+.next-event-source.work,
+.day-source-count.work {
   --source: var(--work);
+  --source-soft: var(--work-soft);
+  --source-line: var(--work-line);
 }
 
 .source-dot {
@@ -328,6 +408,32 @@ a.secondary-button {
   background: #fff8e8;
 }
 
+.day-cell.has-holiday {
+  background: linear-gradient(180deg, rgba(255, 232, 228, 0.72), rgba(255, 255, 255, 0.76));
+}
+
+.day-cell.has-school {
+  background: linear-gradient(180deg, rgba(225, 245, 236, 0.74), rgba(255, 255, 255, 0.76));
+}
+
+.day-cell.has-family-event {
+  background: linear-gradient(180deg, rgba(255, 243, 216, 0.76), rgba(255, 255, 255, 0.78));
+}
+
+.day-cell.has-holiday.selected,
+.day-cell.has-school.selected,
+.day-cell.has-family-event.selected {
+  background: #fff8e8;
+}
+
+.day-cell-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+}
+
 .day-number {
   display: inline-grid;
   place-items: center;
@@ -340,6 +446,45 @@ a.secondary-button {
 .today .day-number {
   background: var(--accent);
   color: #fff;
+}
+
+.day-summary {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.day-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: #efe8dc;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.day-cell.busy .day-count {
+  background: #8c6a35;
+  color: #fff;
+}
+
+.day-source-count {
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  padding: 0 5px;
+  border: 1px solid var(--source-line, var(--line));
+  border-radius: 999px;
+  background: var(--source-soft, #fff);
+  color: var(--source);
+  font-size: 0.63rem;
+  font-weight: 900;
 }
 
 .day-events {
@@ -485,6 +630,27 @@ a.secondary-button {
 .day-chip.work {
   border-color: var(--work-line);
   background: var(--work-soft);
+}
+
+.event-card.family,
+.timeline-event.family,
+.day-chip.family {
+  border-color: var(--family-line);
+  background: var(--family-soft);
+}
+
+.event-card.holiday,
+.timeline-event.holiday,
+.day-chip.holiday {
+  border-color: var(--holiday-line);
+  background: var(--holiday-soft);
+}
+
+.event-card.school,
+.timeline-event.school,
+.day-chip.school {
+  border-color: var(--school-line);
+  background: var(--school-soft);
 }
 
 .timeline-event-time {
@@ -660,6 +826,36 @@ a.secondary-button {
   line-height: 1.6;
 }
 
+.visit-log-list {
+  display: grid;
+  gap: 8px;
+}
+
+.visit-log-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.9fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-height: 42px;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.visit-log-time {
+  color: var(--ink);
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.visit-log-meta {
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 800;
+  text-align: right;
+}
+
 @media (max-width: 980px) {
   .calendar-layout {
     grid-template-columns: 1fr;
@@ -742,6 +938,27 @@ a.secondary-button {
     z-index: 5;
     overflow: hidden;
     background: rgba(255, 253, 248, 0.98);
+  }
+
+  .next-event-bar {
+    min-height: 36px;
+    padding: 7px 10px;
+    gap: 7px;
+  }
+
+  .next-event-kicker {
+    font-size: 0.64rem;
+  }
+
+  .next-event-source {
+    min-height: 22px;
+    padding: 0 7px;
+    font-size: 0.68rem;
+  }
+
+  .next-event-text,
+  .next-event-empty {
+    font-size: 0.76rem;
   }
 
   .calendar-scroll {
@@ -830,6 +1047,26 @@ a.secondary-button {
     gap: 4px;
   }
 
+  .day-cell-header {
+    gap: 4px;
+  }
+
+  .day-summary {
+    gap: 2px;
+  }
+
+  .day-count {
+    min-width: 19px;
+    height: 19px;
+    font-size: 0.62rem;
+  }
+
+  .day-source-count {
+    min-height: 16px;
+    padding: 0 4px;
+    font-size: 0.56rem;
+  }
+
   .day-chip {
     min-height: 20px;
     grid-template-columns: 5px minmax(0, 1fr);
@@ -899,6 +1136,15 @@ a.secondary-button {
 
   .event-title {
     font-size: 0.9rem;
+  }
+
+  .visit-log-row {
+    grid-template-columns: 1fr;
+    gap: 3px;
+  }
+
+  .visit-log-meta {
+    text-align: left;
   }
 }
 

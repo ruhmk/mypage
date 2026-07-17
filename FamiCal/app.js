@@ -1,5 +1,7 @@
 const SOURCE_LABELS = {
   family: "家族",
+  holiday: "祝日",
+  school: "学校",
   personal: "個人",
   work: "仕事"
 };
@@ -11,10 +13,11 @@ const state = {
   selectedDate: stripTime(new Date()),
   remoteEvents: [],
   updatedAt: "",
-  visibleSources: new Set(["family", "personal", "work"])
+  visibleSources: new Set(["family", "holiday", "school", "personal", "work"])
 };
 
 const calendarGrid = document.querySelector("#calendarGrid");
+const nextEventBar = document.querySelector("#nextEventBar");
 const monthLabel = document.querySelector("#monthLabel");
 const yearLabel = document.querySelector("#yearLabel");
 const selectedDateLabel = document.querySelector("#selectedDateLabel");
@@ -48,7 +51,7 @@ document.querySelector("#todayButton").addEventListener("click", () => {
 document.querySelectorAll(".source-toggle input").forEach((input) => {
   input.addEventListener("change", () => {
     state.visibleSources = new Set(
-      ["family", ...Array.from(document.querySelectorAll(".source-toggle input:checked")).map((item) => item.value)]
+      ["family", "holiday", "school", ...Array.from(document.querySelectorAll(".source-toggle input:checked")).map((item) => item.value)]
     );
     render();
   });
@@ -57,9 +60,13 @@ document.querySelectorAll(".source-toggle input").forEach((input) => {
 bootstrap();
 
 function bootstrap() {
-  state.remoteEvents = Array.isArray(window.FAMILY_CALENDAR_EVENTS)
+  const calendarEvents = Array.isArray(window.FAMILY_CALENDAR_EVENTS)
     ? window.FAMILY_CALENDAR_EVENTS
     : fallbackEvents();
+  const fixedEvents = Array.isArray(window.FAMILY_FIXED_EVENTS)
+    ? window.FAMILY_FIXED_EVENTS
+    : [];
+  state.remoteEvents = normalizeEvents([...calendarEvents, ...fixedEvents]);
   state.updatedAt = window.FAMILY_CALENDAR_UPDATED_AT || "";
 
   render();
@@ -74,6 +81,7 @@ function render() {
   selectedDateLabel.textContent = formatDateHeading(state.selectedDate);
 
   renderCalendarGrid();
+  renderNextEvent();
   renderSelectedEvents();
   renderImportStatus();
 }
@@ -86,6 +94,8 @@ function renderCalendarGrid() {
   const days = Array.from({ length: 42 }, (_, index) => addDays(start, index));
 
   days.forEach((date) => {
+    const events = getEventsForDay(date);
+    const dayKinds = getDayKinds(events);
     const cell = document.createElement("button");
     const isOutside = date.getMonth() !== state.viewDate.getMonth();
     cell.type = "button";
@@ -93,7 +103,11 @@ function renderCalendarGrid() {
       "day-cell",
       isOutside ? "outside" : "",
       isSameDay(date, new Date()) ? "today" : "",
-      isSameDay(date, state.selectedDate) ? "selected" : ""
+      isSameDay(date, state.selectedDate) ? "selected" : "",
+      events.length >= 5 ? "busy" : "",
+      dayKinds.has("holiday") ? "has-holiday" : "",
+      dayKinds.has("school") ? "has-school" : "",
+      dayKinds.has("family") ? "has-family-event" : ""
     ].filter(Boolean).join(" ");
     cell.setAttribute("aria-label", formatDateHeading(date));
     cell.addEventListener("click", () => {
@@ -108,14 +122,22 @@ function renderCalendarGrid() {
     number.className = "day-number";
     number.textContent = date.getDate();
 
+    const header = document.createElement("div");
+    header.className = "day-cell-header";
+    header.append(number);
+
+    const summary = createDaySummary(events);
+    if (summary) {
+      header.append(summary);
+    }
+
     const eventsWrapper = document.createElement("div");
     eventsWrapper.className = "day-events";
 
-    const events = getEventsForDay(date);
-    const eventLimit = 4;
+    const eventLimit = 3;
     events.slice(0, eventLimit).forEach((item) => {
       const chip = document.createElement("div");
-      chip.className = `day-chip ${item.source}`;
+      chip.className = `day-chip ${getEventVisualSource(item)}`;
       const text = document.createElement("span");
       text.textContent = `${formatEventStart(item)} ${item.title}`;
       chip.append(text);
@@ -129,14 +151,80 @@ function renderCalendarGrid() {
       eventsWrapper.append(more);
     }
 
-    cell.append(number, eventsWrapper);
+    cell.append(header, eventsWrapper);
     calendarGrid.append(cell);
   });
+}
+
+function createDaySummary(events) {
+  if (events.length === 0) {
+    return null;
+  }
+
+  const summary = document.createElement("div");
+  summary.className = "day-summary";
+  const count = document.createElement("span");
+  count.className = "day-count";
+  count.textContent = String(events.length);
+  count.setAttribute("aria-label", `${events.length}件`);
+  summary.append(count);
+
+  const counts = countEventsByVisualSource(events);
+  const labels = [
+    ["work", "仕"],
+    ["personal", "個"],
+    ["family", "家"],
+    ["school", "学"],
+    ["holiday", "祝"]
+  ];
+  labels.forEach(([source, label]) => {
+    if (!counts[source]) {
+      return;
+    }
+    const item = document.createElement("span");
+    item.className = `day-source-count ${source}`;
+    item.textContent = `${label}${counts[source]}`;
+    summary.append(item);
+  });
+
+  return summary;
 }
 
 function renderSelectedEvents() {
   const events = getEventsForDay(state.selectedDate);
   renderDayTimeline(selectedEventList, events, state.selectedDate);
+}
+
+function renderNextEvent() {
+  if (!nextEventBar) {
+    return;
+  }
+
+  nextEventBar.replaceChildren();
+  const next = getNextEvent();
+  const label = document.createElement("span");
+  label.className = "next-event-kicker";
+  label.textContent = "次の予定";
+  nextEventBar.append(label);
+
+  if (!next) {
+    const empty = document.createElement("span");
+    empty.className = "next-event-empty";
+    empty.textContent = "今後の予定はありません";
+    nextEventBar.append(empty);
+    return;
+  }
+
+  const source = getEventVisualSource(next);
+  const pill = document.createElement("span");
+  pill.className = `next-event-source ${source}`;
+  pill.textContent = SOURCE_LABELS[source] || SOURCE_LABELS[next.source] || next.source;
+
+  const text = document.createElement("span");
+  text.className = "next-event-text";
+  text.textContent = `${formatNextEventTime(next)} ${next.title}`;
+
+  nextEventBar.append(pill, text);
 }
 
 function renderEventList(target, events, emptyText) {
@@ -152,7 +240,7 @@ function renderEventList(target, events, emptyText) {
 
   events.forEach((item) => {
     const card = document.createElement("article");
-    card.className = `event-card ${item.source}`;
+    card.className = `event-card ${getEventVisualSource(item)}`;
 
     const time = document.createElement("div");
     time.className = "event-time";
@@ -247,7 +335,7 @@ function renderDayTimeline(target, events, date) {
 
 function createCompactEventCard(event) {
   const card = document.createElement("article");
-  card.className = `event-card ${event.source}`;
+  card.className = `event-card ${getEventVisualSource(event)}`;
   const title = document.createElement("p");
   title.className = "event-title";
   title.textContent = event.title;
@@ -409,7 +497,7 @@ function createTimelineEventBlock(item, range, hourBands) {
   const top = getTimelineY(item.startMinute, range, hourBands);
   const height = getTimelineY(item.endMinute, range, hourBands) - top;
   const laneWidth = 100 / item.laneCount;
-  block.className = `timeline-event ${event.source}`;
+  block.className = `timeline-event ${getEventVisualSource(event)}`;
   block.style.top = `${top}px`;
   block.style.height = `${height}px`;
   block.style.left = `calc(8px + ${item.lane * laneWidth}%)`;
@@ -425,6 +513,73 @@ function createTimelineEventBlock(item, range, hourBands) {
 
   block.append(time, title);
   return block;
+}
+
+function normalizeEvents(events) {
+  return events
+    .filter((event) => event && event.start && event.end)
+    .map((event, index) => ({
+      id: event.id || `event-${index}-${event.start}`,
+      title: event.title || "予定あり",
+      start: event.start,
+      end: event.end,
+      source: event.source || "family",
+      note: event.note || "",
+      allDay: Boolean(event.allDay)
+    }));
+}
+
+function getNextEvent() {
+  const now = new Date();
+  return getVisibleEvents()
+    .filter((event) => new Date(event.end) > now)
+    .sort((left, right) => new Date(left.start) - new Date(right.start))[0] || null;
+}
+
+function getEventVisualSource(event) {
+  const source = event && event.source ? event.source : "family";
+  const title = String(event && event.title ? event.title : "").normalize("NFKC");
+  if (source === "holiday" || title.indexOf("祝日") >= 0 || title.indexOf("の日") >= 0) {
+    return "holiday";
+  }
+  if (source === "school" || isSchoolTitle(title)) {
+    return "school";
+  }
+  if (source === "family") {
+    return "family";
+  }
+  return source;
+}
+
+function isSchoolTitle(title) {
+  return [
+    "学校",
+    "保育",
+    "幼稚園",
+    "終業式",
+    "始業式",
+    "入学式",
+    "卒業式",
+    "参観",
+    "懇談",
+    "運動会",
+    "遠足",
+    "夏休み",
+    "冬休み",
+    "春休み"
+  ].some((keyword) => title.indexOf(keyword) >= 0);
+}
+
+function getDayKinds(events) {
+  return new Set(events.map(getEventVisualSource));
+}
+
+function countEventsByVisualSource(events) {
+  return events.reduce((counts, event) => {
+    const source = getEventVisualSource(event);
+    counts[source] = (counts[source] || 0) + 1;
+    return counts;
+  }, {});
 }
 
 function getVisibleEvents() {
@@ -463,6 +618,16 @@ function formatEventRange(event) {
     return `${formatShortDate(event.start)} 終日`;
   }
   return `${formatShortDate(event.start)} ${formatTime(event.start)}-${formatTime(event.end)}`;
+}
+
+function formatNextEventTime(event) {
+  const start = new Date(event.start);
+  if (event.allDay) {
+    return isSameDay(start, new Date()) ? "今日 終日" : `${formatShortDate(event.start)} 終日`;
+  }
+  return isSameDay(start, new Date())
+    ? `今日 ${formatTime(event.start)}`
+    : `${formatShortDate(event.start)} ${formatTime(event.start)}`;
 }
 
 function isExcludedWorkEvent(event) {

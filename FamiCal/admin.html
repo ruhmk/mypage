@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>家族カレンダー更新</title>
-    <link rel="stylesheet" href="./styles.css?v=20260717-1">
+    <link rel="stylesheet" href="./styles.css?v=20260717-2">
   </head>
   <body>
     <div class="app-shell admin-shell">
@@ -44,10 +44,23 @@
           </div>
           <div class="event-list" id="adminPreview"></div>
         </section>
+
+        <section class="admin-panel">
+          <div class="panel-heading compact">
+            <div>
+              <p class="panel-kicker">Access</p>
+              <h2>閲覧ログ</h2>
+            </div>
+            <button class="secondary-button" id="refreshVisitLogButton" type="button">更新</button>
+          </div>
+          <p class="admin-copy" id="visitLogStatus">家族ページの直近10件を表示します。</p>
+          <div class="visit-log-list" id="visitLogList"></div>
+        </section>
       </main>
     </div>
 
     <script src="./data/config.js?v=20260717-1"></script>
-    <script src="./admin.js?v=20260717-1" defer></script>
+    <script src="./data/visit-log-config.js?v=20260717-1"></script>
+    <script src="./admin.js?v=20260717-2" defer></script>
   </body>
 </html>
