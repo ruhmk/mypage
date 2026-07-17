@@ -134,7 +134,7 @@ function renderCalendarGrid() {
     const eventsWrapper = document.createElement("div");
     eventsWrapper.className = "day-events";
 
-    const eventLimit = 3;
+    const eventLimit = getMonthCellEventLimit(events.length);
     events.slice(0, eventLimit).forEach((item) => {
       const chip = document.createElement("div");
       chip.className = `day-chip ${getEventVisualSource(item)}`;
@@ -169,6 +169,10 @@ function createDaySummary(events) {
   count.setAttribute("aria-label", `${events.length}件`);
   summary.append(count);
 
+  if (events.length >= 4) {
+    return summary;
+  }
+
   const counts = countEventsByVisualSource(events);
   const labels = [
     ["work", "仕"],
@@ -188,6 +192,14 @@ function createDaySummary(events) {
   });
 
   return summary;
+}
+
+function getMonthCellEventLimit(eventCount) {
+  if (eventCount <= 3) {
+    return eventCount;
+  }
+
+  return window.matchMedia("(max-width: 720px)").matches ? 2 : 3;
 }
 
 function renderSelectedEvents() {

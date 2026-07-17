@@ -370,16 +370,16 @@ a.secondary-button {
 }
 
 .calendar-grid {
-  min-height: 676px;
+  min-height: 828px;
 }
 
 .day-cell {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  min-height: 112px;
-  padding: 10px;
+  gap: 6px;
+  min-height: 138px;
+  padding: 9px;
   border-right: 1px solid var(--line);
   border-top: 0;
   border-left: 0;
@@ -432,6 +432,7 @@ a.secondary-button {
   justify-content: space-between;
   gap: 6px;
   min-width: 0;
+  flex-shrink: 0;
 }
 
 .day-number {
@@ -489,20 +490,21 @@ a.secondary-button {
 
 .day-events {
   display: grid;
-  gap: 5px;
+  gap: 4px;
+  min-height: 0;
 }
 
 .day-chip {
   display: grid;
   grid-template-columns: 7px minmax(0, 1fr);
   align-items: center;
-  min-height: 26px;
+  min-height: 21px;
   overflow: hidden;
   border: 1px solid rgba(31, 35, 40, 0.08);
   border-radius: 6px;
   background: #fff;
   color: var(--ink);
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 700;
 }
 
@@ -524,6 +526,7 @@ a.secondary-button {
   color: var(--muted);
   font-size: 0.78rem;
   font-weight: 800;
+  line-height: 1.15;
 }
 
 .side-panel {
@@ -1062,9 +1065,7 @@ a.secondary-button {
   }
 
   .day-source-count {
-    min-height: 16px;
-    padding: 0 4px;
-    font-size: 0.56rem;
+    display: none;
   }
 
   .day-chip {
