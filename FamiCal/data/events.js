@@ -1,4 +1,4 @@
-window.FAMILY_CALENDAR_UPDATED_AT = "2026-07-17T03:38:00.812Z";
+window.FAMILY_CALENDAR_UPDATED_AT = "2026-07-17T05:26:59.604Z";
 window.FAMILY_CALENDAR_EVENTS = [
   {
     "id": "work-QiuN5ev4OOzmdVq7oE",
@@ -1450,6 +1450,15 @@ window.FAMILY_CALENDAR_EVENTS = [
     "allDay": false
   },
   {
+    "id": "holiday-vw9zf5ZdFS1Ct_Fs1x",
+    "title": "海の日",
+    "start": "2026-07-19T15:00:00.000Z",
+    "end": "2026-07-20T15:00:00.000Z",
+    "source": "holiday",
+    "note": "",
+    "allDay": true
+  },
+  {
     "id": "work--H4gm_wZpPQAERZT68",
     "title": "仕事",
     "start": "2026-07-20T07:00:00.000Z",
@@ -2204,6 +2213,15 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false
+  },
+  {
+    "id": "holiday-DA8quwYj44OmC3pN4x",
+    "title": "山の日",
+    "start": "2026-08-10T15:00:00.000Z",
+    "end": "2026-08-11T15:00:00.000Z",
+    "source": "holiday",
+    "note": "",
+    "allDay": true
   },
   {
     "id": "work-ZtpE3iod5U0H36zv-p",
@@ -3295,6 +3313,33 @@ window.FAMILY_CALENDAR_EVENTS = [
     "allDay": false
   },
   {
+    "id": "holiday-21TFSTcmVyH7dOsbgw",
+    "title": "敬老の日",
+    "start": "2026-09-20T15:00:00.000Z",
+    "end": "2026-09-21T15:00:00.000Z",
+    "source": "holiday",
+    "note": "",
+    "allDay": true
+  },
+  {
+    "id": "holiday-nRVhM6_5c0icWKcZZr",
+    "title": "国民の休日",
+    "start": "2026-09-21T15:00:00.000Z",
+    "end": "2026-09-22T15:00:00.000Z",
+    "source": "holiday",
+    "note": "",
+    "allDay": true
+  },
+  {
+    "id": "holiday-AN8L2RnrYOPSAlmZBr",
+    "title": "秋分の日",
+    "start": "2026-09-22T15:00:00.000Z",
+    "end": "2026-09-23T15:00:00.000Z",
+    "source": "holiday",
+    "note": "",
+    "allDay": true
+  },
+  {
     "id": "personal-h-asqifjyE2TX2N4GA",
     "title": "デュピクセント",
     "start": "2026-09-29T06:00:00.000Z",
@@ -3311,5 +3356,23 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "personal",
     "note": "",
     "allDay": false
+  },
+  {
+    "id": "holiday-dozXKKlCGUknmJtXs1",
+    "title": "スポーツの日",
+    "start": "2026-10-11T15:00:00.000Z",
+    "end": "2026-10-12T15:00:00.000Z",
+    "source": "holiday",
+    "note": "",
+    "allDay": true
+  },
+  {
+    "id": "holiday-TAH6Zewibz2gsukYhe",
+    "title": "文化の日",
+    "start": "2026-11-02T15:00:00.000Z",
+    "end": "2026-11-03T15:00:00.000Z",
+    "source": "holiday",
+    "note": "",
+    "allDay": true
   }
 ];
