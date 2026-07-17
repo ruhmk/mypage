@@ -184,7 +184,7 @@ function fetchGoogleEvents() {
     renderPreview(latestEvents);
 
     const diagnostics = payload && payload.diagnostics
-      ? `仕事 ${payload.diagnostics.workCount}件 / 個人 ${payload.diagnostics.personalCount}件 / 祝日 ${payload.diagnostics.holidayCount || 0}件`
+      ? `仕事 ${payload.diagnostics.workCount}件 / 手入力終日 ${payload.diagnostics.manualWorkAllDayCount || 0}件 / 個人 ${payload.diagnostics.personalCount}件 / 祝日 ${payload.diagnostics.holidayCount || 0}件`
       : "";
     const source = payload && payload.diagnostics && payload.diagnostics.workCalendarId
       ? ` / 仕事元 ${payload.diagnostics.workCalendarId}`
@@ -261,7 +261,7 @@ function publishGitHubEvents() {
       ? ` / ${publish.cutoffDate}以降を更新 / 過去保持 ${publish.preservedCount}件 / 公開 ${publish.publishedCount}件`
       : "";
     const diagnostics = payload && payload.diagnostics
-      ? `仕事 ${payload.diagnostics.workCount}件 / 個人 ${payload.diagnostics.personalCount}件 / 祝日 ${payload.diagnostics.holidayCount || 0}件`
+      ? `仕事 ${payload.diagnostics.workCount}件 / 手入力終日 ${payload.diagnostics.manualWorkAllDayCount || 0}件 / 個人 ${payload.diagnostics.personalCount}件 / 祝日 ${payload.diagnostics.holidayCount || 0}件`
       : "";
     const source = payload && payload.diagnostics && payload.diagnostics.workCalendarId
       ? ` / 仕事元 ${payload.diagnostics.workCalendarId}`
@@ -329,7 +329,7 @@ function cleanup(callbackName, script) {
 }
 
 function isExcludedWorkEvent(event) {
-  return Boolean(event && event.source === "work" && event.allDay);
+  return Boolean(event && event.source === "work" && event.allDay && !event.manualAllDay);
 }
 
 function formatShortDate(value) {

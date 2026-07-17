@@ -537,7 +537,8 @@ function normalizeEvents(events) {
       end: event.end,
       source: event.source || "family",
       note: event.note || "",
-      allDay: Boolean(event.allDay)
+      allDay: Boolean(event.allDay),
+      manualAllDay: Boolean(event.manualAllDay)
     }));
 }
 
@@ -643,7 +644,7 @@ function formatNextEventTime(event) {
 }
 
 function isExcludedWorkEvent(event) {
-  return Boolean(event && event.source === "work" && event.allDay);
+  return Boolean(event && event.source === "work" && event.allDay && !event.manualAllDay);
 }
 
 function formatDateHeading(date) {
