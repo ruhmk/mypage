@@ -4,6 +4,8 @@ const SOURCE_LABELS = {
   work: "仕事"
 };
 
+const visitLogConfig = window.FAMILY_VISIT_LOG_CONFIG || {};
+
 const state = {
   viewDate: startOfMonth(new Date()),
   selectedDate: stripTime(new Date()),
@@ -61,6 +63,7 @@ function bootstrap() {
   state.updatedAt = window.FAMILY_CALENDAR_UPDATED_AT || "";
 
   render();
+  sendVisitLog();
 }
 
 function render() {
@@ -575,6 +578,74 @@ function isSameDay(left, right) {
 
 function sortByStart(left, right) {
   return new Date(left.start) - new Date(right.start);
+}
+
+function sendVisitLog() {
+  if (!visitLogConfig.visitLogUrl) {
+    return;
+  }
+
+  const callbackName = `receiveFamilyCalendarVisitLog${Date.now()}`;
+  const script = document.createElement("script");
+  const url = new URL(visitLogConfig.visitLogUrl);
+  url.searchParams.set("callback", callbackName);
+  url.searchParams.set("device", getDeviceLabel());
+  url.searchParams.set("browser", getBrowserLabel());
+  url.searchParams.set("t", String(Date.now()));
+
+  window[callbackName] = () => {
+    cleanupVisitLog(callbackName, script);
+  };
+
+  script.onerror = () => {
+    cleanupVisitLog(callbackName, script);
+  };
+  script.src = url.toString();
+  document.body.append(script);
+}
+
+function cleanupVisitLog(callbackName, script) {
+  delete window[callbackName];
+  if (script.parentNode) {
+    script.parentNode.removeChild(script);
+  }
+}
+
+function getDeviceLabel() {
+  const userAgent = navigator.userAgent || "";
+  if (/iPad/i.test(userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)) {
+    return "iPad";
+  }
+  if (/iPhone/i.test(userAgent)) {
+    return "iPhone";
+  }
+  if (/Android/i.test(userAgent)) {
+    return /Mobile/i.test(userAgent) ? "Android Phone" : "Android Tablet";
+  }
+  if (/Windows/i.test(userAgent)) {
+    return "Windows";
+  }
+  if (/Macintosh|Mac OS X/i.test(userAgent)) {
+    return "Mac";
+  }
+  return "その他";
+}
+
+function getBrowserLabel() {
+  const userAgent = navigator.userAgent || "";
+  if (/Edg\//i.test(userAgent)) {
+    return "Edge";
+  }
+  if (/CriOS|Chrome\//i.test(userAgent) && !/Edg\//i.test(userAgent)) {
+    return "Chrome";
+  }
+  if (/FxiOS|Firefox\//i.test(userAgent)) {
+    return "Firefox";
+  }
+  if (/Safari\//i.test(userAgent) && !/Chrome|CriOS|Android/i.test(userAgent)) {
+    return "Safari";
+  }
+  return "その他";
 }
 
 function fallbackEvents() {
