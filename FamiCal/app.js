@@ -532,7 +532,7 @@ function normalizeEvents(events) {
     .filter((event) => event && event.start && event.end)
     .map((event, index) => ({
       id: event.id || `event-${index}-${event.start}`,
-      title: event.title || "予定あり",
+      title: getDisplayEventTitle(event),
       start: event.start,
       end: event.end,
       source: event.source || "family",
@@ -542,9 +542,18 @@ function normalizeEvents(events) {
     }));
 }
 
+function getDisplayEventTitle(event) {
+  const title = String(event && event.title ? event.title : "予定あり").normalize("NFKC").trim();
+  if (event && event.source === "work") {
+    return title.replace(/^(?:【|\[)\s*非公開\s*(?:】|\])\s*/, "").trim() || "予定あり";
+  }
+  return title;
+}
+
 function getNextEvent() {
   const now = new Date();
   return getVisibleEvents()
+    .filter((event) => !isWorkEventOnHoliday(event))
     .filter((event) => new Date(event.end) > now)
     .sort((left, right) => new Date(left.start) - new Date(right.start))[0] || null;
 }
@@ -605,10 +614,35 @@ function getVisibleEvents() {
 function getEventsForDay(date) {
   const dayStart = stripTime(date);
   const dayEnd = addDays(dayStart, 1);
-  return getVisibleEvents().filter((item) => {
+  const events = getVisibleEvents().filter((item) => {
     const start = new Date(item.start);
     const end = new Date(item.end);
     return start < dayEnd && end > dayStart;
+  });
+
+  const isHoliday = events.some((item) => item.source === "holiday");
+  return isHoliday ? events.filter((item) => item.source !== "work") : events;
+}
+
+function isWorkEventOnHoliday(event) {
+  if (!event || event.source !== "work") {
+    return false;
+  }
+
+  const start = new Date(event.start);
+  if (Number.isNaN(start.getTime())) {
+    return false;
+  }
+
+  const dayStart = stripTime(start);
+  const dayEnd = addDays(dayStart, 1);
+  return state.remoteEvents.some((item) => {
+    if (item.source !== "holiday") {
+      return false;
+    }
+    const holidayStart = new Date(item.start);
+    const holidayEnd = new Date(item.end);
+    return holidayStart < dayEnd && holidayEnd > dayStart;
   });
 }
 
