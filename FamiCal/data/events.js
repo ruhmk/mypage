@@ -1,4 +1,4 @@
-window.FAMILY_CALENDAR_UPDATED_AT = "2026-07-21T01:54:48.278Z";
+window.FAMILY_CALENDAR_UPDATED_AT = "2026-07-21T02:22:51.435Z";
 window.FAMILY_CALENDAR_EVENTS = [
   {
     "id": "work-QiuN5ev4OOzmdVq7oE",
@@ -1492,7 +1492,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-21T01:45:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-Wmi5FxWcGT1SB2nWbT",
@@ -1501,7 +1502,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-21T03:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-wnlWwXnxsQm3DHWz01",
@@ -1510,7 +1512,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-21T05:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-ih1GG8_dFH7JqkyFND",
@@ -1519,7 +1522,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-21T06:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "personal-GXZa22vIM7VQMpar9E",
@@ -1537,7 +1541,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-21T09:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-DeumFwVmxshoHa420U",
@@ -1546,7 +1551,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-22T01:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-in7TvCtY-mj6fdP3qq",
@@ -1555,7 +1561,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-22T02:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-LMt9p1jCwqcwNyhcxI",
@@ -1564,7 +1571,18 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-22T07:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
+  },
+  {
+    "id": "work-AAmqmJmIa6yEym0PA2",
+    "title": "[非公開]出社",
+    "start": "2026-07-22T15:00:00.000Z",
+    "end": "2026-07-23T15:00:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": true,
+    "manualAllDay": true
   },
   {
     "id": "personal-txW0UTi8snrG8Fb9YW",
@@ -1582,7 +1600,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-23T01:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-DeJGxcjFlkHS_C2Uab",
@@ -1591,7 +1610,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-23T07:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-8pUfUOXGoy_FkHQGSr",
@@ -1600,7 +1620,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-23T09:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-VpGIvo1Y3WAocJlQU0",
@@ -1609,7 +1630,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-23T10:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-5WntUN9GtJTomKYn1c",
@@ -1618,7 +1640,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-24T01:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-1gOPTNZaepYwHULk0J",
@@ -1627,7 +1650,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-24T02:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-klb9m63SmPYfmR_pFF",
@@ -1636,7 +1660,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-24T04:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-b6Ictcw355UyAP4uPp",
@@ -1645,7 +1670,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-24T06:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-SmMzUwcSkj4_zMbgIs",
@@ -1654,7 +1680,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-24T07:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-lNF_hcorjWVDjIupic",
@@ -1663,7 +1690,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-24T07:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-vXuNoDRbdWV5bDtZPS",
@@ -1672,7 +1700,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-24T08:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-TEn5C6NzfKBLG8ppG7",
@@ -1681,7 +1710,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-27T01:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-VMgAxBdZSk04X_hmkQ",
@@ -1690,7 +1720,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-27T02:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-y4J-mzpbOUpyhRRE55",
@@ -1699,7 +1730,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-27T02:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-lcKJCD7gii6zppUvdf",
@@ -1708,7 +1740,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-27T03:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-VcjObJSeDZNOqU1WYn",
@@ -1717,7 +1750,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-27T03:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-lnxiX6vcpwBt7JT6uT",
@@ -1726,7 +1760,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-27T07:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-GsfK2Wd0DBQaVv7AZB",
@@ -1735,7 +1770,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-27T09:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-PVmN3cxQNtZ7tyU_jw",
@@ -1744,7 +1780,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-28T01:45:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-wS0dSafTuX3OOQ74vr",
@@ -1753,7 +1790,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-28T06:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-JSa6DDQVEk2Z6HydHt",
@@ -1762,7 +1800,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-28T09:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-6Im51cQ4KQfkYFyK3O",
@@ -1771,7 +1810,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-29T01:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-AkQT8pqGrCMdv1e3dt",
@@ -1780,7 +1820,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-29T02:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-1F8EqwqCRfpxKfGGLx",
@@ -1789,7 +1830,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-29T06:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-e2Ksyjrn41yz5iixBu",
@@ -1798,7 +1840,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-30T01:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-QbPWNBnUUIdOgPp6BR",
@@ -1807,7 +1850,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-30T03:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-Ah9gCp8JQUYrgIlZCF",
@@ -1816,7 +1860,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-30T07:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-jz9AoZ921aVCC974_k",
@@ -1825,7 +1870,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-30T09:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-R9W3QhoFnyJ2rkDXQM",
@@ -1834,7 +1880,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-31T01:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-jkXku0qZFsk-LIlDGy",
@@ -1843,7 +1890,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-31T02:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-mc4lqfVlRB5IH4ZMv-",
@@ -1852,7 +1900,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-31T04:15:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-vSkxWvNVVaGJvz72IO",
@@ -1861,7 +1910,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-31T04:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-N5p4P5jin3_mX-pe4W",
@@ -1870,7 +1920,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-31T06:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-ZUBqNykuMzvF-8YNgR",
@@ -1879,7 +1930,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-31T07:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-LAcO_BKszKzIXKgHce",
@@ -1888,7 +1940,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-31T07:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-zHoJMpYq77ZmGilPAx",
@@ -1897,7 +1950,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-31T08:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-t4l1Pg4-GrQKg12RZv",
@@ -1906,7 +1960,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-07-31T10:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "personal-YGdIj2hqnPixPGlvLj",
@@ -1924,7 +1979,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-03T01:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-jl445fd1JGPKaJE1go",
@@ -1933,7 +1989,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-03T02:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-5T1qtkVB6DM-FRyllf",
@@ -1942,7 +1999,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-03T02:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-0ndqlrCPvQ4Cl50_a2",
@@ -1951,7 +2009,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-03T03:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-CdZh4f-O5btdFg0Ude",
@@ -1960,7 +2019,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-03T07:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-8OiLqX5BxpwfuorRnL",
@@ -1969,7 +2029,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-03T09:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-4_NXUXDTD_BMsYsQpF",
@@ -1978,7 +2039,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-04T01:45:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-RAC3u6r8MWJHpZ_b5L",
@@ -1987,7 +2049,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-04T06:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "personal-ofZm-u2UGE43_nCsdP",
@@ -2005,7 +2068,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-04T09:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-Ee_4RoX2l1odosvewE",
@@ -2014,7 +2078,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-05T01:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-b8Ifo0WNcGxF4BIEvE",
@@ -2023,7 +2088,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-05T02:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-VhuGMnOwx6qJ6dz1FW",
@@ -2032,7 +2098,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-05T07:10:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-2jTOrGJTst1Bul0L57",
@@ -2041,7 +2108,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-05T10:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-65jxgtjSImhqmb723o",
@@ -2050,7 +2118,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-06T01:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "personal-ooV3vxMYKDsQ618EbZ",
@@ -2068,7 +2137,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-06T01:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-sEoTc6-G-bckSj6ovt",
@@ -2077,7 +2147,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-06T04:45:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-FfoVHWsb3gRR96bqUT",
@@ -2086,7 +2157,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-06T07:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-u83oIQv4AfXYe9ESR2",
@@ -2095,7 +2167,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-06T09:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-czSSa1TFBfyPYBFe8o",
@@ -2104,7 +2177,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-07T01:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-DxYGL7-t_FtMUYEW7q",
@@ -2113,7 +2187,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-07T02:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-j2yJVaaejfZn2GPduc",
@@ -2122,7 +2197,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-07T06:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-O8DxrUEYjV4isvIaSQ",
@@ -2131,7 +2207,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-07T07:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-D-fJ3qBsTyoOv3i6jU",
@@ -2140,7 +2217,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-07T07:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-WcpRIz44vY1lI3kHrn",
@@ -2149,7 +2227,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-07T08:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-4rMA9W1c1Cp7wbE0P1",
@@ -2158,7 +2237,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-10T01:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-hmsgjoEtVk57EchBTi",
@@ -2167,7 +2247,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-10T02:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-vF0YpMBk1oYp8hULry",
@@ -2176,7 +2257,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-10T02:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-sBfqt-veqXMs1kLt_s",
@@ -2185,7 +2267,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-10T03:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-mFSlHaCbB9Jb7ZZ87M",
@@ -2194,7 +2277,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-10T07:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-jgM5fEC1fH1cSqxCtn",
@@ -2203,7 +2287,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-10T09:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "holiday-DA8quwYj44OmC3pN4x",
@@ -2221,7 +2306,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-11T09:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-vgMV6vI7zn-1GGhrcp",
@@ -2230,7 +2316,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-12T01:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-eWc4W3u-c5hIaXPg9U",
@@ -2239,7 +2326,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-12T02:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-GyM8b2iNWohH_nlLUe",
@@ -2248,7 +2336,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-13T01:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-Z-wsyZu_foeZxybGap",
@@ -2257,7 +2346,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-13T05:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-5X19ForsGCylemT4uo",
@@ -2266,7 +2356,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-13T07:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-1L9UnzQdDUpa3rXA6f",
@@ -2275,7 +2366,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-13T09:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-Qel3W92XXkezXshKGz",
@@ -2284,7 +2376,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-14T01:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-mE_DGWWG6WibtXAgmG",
@@ -2293,7 +2386,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-14T02:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-lc6SdZbkPBr4RCDA0I",
@@ -2302,7 +2396,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-14T06:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-SimtMsGv3ElCxXBVI_",
@@ -2311,7 +2406,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-14T07:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-4xwGnF0KOmcBdci9m8",
@@ -2320,7 +2416,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-14T07:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-dzU2KJL9rr-Onuz76A",
@@ -2329,7 +2426,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-14T08:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-fKVrdEPbKp5a5zuY8Q",
@@ -2338,7 +2436,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-17T01:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-bkp2tCYTUrcodVr6qf",
@@ -2347,7 +2446,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-17T02:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-52B2gDO7S_aYDAnuqf",
@@ -2356,7 +2456,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-17T02:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-0_bcaUcfuYBFEO6NbP",
@@ -2365,7 +2466,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-17T03:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-jWAcHwVdUVN0ket7XV",
@@ -2374,7 +2476,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-17T07:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-co70FQ_l_au8sRzUFP",
@@ -2383,7 +2486,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-17T09:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work--Eyzw6fd9qbMP66hDZ",
@@ -2392,7 +2496,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-18T01:45:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-9kynGqa-8uvya-g1ao",
@@ -2401,7 +2506,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-18T06:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "personal-s4thshEbMdxtOu2PGz",
@@ -2419,7 +2525,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-18T09:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-MkAQ7FmGe8yTEmlRNN",
@@ -2428,7 +2535,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-19T01:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-GQJFtd8RMHgRO6fq1-",
@@ -2437,7 +2545,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-19T02:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-rlOdbTmCgQeZVZSSL3",
@@ -2446,7 +2555,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-20T01:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-VdOGcTSctsP_w74Tat",
@@ -2455,7 +2565,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-20T07:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-QF2Wo8XOGCVlOlIod4",
@@ -2464,7 +2575,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-20T09:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-vmHkp0Hq7VQZ69mqEM",
@@ -2473,7 +2585,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-21T01:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-rnOgX17bUjDsboJ6n6",
@@ -2482,7 +2595,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-21T02:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-l1Cxi2H7WlnYfPcLCX",
@@ -2491,7 +2605,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-21T06:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-GeOyTHJT-t8xnsrb4R",
@@ -2500,7 +2615,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-21T07:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-Q-gjOD_ylNLJ2WFYdV",
@@ -2509,7 +2625,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-21T07:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-zSooqRrE7WIOvS25AD",
@@ -2518,7 +2635,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-21T08:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "personal-O0QhlLlsTXHHih0y6d",
@@ -2536,7 +2654,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-24T01:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-NLFBbgFPZGoqzbj2wP",
@@ -2545,7 +2664,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-24T02:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-2bli-3ZdMhKAwieCpF",
@@ -2554,7 +2674,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-24T02:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-_rkjEuATib17gZmv-q",
@@ -2563,7 +2684,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-24T03:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-1JCWBC7_SFoqL2XXxE",
@@ -2572,7 +2694,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-24T04:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-Ice6sOA9CG2ckIOG6W",
@@ -2581,7 +2704,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-24T07:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-aE_6dmQfjkPzy6hL1w",
@@ -2590,7 +2714,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-24T09:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-kOJVADmnjzOgloFtYA",
@@ -2599,7 +2724,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-25T01:45:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-fnVtc5pJowAavCPMvR",
@@ -2608,7 +2734,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-25T06:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-kYLc7jTUfbFkWjUlYb",
@@ -2617,7 +2744,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-25T09:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-TgQ3C7i2nokO-UvNDX",
@@ -2626,7 +2754,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-26T01:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-XBqukOfa_LXU0lBiUh",
@@ -2635,7 +2764,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-26T02:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-eC-NxYwfXMZNN9TKWW",
@@ -2644,7 +2774,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-27T01:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-AQaQSzg1nel7f8UEZo",
@@ -2653,7 +2784,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-27T07:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-OzW1-LXojIXri0T8Li",
@@ -2662,7 +2794,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-27T09:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-W2geG_Kw54_YESpoHD",
@@ -2671,7 +2804,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-28T01:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-FrQtNEMYQfeTYfwKTR",
@@ -2680,7 +2814,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-28T02:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-Oxw1-CIitEYMSqH1ON",
@@ -2689,7 +2824,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-28T06:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-VTQrfG6qEsuxcUlHzH",
@@ -2698,7 +2834,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-28T07:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-2FWURAWXHbyyi50L3J",
@@ -2707,7 +2844,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-28T07:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-zrl-ki136Ue_qgMtUg",
@@ -2716,7 +2854,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-28T08:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-e7weDyZ64yTla33moN",
@@ -2725,7 +2864,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-31T01:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-Tsw5YZc-HT6Rqb0f8s",
@@ -2734,7 +2874,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-31T02:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-DS2QFeRC70e3iEBJQr",
@@ -2743,7 +2884,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-31T02:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-yZSNJ26kN_dQ4D5VGW",
@@ -2752,7 +2894,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-31T03:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-pf_PjUmp-I8bkL3bYJ",
@@ -2761,7 +2904,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-31T07:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-nIJx1pKFDaaw2_sGT0",
@@ -2770,7 +2914,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-08-31T09:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-H7kpd2D1cVNEIV2qcR",
@@ -2779,7 +2924,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-01T01:45:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-f0Rocp6SgivKLGMPuq",
@@ -2788,7 +2934,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-01T06:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "personal-st4FzKUUqZFhAA6g__",
@@ -2806,7 +2953,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-02T01:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-nKlN9nJB3ihD4QQuqq",
@@ -2815,7 +2963,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-02T02:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-UWczYUSwdOHtTNTyhA",
@@ -2824,7 +2973,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-02T07:10:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-3bpg2jrQYG_cEGsXmM",
@@ -2833,7 +2983,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-03T01:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-Y0G0ngcR1JsWkdfrlK",
@@ -2842,7 +2993,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-03T07:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-Phb0zCupBPi5t-8XuH",
@@ -2851,7 +3003,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-03T09:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-EhfdQxrjJgqRRQVotA",
@@ -2860,7 +3013,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-04T01:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-sjS603PBjApBeHENrl",
@@ -2869,7 +3023,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-04T02:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-vkNmflbCEMThDaPXoq",
@@ -2878,7 +3033,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-04T06:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-9AicFqhwPjBQGGgXnB",
@@ -2887,7 +3043,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-04T07:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-ivhWJn492-s_AM34cv",
@@ -2896,7 +3053,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-04T07:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-VagTa0L4tSQqi6jtnh",
@@ -2905,7 +3063,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-04T08:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-766OmMsEGnrrGM5ilx",
@@ -2914,7 +3073,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-07T01:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-U6MAy3UZCh8VXa0Et5",
@@ -2923,7 +3083,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-07T02:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-3ZDMah7uvPvggxbv2x",
@@ -2932,7 +3093,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-07T02:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-qmnoCWCvFPS-Ciocvf",
@@ -2941,7 +3103,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-07T03:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-8A3AgcNlYoHbdYIsol",
@@ -2950,7 +3113,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-07T07:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-7kXnFbHSlXxLV0h-Cc",
@@ -2959,7 +3123,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-07T09:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-TY6pi3-AfgIQKDK8dM",
@@ -2968,7 +3133,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-08T01:45:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-hie7MMD6a0cJ_H5X1Q",
@@ -2977,7 +3143,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-08T06:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-SUfLsjgs5PTLDJ-Il5",
@@ -2986,7 +3153,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-09T01:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-8qSe28UVaDSq9Ut4LX",
@@ -2995,7 +3163,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-09T02:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-5O09z6m2p6_haTSSgK",
@@ -3004,7 +3173,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-10T01:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-9TmruOZlDwI5rgCJA0",
@@ -3013,7 +3183,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-10T04:45:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-uaHjhv23YEWLGS11zZ",
@@ -3022,7 +3193,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-10T05:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-OyHwvoYzAof2MNyYGV",
@@ -3031,7 +3203,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-10T07:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-nZFqAbxmCizVpkKmRG",
@@ -3040,7 +3213,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-10T09:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-URymWkk5L-o-X4GJSB",
@@ -3049,7 +3223,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-11T01:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-kkjV9RJTWQ3K6hwWY8",
@@ -3058,7 +3233,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-11T02:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-2LjGYJQ6nA1kA15H5z",
@@ -3067,7 +3243,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-11T06:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-14E1rIzEmtbnb-REbk",
@@ -3076,7 +3253,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-11T07:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-r3qYY1HCDlBna0BZYa",
@@ -3085,7 +3263,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-11T07:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-HQ6LTFwBzguLR8WTQ7",
@@ -3094,7 +3273,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-11T08:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-Z8sTBsccd9tCnZ8oym",
@@ -3103,7 +3283,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-14T01:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-OMt8CdVppP0ncpkZvw",
@@ -3112,7 +3293,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-14T02:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-CmzIBe76Xyc6Us0fgy",
@@ -3121,7 +3303,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-14T02:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-iyrTOTkK50MfU_4yZB",
@@ -3130,7 +3313,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-14T03:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-QhBOfT7-6_eklZb3uN",
@@ -3139,7 +3323,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-14T07:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-WwIsycwTul5s9wBK53",
@@ -3148,7 +3333,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-14T09:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-NJMwfxUBSyJySwwUxl",
@@ -3157,7 +3343,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-15T01:45:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-GHnGC4iDmjV8UZbOUZ",
@@ -3166,7 +3353,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-15T06:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "personal-TBuJTyKAT4fpBHZC72",
@@ -3184,7 +3372,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-16T01:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-Pn5JxVoOm4rDTTTJhB",
@@ -3193,7 +3382,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-16T02:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-_PcR9NXkp_dezb4X68",
@@ -3202,7 +3392,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-17T01:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-peVj1iw2zGVz2G5lCd",
@@ -3211,7 +3402,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-17T07:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-Q0_GAvunxyxqGwoo5g",
@@ -3220,7 +3412,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-17T09:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-qzZ5rvC3W6nRreCOWT",
@@ -3229,7 +3422,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-18T01:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-aiGMRESRRLvFG61Fr_",
@@ -3238,7 +3432,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-18T02:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-xIS2Zk0IC1AUPgG2YN",
@@ -3247,7 +3442,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-18T06:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-IVo1dTEmOGjCJtgALp",
@@ -3256,7 +3452,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-18T07:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-HgbG8toGNmioNTCtyE",
@@ -3265,7 +3462,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-18T07:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-YBu_iwx1oqOYLrqzsZ",
@@ -3274,7 +3472,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-18T08:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "holiday-21TFSTcmVyH7dOsbgw",
@@ -3292,7 +3491,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-21T07:30:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "work-nTn0JFkwfGxZBUVR4D",
@@ -3301,7 +3501,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "end": "2026-09-21T09:00:00.000Z",
     "source": "work",
     "note": "",
-    "allDay": false
+    "allDay": false,
+    "manualAllDay": false
   },
   {
     "id": "holiday-nRVhM6_5c0icWKcZZr",
