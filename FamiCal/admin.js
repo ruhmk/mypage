@@ -1,6 +1,5 @@
 const GOOGLE_SYNC_TIMEOUT_MS = 15000;
 const appConfig = window.FAMILY_CALENDAR_CONFIG || {};
-const visitLogConfig = window.FAMILY_VISIT_LOG_CONFIG || {};
 
 const fetchGoogleButton = document.querySelector("#fetchGoogleButton");
 const publishGitHubButton = document.querySelector("#publishGitHubButton");
@@ -8,9 +7,6 @@ const downloadEventsButton = document.querySelector("#downloadEventsButton");
 const directPublishLink = document.querySelector("#directPublishLink");
 const adminStatus = document.querySelector("#adminStatus");
 const adminPreview = document.querySelector("#adminPreview");
-const refreshVisitLogButton = document.querySelector("#refreshVisitLogButton");
-const visitLogStatus = document.querySelector("#visitLogStatus");
-const visitLogList = document.querySelector("#visitLogList");
 
 let latestEvents = [];
 
@@ -27,13 +23,6 @@ publishGitHubButton.addEventListener("click", () => {
 downloadEventsButton.addEventListener("click", () => {
   downloadEventsJs(latestEvents);
 });
-
-if (refreshVisitLogButton) {
-  refreshVisitLogButton.addEventListener("click", () => {
-    fetchVisitLogs();
-  });
-  fetchVisitLogs();
-}
 
 function setupDirectPublishLink() {
   if (!directPublishLink) {
@@ -56,89 +45,6 @@ function setupDirectPublishLink() {
 
   setFreshUrl();
   directPublishLink.addEventListener("click", setFreshUrl);
-}
-
-function fetchVisitLogs() {
-  if (!visitLogList || !visitLogStatus || !refreshVisitLogButton) {
-    return;
-  }
-
-  if (!visitLogConfig.visitLogUrl) {
-    visitLogStatus.textContent = "data/visit-log-config.js に閲覧ログ用Apps ScriptのURLを入れてください。";
-    renderVisitLogs([]);
-    return;
-  }
-
-  const callbackName = `receiveFamilyVisitLogs${Date.now()}`;
-  const script = document.createElement("script");
-  const url = new URL(visitLogConfig.visitLogUrl);
-  url.searchParams.set("action", "list");
-  url.searchParams.set("callback", callbackName);
-  url.searchParams.set("t", String(Date.now()));
-
-  refreshVisitLogButton.disabled = true;
-  visitLogStatus.textContent = "閲覧ログを取得中...";
-
-  const timeout = window.setTimeout(() => {
-    cleanup(callbackName, script);
-    refreshVisitLogButton.disabled = false;
-    visitLogStatus.textContent = "閲覧ログを取得できませんでした。";
-  }, 15000);
-
-  window[callbackName] = (payload) => {
-    window.clearTimeout(timeout);
-    cleanup(callbackName, script);
-    refreshVisitLogButton.disabled = false;
-
-    if (payload && payload.error) {
-      visitLogStatus.textContent = payload.error;
-      renderVisitLogs([]);
-      return;
-    }
-
-    const logs = Array.isArray(payload && payload.logs) ? payload.logs : [];
-    visitLogStatus.textContent = logs.length > 0
-      ? `直近 ${logs.length}件を表示中`
-      : "閲覧ログはまだありません。";
-    renderVisitLogs(logs);
-  };
-
-  script.onerror = () => {
-    window.clearTimeout(timeout);
-    cleanup(callbackName, script);
-    refreshVisitLogButton.disabled = false;
-    visitLogStatus.textContent = "閲覧ログを取得できませんでした。";
-  };
-  script.src = url.toString();
-  document.body.append(script);
-}
-
-function renderVisitLogs(logs) {
-  visitLogList.replaceChildren();
-
-  if (logs.length === 0) {
-    const empty = document.createElement("div");
-    empty.className = "empty-state";
-    empty.textContent = "閲覧ログなし";
-    visitLogList.append(empty);
-    return;
-  }
-
-  logs.forEach((log) => {
-    const row = document.createElement("article");
-    row.className = "visit-log-row";
-
-    const time = document.createElement("div");
-    time.className = "visit-log-time";
-    time.textContent = log.visitedAt || "";
-
-    const meta = document.createElement("div");
-    meta.className = "visit-log-meta";
-    meta.textContent = [log.device, log.browser].filter(Boolean).join(" / ") || "不明";
-
-    row.append(time, meta);
-    visitLogList.append(row);
-  });
 }
 
 function fetchGoogleEvents() {
