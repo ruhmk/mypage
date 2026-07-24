@@ -1,0 +1,772 @@
+{
+  "version": 1,
+  "app": "Flow Fragments",
+  "activeFlowId": "flow_257da3ee-e25f-4428-83a4-609c658549b5",
+  "flows": [
+    {
+      "id": "flow_8ab1b3d8-9295-4a4b-8ba7-2cc1973a7962",
+      "name": "メインフロー",
+      "cards": [
+        {
+          "id": "card_1d3eab95-76b8-40ed-b763-d7848efbcab6",
+          "title": "瀬川3⇔奥野5",
+          "body": "",
+          "tags": [],
+          "collapsed": false,
+          "x": 175,
+          "y": 125,
+          "groupId": "group_a2d6472c-9871-4eae-ae21-d7cb74d7503b",
+          "rowSpan": 1,
+          "h": 75,
+          "w": 150
+        },
+        {
+          "id": "card_b31fa3a4-f9d2-4013-bbb2-42a6237d7d4c",
+          "title": "前田常駐",
+          "body": "",
+          "tags": [],
+          "collapsed": false,
+          "x": 350,
+          "y": 200,
+          "groupId": "group_a2d6472c-9871-4eae-ae21-d7cb74d7503b",
+          "rowSpan": 1,
+          "h": 75,
+          "w": 150
+        },
+        {
+          "id": "card_6db48e29-a895-4b15-b60c-46724f7629fe",
+          "title": "kout",
+          "body": "",
+          "tags": [],
+          "collapsed": false,
+          "rowSpan": 1,
+          "x": 625,
+          "y": 350,
+          "groupId": "group_b9c635fa-d73a-4267-aba6-44aed977f370",
+          "h": 75,
+          "w": 150
+        },
+        {
+          "id": "card_6e0b939a-b744-40aa-b402-db68aa3e32bc",
+          "title": "遠藤 2Dリード",
+          "body": "",
+          "tags": [],
+          "collapsed": false,
+          "h": 75,
+          "x": 175,
+          "y": 450,
+          "groupId": "group_b9c635fa-d73a-4267-aba6-44aed977f370",
+          "w": 150
+        },
+        {
+          "id": "card_d2d270cb-fedb-4a95-b3b4-7dd472708c2f",
+          "title": "宮本さん、山本さんout",
+          "body": "",
+          "tags": [],
+          "collapsed": false,
+          "h": 75,
+          "x": 1550,
+          "y": 75,
+          "groupId": "",
+          "w": 250
+        },
+        {
+          "id": "card_56135324-8af0-41b0-9fcb-b63b5b66f433",
+          "title": "kリードout",
+          "body": "通達タイミング想定",
+          "tags": [],
+          "collapsed": false,
+          "rowSpan": 1,
+          "x": 75,
+          "y": 325,
+          "groupId": "group_b9c635fa-d73a-4267-aba6-44aed977f370",
+          "h": 100,
+          "w": 250
+        },
+        {
+          "id": "card_aae26b9b-8a86-444e-8724-0e0a6a71993e",
+          "title": "前田　絵コンテ習熟",
+          "body": "",
+          "tags": [],
+          "collapsed": false,
+          "h": 75,
+          "x": 525,
+          "y": 200,
+          "groupId": "group_a2d6472c-9871-4eae-ae21-d7cb74d7503b",
+          "w": 525
+        },
+        {
+          "id": "card_55128ea5-4ff8-4a05-af02-51a5ffe8c18c",
+          "title": "ひすんさんjoin検討",
+          "body": "",
+          "tags": [],
+          "collapsed": false,
+          "h": 75,
+          "x": 775,
+          "y": 675,
+          "groupId": "",
+          "w": 200
+        },
+        {
+          "id": "card_36069867-1c56-44a0-937e-b7db52882e1e",
+          "title": "柳澤役割変更",
+          "body": "デバチケなど",
+          "tags": [],
+          "collapsed": false,
+          "w": 375,
+          "h": 100,
+          "x": 100,
+          "y": 575,
+          "groupId": ""
+        },
+        {
+          "id": "card_95d2b114-392a-47c5-ae1b-752b058e2545",
+          "title": "宮本2D作業者",
+          "body": "",
+          "tags": [],
+          "collapsed": false,
+          "w": 375,
+          "h": 75,
+          "x": 100,
+          "y": 675,
+          "groupId": ""
+        },
+        {
+          "id": "card_e4654d1e-98c4-4648-a857-b76326b56298",
+          "title": "大塚判断",
+          "body": "",
+          "tags": [],
+          "collapsed": false,
+          "w": 250,
+          "h": 75,
+          "x": 175,
+          "y": 775,
+          "groupId": ""
+        },
+        {
+          "id": "card_c2bd9c6d-f8e0-4fcc-b151-6f7863913b98",
+          "title": "前田C&R化",
+          "body": "",
+          "tags": [],
+          "collapsed": false,
+          "w": 150,
+          "h": 75,
+          "x": 1075,
+          "y": 200,
+          "groupId": ""
+        },
+        {
+          "id": "card_c3b62589-9252-46ea-90f9-a765f9f5b63c",
+          "title": "遠藤 ADV D",
+          "body": "",
+          "tags": [],
+          "collapsed": false,
+          "w": 250,
+          "h": 100,
+          "x": 775,
+          "y": 325,
+          "groupId": "group_b9c635fa-d73a-4267-aba6-44aed977f370"
+        },
+        {
+          "id": "card_1c3394f6-17d6-4527-b819-69376db5d766",
+          "title": "奥野さん　絵コンテ習熟",
+          "body": "",
+          "tags": [],
+          "collapsed": false,
+          "w": 700,
+          "h": 75,
+          "x": 350,
+          "y": 125,
+          "groupId": "group_a2d6472c-9871-4eae-ae21-d7cb74d7503b"
+        },
+        {
+          "id": "card_10e99830-9d29-4b2f-9be7-94888ad21e8e",
+          "title": "松井入れ替え",
+          "body": "柳澤並走",
+          "tags": [],
+          "collapsed": false,
+          "w": 825,
+          "h": 100,
+          "x": 775,
+          "y": 575,
+          "groupId": ""
+        }
+      ],
+      "edges": [
+        {
+          "id": "edge_763c8673-531e-48b1-acad-4eb428887fbf",
+          "from": "card_b31fa3a4-f9d2-4013-bbb2-42a6237d7d4c",
+          "to": "card_aae26b9b-8a86-444e-8724-0e0a6a71993e",
+          "label": "",
+          "color": "#66e7f5"
+        },
+        {
+          "id": "edge_f3268ef8-6ca7-4261-9ba5-6b10d4add1ed",
+          "from": "card_56135324-8af0-41b0-9fcb-b63b5b66f433",
+          "to": "card_6db48e29-a895-4b15-b60c-46724f7629fe",
+          "label": "",
+          "color": "#66e7f5"
+        },
+        {
+          "id": "edge_c43f14a7-5e4b-4358-b487-fae485b59a6b",
+          "from": "card_1d3eab95-76b8-40ed-b763-d7848efbcab6",
+          "to": "card_1c3394f6-17d6-4527-b819-69376db5d766",
+          "label": "",
+          "color": "#66e7f5"
+        },
+        {
+          "id": "edge_5092a195-993a-4084-b732-e7aae7173e3e",
+          "from": "card_36069867-1c56-44a0-937e-b7db52882e1e",
+          "to": "card_10e99830-9d29-4b2f-9be7-94888ad21e8e",
+          "label": "",
+          "color": "#66e7f5"
+        }
+      ],
+      "groups": [
+        {
+          "id": "group_a2d6472c-9871-4eae-ae21-d7cb74d7503b",
+          "name": "メンバー体制変更",
+          "color": "#66e7f5",
+          "x": 175,
+          "y": 75,
+          "w": 900,
+          "h": 200,
+          "locked": true
+        },
+        {
+          "id": "group_b9c635fa-d73a-4267-aba6-44aed977f370",
+          "name": "2Dリード交代",
+          "color": "#ff7da8",
+          "x": 175,
+          "y": 275,
+          "w": 1200,
+          "h": 275,
+          "locked": true
+        }
+      ],
+      "createdAt": "2026-07-10T10:49:25.708Z",
+      "timeline": {
+        "enabled": true,
+        "startMonth": "2026-08",
+        "monthCount": 12,
+        "rows": [
+          "項目1",
+          "項目2",
+          "項目3"
+        ],
+        "colWidths": [
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300
+        ],
+        "rowHeights": [
+          250,
+          250,
+          300
+        ]
+      }
+    },
+    {
+      "id": "flow_257da3ee-e25f-4428-83a4-609c658549b5",
+      "name": "ギミックフロー",
+      "cards": [
+        {
+          "id": "card_759fafb4-b75e-4afc-b451-8f62d41d825c",
+          "title": "新エリア開発開始",
+          "body": "",
+          "tags": [],
+          "collapsed": false,
+          "w": 250,
+          "h": 100,
+          "x": 75,
+          "y": 300,
+          "groupId": ""
+        },
+        {
+          "id": "card_82657078-1f25-4663-9254-3e6caa6f4661",
+          "title": "アイデア募集",
+          "body": "エリア4で初めて",
+          "tags": [],
+          "collapsed": false,
+          "w": 250,
+          "h": 100,
+          "x": 425,
+          "y": 300,
+          "groupId": ""
+        },
+        {
+          "id": "card_c32f89c3-aa69-4ffe-bf74-d65b803199c1",
+          "title": "ギミック班の技術的やるやら検討",
+          "body": "",
+          "tags": [],
+          "collapsed": false,
+          "w": 250,
+          "h": 100,
+          "x": 725,
+          "y": 300,
+          "groupId": ""
+        },
+        {
+          "id": "card_559ae925-3bca-4a76-a8b1-4e3d77055248",
+          "title": "杉村さん・一馬さんでやるやら決め",
+          "body": "",
+          "tags": [],
+          "collapsed": false,
+          "w": 250,
+          "h": 100,
+          "x": 1025,
+          "y": 300,
+          "groupId": ""
+        },
+        {
+          "id": "card_1d2187b7-130e-410e-9d71-b75874acf68e",
+          "title": "各セクション工数検討",
+          "body": "",
+          "tags": [],
+          "collapsed": false,
+          "w": 250,
+          "h": 100,
+          "x": 1325,
+          "y": 300,
+          "groupId": ""
+        },
+        {
+          "id": "card_307fb0db-8a86-4b1c-984b-29a1f8c78a02",
+          "title": "課題からの杉村さん相談",
+          "body": "",
+          "tags": [],
+          "collapsed": false,
+          "w": 250,
+          "h": 100,
+          "x": 1700,
+          "y": 100,
+          "groupId": ""
+        },
+        {
+          "id": "card_c7fc412b-51fa-4377-899d-0d052bb2d2ed",
+          "title": "やるやら",
+          "body": "",
+          "tags": [],
+          "collapsed": false,
+          "w": 250,
+          "h": 100,
+          "x": 2025,
+          "y": 100,
+          "groupId": ""
+        },
+        {
+          "id": "card_2d307221-f480-40b6-8ccc-43b1a520b7b4",
+          "title": "モーション作成",
+          "body": "",
+          "tags": [],
+          "collapsed": false,
+          "w": 250,
+          "h": 100,
+          "x": 2275,
+          "y": 425,
+          "groupId": "group_f7596d5c-1215-49aa-bf0f-07b37a0f0e87"
+        },
+        {
+          "id": "card_00eecb54-b2d5-47d0-9fcd-bf99d0714c04",
+          "title": "他セクションに関わるもの優先",
+          "body": "",
+          "tags": [],
+          "collapsed": false,
+          "w": 250,
+          "h": 100,
+          "x": 1675,
+          "y": 425,
+          "groupId": ""
+        },
+        {
+          "id": "card_8baa2903-bd3e-4b3d-845f-82f45bab8da9",
+          "title": "背景作成",
+          "body": "",
+          "tags": [],
+          "collapsed": false,
+          "w": 250,
+          "h": 100,
+          "x": 2275,
+          "y": 550,
+          "groupId": "group_f7596d5c-1215-49aa-bf0f-07b37a0f0e87"
+        },
+        {
+          "id": "card_f1866c00-3485-4bc2-82d8-dbc5abe87085",
+          "title": "エフェクト作成",
+          "body": "",
+          "tags": [],
+          "collapsed": false,
+          "w": 250,
+          "h": 100,
+          "x": 2275,
+          "y": 675,
+          "groupId": "group_f7596d5c-1215-49aa-bf0f-07b37a0f0e87"
+        },
+        {
+          "id": "card_8e4b3cae-30c5-49c6-becd-e6f7e9974a61",
+          "title": "ギミック定例で共有　サウンドへリスト共有",
+          "body": "",
+          "tags": [],
+          "collapsed": false,
+          "w": 250,
+          "h": 100,
+          "x": 2275,
+          "y": 800,
+          "groupId": "group_f7596d5c-1215-49aa-bf0f-07b37a0f0e87"
+        },
+        {
+          "id": "card_9e2daaa6-9d74-4a09-9d3c-c1e09e07f660",
+          "title": "尺FIXして動画をサウンドに渡す",
+          "body": "",
+          "tags": [],
+          "collapsed": false,
+          "w": 250,
+          "h": 100,
+          "x": 2850,
+          "y": 525,
+          "groupId": "group_f7596d5c-1215-49aa-bf0f-07b37a0f0e87"
+        },
+        {
+          "id": "card_64776da2-eb24-449c-a4a7-7f3a1ae435a5",
+          "title": "3Dxサウンド定例で共有",
+          "body": "",
+          "tags": [],
+          "collapsed": false,
+          "w": 250,
+          "h": 100,
+          "x": 2300,
+          "y": 850,
+          "groupId": "group_f7596d5c-1215-49aa-bf0f-07b37a0f0e87"
+        },
+        {
+          "id": "card_a9ca7bef-27ff-48f4-9648-56a8ebf44417",
+          "title": "ギミック作成",
+          "body": "",
+          "tags": [],
+          "collapsed": false,
+          "w": 250,
+          "h": 100,
+          "x": 2625,
+          "y": 300,
+          "groupId": "group_f7596d5c-1215-49aa-bf0f-07b37a0f0e87"
+        },
+        {
+          "id": "card_22df25e1-a5c1-41bc-9fe0-85045ae10f79",
+          "title": "本作成",
+          "body": "",
+          "tags": [],
+          "collapsed": false,
+          "w": 250,
+          "h": 100,
+          "x": 3550,
+          "y": 525,
+          "groupId": "group_5b2fa20a-6991-4da3-a0ae-c3d8ec417166"
+        },
+        {
+          "id": "card_41036892-65e3-4e02-8441-907bf21b36cf",
+          "title": "杉村さん・一馬さんチェック",
+          "body": "",
+          "tags": [],
+          "collapsed": false,
+          "w": 250,
+          "h": 100,
+          "x": 4200,
+          "y": 525,
+          "groupId": "group_5b2fa20a-6991-4da3-a0ae-c3d8ec417166"
+        },
+        {
+          "id": "card_fccf4a96-a49e-4710-a056-5c6c0551d658",
+          "title": "追加分作成",
+          "body": "",
+          "tags": [],
+          "collapsed": false,
+          "w": 250,
+          "h": 100,
+          "x": 3875,
+          "y": 725,
+          "groupId": "group_5b2fa20a-6991-4da3-a0ae-c3d8ec417166"
+        },
+        {
+          "id": "card_6b254905-31a0-4e7d-88eb-25e3b394393c",
+          "title": "デバッグ",
+          "body": "",
+          "tags": [],
+          "collapsed": false,
+          "w": 250,
+          "h": 100,
+          "x": 3225,
+          "y": 350,
+          "groupId": "group_5b2fa20a-6991-4da3-a0ae-c3d8ec417166"
+        },
+        {
+          "id": "card_b9355a65-6c3d-4a7e-84ec-69c98ca0b444",
+          "title": "杉村さんがレア振り分け決め",
+          "body": "",
+          "tags": [],
+          "collapsed": false,
+          "w": 250,
+          "h": 100,
+          "x": 1300,
+          "y": 550,
+          "groupId": ""
+        },
+        {
+          "id": "card_f44db133-ba92-4516-a468-6616392b40ef",
+          "title": "アチーブ決め",
+          "body": "",
+          "tags": [],
+          "collapsed": false,
+          "w": 250,
+          "h": 100,
+          "x": 1800,
+          "y": 700,
+          "groupId": ""
+        }
+      ],
+      "edges": [
+        {
+          "id": "edge_5e7aa269-a1f6-46c0-8c37-bb4dfffc9b9a",
+          "from": "card_759fafb4-b75e-4afc-b451-8f62d41d825c",
+          "to": "card_82657078-1f25-4663-9254-3e6caa6f4661",
+          "label": "",
+          "color": "#66e7f5"
+        },
+        {
+          "id": "edge_fbbd563f-51e3-492d-9d32-3ae6f7b61f64",
+          "from": "card_82657078-1f25-4663-9254-3e6caa6f4661",
+          "to": "card_c32f89c3-aa69-4ffe-bf74-d65b803199c1",
+          "label": "",
+          "color": "#66e7f5"
+        },
+        {
+          "id": "edge_c6693c6f-e057-4955-8f77-900c0953e737",
+          "from": "card_c32f89c3-aa69-4ffe-bf74-d65b803199c1",
+          "to": "card_559ae925-3bca-4a76-a8b1-4e3d77055248",
+          "label": "",
+          "color": "#66e7f5"
+        },
+        {
+          "id": "edge_b5427d6d-d422-468d-aa4b-ad5e9f677d05",
+          "from": "card_559ae925-3bca-4a76-a8b1-4e3d77055248",
+          "to": "card_1d2187b7-130e-410e-9d71-b75874acf68e",
+          "label": "",
+          "color": "#66e7f5"
+        },
+        {
+          "id": "edge_69400b42-673e-4d1d-ad46-edbd08ecb951",
+          "from": "card_1d2187b7-130e-410e-9d71-b75874acf68e",
+          "to": "card_307fb0db-8a86-4b1c-984b-29a1f8c78a02",
+          "label": "課題あったら",
+          "color": "#66e7f5"
+        },
+        {
+          "id": "edge_dc00c742-a15e-4f80-b339-f1309395d279",
+          "from": "card_307fb0db-8a86-4b1c-984b-29a1f8c78a02",
+          "to": "card_c7fc412b-51fa-4377-899d-0d052bb2d2ed",
+          "label": "",
+          "color": "#66e7f5"
+        },
+        {
+          "id": "edge_7593d417-750d-405e-bd50-fc589261ee0c",
+          "from": "card_1d2187b7-130e-410e-9d71-b75874acf68e",
+          "to": "card_00eecb54-b2d5-47d0-9fcd-bf99d0714c04",
+          "label": "やる",
+          "color": "#66e7f5"
+        },
+        {
+          "id": "edge_29c7f346-4c75-42c6-8efa-4ade974418b8",
+          "from": "card_00eecb54-b2d5-47d0-9fcd-bf99d0714c04",
+          "to": "card_2d307221-f480-40b6-8ccc-43b1a520b7b4",
+          "label": "",
+          "color": "#66e7f5"
+        },
+        {
+          "id": "edge_0ac9f6ed-be66-42ea-8532-02d57206c15b",
+          "from": "card_00eecb54-b2d5-47d0-9fcd-bf99d0714c04",
+          "to": "card_8baa2903-bd3e-4b3d-845f-82f45bab8da9",
+          "label": "",
+          "color": "#66e7f5"
+        },
+        {
+          "id": "edge_8b9b3629-b41e-4e08-8f77-528d8747067d",
+          "from": "card_00eecb54-b2d5-47d0-9fcd-bf99d0714c04",
+          "to": "card_f1866c00-3485-4bc2-82d8-dbc5abe87085",
+          "label": "",
+          "color": "#66e7f5"
+        },
+        {
+          "id": "edge_1eb0a23a-0144-4c91-a60b-f008060a4335",
+          "from": "card_2d307221-f480-40b6-8ccc-43b1a520b7b4",
+          "to": "card_9e2daaa6-9d74-4a09-9d3c-c1e09e07f660",
+          "label": "",
+          "color": "#66e7f5"
+        },
+        {
+          "id": "edge_e72d5fe8-0829-4404-bd07-5b8dbffa7d70",
+          "from": "card_8baa2903-bd3e-4b3d-845f-82f45bab8da9",
+          "to": "card_9e2daaa6-9d74-4a09-9d3c-c1e09e07f660",
+          "label": "",
+          "color": "#66e7f5"
+        },
+        {
+          "id": "edge_0a92e7c3-d03f-406f-9fa8-7148e6d1dbee",
+          "from": "card_f1866c00-3485-4bc2-82d8-dbc5abe87085",
+          "to": "card_9e2daaa6-9d74-4a09-9d3c-c1e09e07f660",
+          "label": "",
+          "color": "#66e7f5"
+        },
+        {
+          "id": "edge_1f15b103-d0ec-4a55-8811-c44b329640c5",
+          "from": "card_00eecb54-b2d5-47d0-9fcd-bf99d0714c04",
+          "to": "card_8e4b3cae-30c5-49c6-becd-e6f7e9974a61",
+          "label": "",
+          "color": "#66e7f5"
+        },
+        {
+          "id": "edge_76336fb5-2eb2-497b-bd38-ece48a66b550",
+          "from": "card_2d307221-f480-40b6-8ccc-43b1a520b7b4",
+          "to": "card_a9ca7bef-27ff-48f4-9648-56a8ebf44417",
+          "label": "",
+          "color": "#66e7f5"
+        },
+        {
+          "id": "edge_f069f820-5796-4755-afdf-024c06d5f7cf",
+          "from": "card_8baa2903-bd3e-4b3d-845f-82f45bab8da9",
+          "to": "card_a9ca7bef-27ff-48f4-9648-56a8ebf44417",
+          "label": "",
+          "color": "#66e7f5"
+        },
+        {
+          "id": "edge_2b02993f-3634-4490-b47c-c85ac731dce7",
+          "from": "card_f1866c00-3485-4bc2-82d8-dbc5abe87085",
+          "to": "card_a9ca7bef-27ff-48f4-9648-56a8ebf44417",
+          "label": "",
+          "color": "#66e7f5"
+        },
+        {
+          "id": "edge_7870fd59-8dfd-4d48-a5ab-7194b0707353",
+          "from": "card_a9ca7bef-27ff-48f4-9648-56a8ebf44417",
+          "to": "card_9e2daaa6-9d74-4a09-9d3c-c1e09e07f660",
+          "label": "たまに",
+          "color": "#66e7f5"
+        },
+        {
+          "id": "edge_100ec10f-f541-43b5-b2fc-2c0afe5ddb73",
+          "from": "card_9e2daaa6-9d74-4a09-9d3c-c1e09e07f660",
+          "to": "card_22df25e1-a5c1-41bc-9fe0-85045ae10f79",
+          "label": "",
+          "color": "#66e7f5"
+        },
+        {
+          "id": "edge_b3b4647e-f654-4450-a7f9-72e5eb21eba2",
+          "from": "card_22df25e1-a5c1-41bc-9fe0-85045ae10f79",
+          "to": "card_41036892-65e3-4e02-8441-907bf21b36cf",
+          "label": "",
+          "color": "#66e7f5"
+        },
+        {
+          "id": "edge_b14bc490-0741-4eca-8f0c-ad8302cf077f",
+          "from": "card_22df25e1-a5c1-41bc-9fe0-85045ae10f79",
+          "to": "card_fccf4a96-a49e-4710-a056-5c6c0551d658",
+          "label": "",
+          "color": "#66e7f5"
+        },
+        {
+          "id": "edge_0ec746c8-e9e5-414e-940c-9f340fe773cc",
+          "from": "card_fccf4a96-a49e-4710-a056-5c6c0551d658",
+          "to": "card_41036892-65e3-4e02-8441-907bf21b36cf",
+          "label": "",
+          "color": "#66e7f5"
+        },
+        {
+          "id": "edge_f685261c-443b-4792-83ca-2be96001c23f",
+          "from": "card_9e2daaa6-9d74-4a09-9d3c-c1e09e07f660",
+          "to": "card_6b254905-31a0-4e7d-88eb-25e3b394393c",
+          "label": "",
+          "color": "#66e7f5"
+        },
+        {
+          "id": "edge_6263f41d-4068-4b1c-b553-dbd9d5510d5f",
+          "from": "card_6b254905-31a0-4e7d-88eb-25e3b394393c",
+          "to": "card_22df25e1-a5c1-41bc-9fe0-85045ae10f79",
+          "label": "",
+          "color": "#66e7f5"
+        },
+        {
+          "id": "edge_19503b58-3377-4ca9-b573-9dcd0df93196",
+          "from": "card_559ae925-3bca-4a76-a8b1-4e3d77055248",
+          "to": "card_b9355a65-6c3d-4a7e-84ec-69c98ca0b444",
+          "label": "",
+          "color": "#66e7f5"
+        },
+        {
+          "id": "edge_2c872332-b1ab-44c4-96a0-a34e93d09c0f",
+          "from": "card_b9355a65-6c3d-4a7e-84ec-69c98ca0b444",
+          "to": "card_1d2187b7-130e-410e-9d71-b75874acf68e",
+          "label": "",
+          "color": "#66e7f5"
+        },
+        {
+          "id": "edge_43e0bf80-ac7e-4075-a7fa-e91041739b96",
+          "from": "card_00eecb54-b2d5-47d0-9fcd-bf99d0714c04",
+          "to": "card_f44db133-ba92-4516-a468-6616392b40ef",
+          "label": "",
+          "color": "#66e7f5"
+        }
+      ],
+      "groups": [
+        {
+          "id": "group_f7596d5c-1215-49aa-bf0f-07b37a0f0e87",
+          "name": "仮作成",
+          "color": "#66e7f5",
+          "x": 2200,
+          "y": 225,
+          "w": 950,
+          "h": 775,
+          "locked": false
+        },
+        {
+          "id": "group_5b2fa20a-6991-4da3-a0ae-c3d8ec417166",
+          "name": "本制作",
+          "color": "#ff7da8",
+          "x": 3200,
+          "y": 225,
+          "w": 1275,
+          "h": 775,
+          "locked": false
+        }
+      ],
+      "timeline": {
+        "enabled": false,
+        "startMonth": "2026-07",
+        "monthCount": 4,
+        "rows": [
+          "項目1",
+          "項目2",
+          "項目3"
+        ],
+        "colWidths": [
+          300,
+          300,
+          300,
+          300
+        ],
+        "rowHeights": [
+          150,
+          150,
+          150
+        ]
+      },
+      "createdAt": "2026-07-24T05:48:26.163Z"
+    }
+  ]
+}
