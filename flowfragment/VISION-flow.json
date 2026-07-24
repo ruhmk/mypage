@@ -721,6 +721,15 @@
           "to": "card_f44db133-ba92-4516-a468-6616392b40ef",
           "label": "",
           "color": "#66e7f5"
+        },
+        {
+          "id": "edge_1ad7625e-929e-4bb6-90dd-d66fbb95b5f6",
+          "from": "card_c7fc412b-51fa-4377-899d-0d052bb2d2ed",
+          "to": "card_1d2187b7-130e-410e-9d71-b75874acf68e",
+          "kind": "loopTop",
+          "label": "ループ",
+          "color": "#ff7da8",
+          "arcHeight": 150
         }
       ],
       "groups": [
@@ -732,7 +741,7 @@
           "y": 225,
           "w": 950,
           "h": 775,
-          "locked": false
+          "locked": true
         },
         {
           "id": "group_5b2fa20a-6991-4da3-a0ae-c3d8ec417166",
@@ -742,7 +751,7 @@
           "y": 225,
           "w": 1275,
           "h": 775,
-          "locked": false
+          "locked": true
         }
       ],
       "timeline": {
