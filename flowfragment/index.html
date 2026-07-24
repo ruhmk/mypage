@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#07090f">
+  <title>Flow Fragments</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main id="app">
+    <canvas id="ambient" aria-hidden="true"></canvas>
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark"></span><div><strong>Flow Fragments</strong><small>LOCAL FLOW WORKSPACE</small></div></div>
+      <button id="new-flow" class="primary wide">＋ 新しいフロー</button>
+      <section><div class="section-title"><span>フローチャート</span><span id="flow-count"></span></div><div id="flow-list" class="nav-list"></div></section>
+      <section><div class="section-title"><span>タグ</span><button id="clear-tag" class="text-button hidden">解除</button></div><div id="tag-list" class="tag-list"></div></section>
+      <section class="card-index-section"><div class="section-title"><span>カード</span><span id="card-count"></span></div><div id="card-index" class="card-index"></div></section>
+      <div class="sidebar-footer"><span id="save-status">ローカル保存済み</span><small>自動保存</small></div>
+    </aside>
+
+    <section id="workspace" class="workspace">
+      <header class="topbar">
+        <div><input id="flow-title" class="flow-title" aria-label="フロー名"><div id="view-caption" class="crumb">自由配置キャンバス</div></div>
+        <nav class="toolbar">
+          <button id="undo" title="元に戻す">↶</button><button id="redo" title="やり直す">↷</button>
+          <span class="divider"></span>
+          <button id="auto-layout" title="全体を自動整列">整列</button><button id="fit-view" title="全体を表示">全体</button>
+          <button id="add-group" title="グループを追加">領域＋</button>
+          <button id="timeline-toggle" title="時系列表示を切替">時系列</button><button id="timeline-settings" title="時系列の軸を設定">軸設定</button>
+          <span class="divider"></span>
+          <button id="export-png" title="図全体を100%サイズでPNG保存">PNG</button>
+          <select id="recent-file-select" title="最近開いたファイル"><option value="">最近のファイル</option></select>
+          <button id="forget-file" title="プルダウンから削除">−</button>
+          <button id="import-json">開く</button><button id="export-json">保存</button><button id="save-as-json">別名保存</button>
+          <input id="file-input" type="file" accept="application/json,.json" hidden>
+        </nav>
+      </header>
+      <div id="viewport" class="viewport">
+        <div id="world" class="world"><div id="timeline-layer"></div><div id="group-layer"></div><svg id="edge-layer"></svg><div id="card-layer"></div></div>
+        <div class="viewport-help">
+          <span>空白ドラッグ：視点移動　／　ホイール：拡大縮小</span>
+          <span><b>右ドラッグ</b>：通常線　／　<b>Shift＋右ドラッグ</b>：① 上側ループ　／　<b>Alt＋右ドラッグ</b>：② 下側ループ　／　<b>Ctrl＋右ドラッグ</b>：③ 自己ループ</span>
+        </div>
+      </div>
+      <form id="quick-add" class="quick-add"><textarea id="quick-text" rows="2" placeholder="カードを追加…（Ctrl + Enter）"></textarea><button class="primary" type="submit">追加</button></form>
+      <aside id="inspector" class="inspector"><div class="empty-inspector"><span>◇</span><p>カード・線・領域を選択すると<br>詳細を編集できます</p></div></aside>
+    </section>
+  </main>
+  <div id="modal-root"></div><div id="toast-root"></div>
+  <script src="app.js"></script>
+</body>
+</html>

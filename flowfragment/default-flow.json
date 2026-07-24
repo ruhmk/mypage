@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "app": "Flow Fragments",
+  "activeFlowId": "sample_flow",
+  "flows": [
+    {
+      "id": "sample_flow",
+      "name": "サンプルフロー",
+      "createdAt": "2026-07-24T00:00:00.000Z",
+      "timeline": {
+        "enabled": true,
+        "startMonth": "2026-07",
+        "monthCount": 3,
+        "rows": ["企画", "制作", "確認"],
+        "colWidths": [300, 300, 300],
+        "rowHeights": [150, 150, 150]
+      },
+      "groups": [],
+      "cards": [
+        {
+          "id": "sample_start",
+          "title": "目的を決める",
+          "body": "このカードを動かして使い始めます。",
+          "tags": ["サンプル"],
+          "collapsed": false,
+          "w": 250,
+          "h": 100,
+          "x": 200,
+          "y": 100,
+          "groupId": ""
+        },
+        {
+          "id": "sample_plan",
+          "title": "計画を作る",
+          "body": "右クリックドラッグで次のカードへ接続できます。",
+          "tags": ["サンプル"],
+          "collapsed": false,
+          "w": 300,
+          "h": 100,
+          "x": 500,
+          "y": 250,
+          "groupId": ""
+        },
+        {
+          "id": "sample_done",
+          "title": "確認して完了",
+          "body": "カード右端と下端でサイズを変更できます。",
+          "tags": ["サンプル"],
+          "collapsed": false,
+          "w": 250,
+          "h": 100,
+          "x": 850,
+          "y": 400,
+          "groupId": ""
+        }
+      ],
+      "edges": [
+        {
+          "id": "sample_edge_1",
+          "from": "sample_start",
+          "to": "sample_plan",
+          "label": "方針が決まったら",
+          "color": "#66e7f5"
+        },
+        {
+          "id": "sample_edge_2",
+          "from": "sample_plan",
+          "to": "sample_done",
+          "label": "準備できたら",
+          "color": "#66e7f5"
+        }
+      ]
+    }
+  ]
+}
