@@ -1,4 +1,4 @@
-window.FAMILY_CALENDAR_UPDATED_AT = "2026-07-25T00:40:26.162Z";
+window.FAMILY_CALENDAR_UPDATED_AT = "2026-07-26T00:40:26.646Z";
 window.FAMILY_CALENDAR_EVENTS = [
   {
     "id": "work-QiuN5ev4OOzmdVq7oE",
@@ -2988,6 +2988,15 @@ window.FAMILY_CALENDAR_EVENTS = [
     "manualAllDay": false
   },
   {
+    "id": "personal-uXEaMJLCxjyRdhEzeP",
+    "title": "14時予約ホンダカーズ",
+    "start": "2026-08-29T04:30:00.000Z",
+    "end": "2026-08-29T06:30:00.000Z",
+    "source": "personal",
+    "note": "",
+    "allDay": false
+  },
+  {
     "id": "work-e7weDyZ64yTla33moN",
     "title": "朝会",
     "start": "2026-08-31T01:20:00.000Z",
@@ -3743,6 +3752,15 @@ window.FAMILY_CALENDAR_EVENTS = [
     "title": "七五三",
     "start": "2026-11-14T15:00:00.000Z",
     "end": "2026-11-15T15:00:00.000Z",
+    "source": "holiday",
+    "note": "",
+    "allDay": true
+  },
+  {
+    "id": "holiday-MK2otcq3W4_wJRzOLg",
+    "title": "勤労感謝の日",
+    "start": "2026-11-22T15:00:00.000Z",
+    "end": "2026-11-23T15:00:00.000Z",
     "source": "holiday",
     "note": "",
     "allDay": true
