@@ -14,8 +14,14 @@
       <div class="brand"><span class="brand-mark"></span><div><strong>Flow Fragments</strong><small>LOCAL FLOW WORKSPACE</small></div></div>
       <button id="new-flow" class="primary wide">＋ 新しいフロー</button>
       <section><div class="section-title"><span>フローチャート</span><span id="flow-count"></span></div><div id="flow-list" class="nav-list"></div></section>
-      <section><div class="section-title"><span>タグ</span><button id="clear-tag" class="text-button hidden">解除</button></div><div id="tag-list" class="tag-list"></div></section>
-      <section class="card-index-section"><div class="section-title"><span>カード</span><span id="card-count"></span></div><div id="card-index" class="card-index"></div></section>
+      <section class="tag-filter-section">
+        <div class="section-title"><span>タグフィルター</span><span id="card-count"></span></div>
+        <select id="tag-select" class="tag-select" aria-label="表示するタグ">
+          <option value="">タグを選択</option>
+        </select>
+        <button id="clear-tag" class="hidden" type="button" aria-hidden="true" tabindex="-1"></button>
+        <div id="card-index" class="card-index tag-card-results"></div>
+      </section>
       <div class="sidebar-footer"><span id="save-status">ローカル保存済み</span><small>自動保存</small></div>
     </aside>
 
