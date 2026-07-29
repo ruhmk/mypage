@@ -38,6 +38,16 @@
           <button id="timeline-toggle" title="時系列表示を切替">時系列</button><button id="timeline-settings" title="時系列の軸を設定">軸設定</button>
           <span class="divider"></span>
           <button id="export-png" title="図全体を100%サイズでPNG保存">PNG</button>
+          <div id="context-export-control" class="context-export">
+            <button id="export-context" class="context-main" title="AIに渡せるMarkdown・PNG・JSONをZIPで保存">文脈を書き出す</button>
+            <button id="context-menu-toggle" class="context-toggle" title="書き出し方法を選択" aria-label="文脈の書き出しメニュー" aria-expanded="false">⌄</button>
+            <div id="context-export-menu" class="context-menu hidden">
+              <button data-context-action="package"><span><b>AI用一式をダウンロード</b><small>Markdown・PNG・JSON</small></span><em>ZIP</em></button>
+              <button data-context-action="copy">文脈をコピー</button>
+              <button data-context-action="markdown">Markdownを保存</button>
+              <button data-context-action="png">PNGを保存</button>
+            </div>
+          </div>
           <select id="recent-file-select" title="最近開いたファイル"><option value="">最近のファイル</option></select>
           <button id="forget-file" title="プルダウンから削除">−</button>
           <button id="import-json">開く</button><button id="export-json">保存</button><button id="save-as-json">別名保存</button>
