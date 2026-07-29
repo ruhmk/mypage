@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#07090f">
   <title>Flow Fragments</title>
-  <link rel="stylesheet" href="styles.css?v=20260729-3">
+  <link rel="stylesheet" href="styles.css?v=20260729-4">
 </head>
 <body>
   <main id="app">
@@ -21,6 +21,10 @@
         </select>
         <button id="clear-tag" class="hidden" type="button" aria-hidden="true" tabindex="-1"></button>
         <div id="card-index" class="card-index tag-card-results"></div>
+        <form id="quick-add" class="quick-add sidebar-quick-add">
+          <textarea id="quick-text" rows="2" placeholder="カードを追加…（Ctrl + Enter）"></textarea>
+          <button class="primary" type="submit">追加</button>
+        </form>
       </section>
       <div class="sidebar-footer"><span id="save-status">ローカル保存済み</span><small>自動保存</small></div>
     </aside>
@@ -62,11 +66,10 @@
           <span><b>右ドラッグ</b>：通常線　／　<b>Shift＋右ドラッグ</b>：① 上側ループ　／　<b>Alt＋右ドラッグ</b>：② 下側ループ　／　<b>Ctrl＋右ドラッグ</b>：③ 自己ループ</span>
         </div>
       </div>
-      <form id="quick-add" class="quick-add"><textarea id="quick-text" rows="2" placeholder="カードを追加…（Ctrl + Enter）"></textarea><button class="primary" type="submit">追加</button></form>
       <aside id="inspector" class="inspector"><div class="empty-inspector"><span>◇</span><p>カード・線・領域を選択すると<br>詳細を編集できます</p></div></aside>
     </section>
   </main>
   <div id="modal-root"></div><div id="toast-root"></div>
-  <script src="app.js?v=20260729-3"></script>
+  <script src="app.js?v=20260729-4"></script>
 </body>
 </html>
