@@ -1,4 +1,4 @@
-window.FAMILY_CALENDAR_UPDATED_AT = "2026-08-08T00:40:25.956Z";
+window.FAMILY_CALENDAR_UPDATED_AT = "2026-08-09T00:40:26.049Z";
 window.FAMILY_CALENDAR_EVENTS = [
   {
     "id": "work-QiuN5ev4OOzmdVq7oE",
@@ -2648,6 +2648,15 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "holiday",
     "note": "",
     "allDay": true
+  },
+  {
+    "id": "personal-57ml030WIa8On0vU9X",
+    "title": "16時予約イメージア",
+    "start": "2026-08-11T06:00:00.000Z",
+    "end": "2026-08-11T07:00:00.000Z",
+    "source": "personal",
+    "note": "",
+    "allDay": false
   },
   {
     "id": "work-iU9ZDO7JqqESdXwlCL",
