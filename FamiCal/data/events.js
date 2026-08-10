@@ -1,4 +1,4 @@
-window.FAMILY_CALENDAR_UPDATED_AT = "2026-08-09T00:40:26.049Z";
+window.FAMILY_CALENDAR_UPDATED_AT = "2026-08-10T00:40:25.935Z";
 window.FAMILY_CALENDAR_EVENTS = [
   {
     "id": "work-QiuN5ev4OOzmdVq7oE",
@@ -2614,8 +2614,8 @@ window.FAMILY_CALENDAR_EVENTS = [
   {
     "id": "personal-UC3neGWACaG-zgycUS",
     "title": "みやびーたち麻雀、飲み予定",
-    "start": "2026-08-10T04:00:00.000Z",
-    "end": "2026-08-10T05:00:00.000Z",
+    "start": "2026-08-10T03:25:00.000Z",
+    "end": "2026-08-10T14:20:00.000Z",
     "source": "personal",
     "note": "",
     "allDay": false
@@ -3493,6 +3493,15 @@ window.FAMILY_CALENDAR_EVENTS = [
     "note": "",
     "allDay": false,
     "manualAllDay": false
+  },
+  {
+    "id": "personal-oOg3hfShw5UAdplDGk",
+    "title": "市立病院",
+    "start": "2026-09-02T23:00:00.000Z",
+    "end": "2026-09-03T00:00:00.000Z",
+    "source": "personal",
+    "note": "",
+    "allDay": false
   },
   {
     "id": "work-AckPgNz4M6Gss7eSAW",
@@ -4413,6 +4422,26 @@ window.FAMILY_CALENDAR_EVENTS = [
     "title": "仕事",
     "start": "2026-10-08T04:00:00.000Z",
     "end": "2026-10-08T05:30:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": false,
+    "manualAllDay": false
+  },
+  {
+    "id": "work-1yLgzlmPfZ4kIGgrKC",
+    "title": "朝会",
+    "start": "2026-10-09T01:20:00.000Z",
+    "end": "2026-10-09T01:30:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": false,
+    "manualAllDay": false
+  },
+  {
+    "id": "work-D_F91LNYI16v4_aTw2",
+    "title": "仕事",
+    "start": "2026-10-09T07:00:00.000Z",
+    "end": "2026-10-09T07:30:00.000Z",
     "source": "work",
     "note": "",
     "allDay": false,
