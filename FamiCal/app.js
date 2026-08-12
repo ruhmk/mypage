@@ -527,16 +527,21 @@ function createTimelineEventBlock(item, range, hourBands) {
 function normalizeEvents(events) {
   return events
     .filter((event) => event && event.start && event.end)
-    .map((event, index) => ({
-      id: event.id || `event-${index}-${event.start}`,
-      title: getDisplayEventTitle(event),
-      start: event.start,
-      end: event.end,
-      source: event.source || "family",
-      note: event.note || "",
-      allDay: Boolean(event.allDay),
-      manualAllDay: Boolean(event.manualAllDay)
-    }));
+    .map((event, index) => {
+      const title = getDisplayEventTitle(event);
+      const kitagawaAllDay = Boolean(event.allDay && isKitagawaAllDayTitle(title));
+      return {
+        id: event.id || `event-${index}-${event.start}`,
+        title,
+        start: event.start,
+        end: event.end,
+        source: event.source || "family",
+        note: event.note || "",
+        allDay: Boolean(event.allDay),
+        manualAllDay: Boolean(event.manualAllDay) || kitagawaAllDay,
+        workDayOff: Boolean(event.workDayOff) || (kitagawaAllDay && isKitagawaFullDayOffTitle(title))
+      };
+    });
 }
 
 function getDisplayEventTitle(event) {
@@ -547,10 +552,18 @@ function getDisplayEventTitle(event) {
   return title;
 }
 
+function isKitagawaAllDayTitle(title) {
+  return /^(?:【|\[)\s*北河\s*(?:】|\])/.test(String(title || "").normalize("NFKC").trim());
+}
+
+function isKitagawaFullDayOffTitle(title) {
+  const text = String(title || "").normalize("NFKC").replace(/\s/g, "");
+  return text === "【北河】全休" || text === "【北河】全休予定" || text === "[北河]全休" || text === "[北河]全休予定";
+}
+
 function getNextEvent() {
   const now = new Date();
   return getVisibleEvents()
-    .filter((event) => !isWorkEventOnHoliday(event))
     .filter((event) => new Date(event.end) > now)
     .sort((left, right) => new Date(left.start) - new Date(right.start))[0] || null;
 }
@@ -558,7 +571,7 @@ function getNextEvent() {
 function getEventVisualSource(event) {
   const source = event && event.source ? event.source : "family";
   const title = String(event && event.title ? event.title : "").normalize("NFKC");
-  if (source === "holiday" || title.indexOf("祝日") >= 0 || title.indexOf("の日") >= 0) {
+  if ((event && event.workDayOff) || source === "holiday" || title.indexOf("祝日") >= 0 || title.indexOf("の日") >= 0) {
     return "holiday";
   }
   if (source === "school" || isSchoolTitle(title)) {
@@ -605,42 +618,46 @@ function getVisibleEvents() {
   return state.remoteEvents
     .filter((item) => !isExcludedWorkEvent(item))
     .filter((item) => state.visibleSources.has(item.source))
+    .filter((item) => !isSuppressedWorkEvent(item))
     .sort(sortByStart);
 }
 
 function getEventsForDay(date) {
   const dayStart = stripTime(date);
   const dayEnd = addDays(dayStart, 1);
-  const events = getVisibleEvents().filter((item) => {
+  return getVisibleEvents().filter((item) => {
     const start = new Date(item.start);
     const end = new Date(item.end);
     return start < dayEnd && end > dayStart;
   });
-
-  const isHoliday = events.some((item) => item.source === "holiday");
-  return isHoliday ? events.filter((item) => item.source !== "work") : events;
 }
 
-function isWorkEventOnHoliday(event) {
-  if (!event || event.source !== "work") {
+function isSuppressedWorkEvent(event) {
+  if (!event || event.source !== "work" || event.workDayOff) {
     return false;
   }
 
-  const start = new Date(event.start);
-  if (Number.isNaN(start.getTime())) {
-    return false;
-  }
-
-  const dayStart = stripTime(start);
-  const dayEnd = addDays(dayStart, 1);
   return state.remoteEvents.some((item) => {
-    if (item.source !== "holiday") {
+    if (item.source !== "holiday" && !item.workDayOff) {
       return false;
     }
-    const holidayStart = new Date(item.start);
-    const holidayEnd = new Date(item.end);
-    return holidayStart < dayEnd && holidayEnd > dayStart;
+    return eventRangesOverlap(event, item);
   });
+}
+
+function eventRangesOverlap(left, right) {
+  const leftStart = new Date(left.start);
+  const leftEnd = new Date(left.end);
+  const rightStart = new Date(right.start);
+  const rightEnd = new Date(right.end);
+  return (
+    !Number.isNaN(leftStart.getTime()) &&
+    !Number.isNaN(leftEnd.getTime()) &&
+    !Number.isNaN(rightStart.getTime()) &&
+    !Number.isNaN(rightEnd.getTime()) &&
+    leftStart < rightEnd &&
+    leftEnd > rightStart
+  );
 }
 
 function renderImportStatus() {
