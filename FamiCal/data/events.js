@@ -1,4 +1,4 @@
-window.FAMILY_CALENDAR_UPDATED_AT = "2026-08-12T02:05:15.620Z";
+window.FAMILY_CALENDAR_UPDATED_AT = "2026-08-12T04:10:53.943Z";
 window.FAMILY_CALENDAR_EVENTS = [
   {
     "id": "work-QiuN5ev4OOzmdVq7oE",
@@ -2666,7 +2666,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-kxkGQf7Bq-No1e5Pgp",
@@ -2676,7 +2677,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-4yFcCH3KOlxbdhCPj9",
@@ -2686,7 +2688,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-bOQHMBqBZ5V7wF_M3G",
@@ -2696,7 +2699,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-YMqRF5qmtfmzN-2SFU",
@@ -2706,7 +2710,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-c68hF-I9RK8YyQpYTF",
@@ -2716,7 +2721,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-0Kc-RdLJas5VzcqQOR",
@@ -2726,7 +2732,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-sykEsoAnR-5rOaKLcF",
@@ -2736,7 +2743,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-sbgiYdV4aLTTuxcK1w",
@@ -2746,7 +2754,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-lNl1ipTPhdQOn1lhfG",
@@ -2756,7 +2765,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-soqHrsEd-NjK37uVj3",
@@ -2766,7 +2776,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-362Nvchx2SQfGOLsIo",
@@ -2776,7 +2787,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-5X19ForsGCylemT4uo",
@@ -2786,7 +2798,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-1L9UnzQdDUpa3rXA6f",
@@ -2796,7 +2809,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-ocDG2J8NeAhEJSlDZT",
@@ -2806,7 +2820,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-b8n538eyhUVZ5SJ_Ne",
@@ -2816,7 +2831,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-aZKCmmLSfrHczBnhL4",
@@ -2826,7 +2842,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-4xwGnF0KOmcBdci9m8",
@@ -2836,7 +2853,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-GaYFVDDSTj8Bz6yLkQ",
@@ -2846,7 +2864,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-uU3saZGQPD2Z0Bp0tZ",
@@ -2856,7 +2875,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-jWAcHwVdUVN0ket7XV",
@@ -2866,7 +2886,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-EAN1wQ4qjuHFnrEbG5",
@@ -2876,7 +2897,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-BVtLMVw5-aFENjCyG6",
@@ -2886,7 +2908,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-mS7knF-pBTeSwcMRUf",
@@ -2896,7 +2919,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-BFBn46mqv7zvyYHRF_",
@@ -2906,7 +2930,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-wIihpsH57Snxk1ExGr",
@@ -2916,7 +2941,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-Fd6uCvHaVGJTcWX6wv",
@@ -2926,7 +2952,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "personal-s4thshEbMdxtOu2PGz",
@@ -2945,7 +2972,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-jspIc7_pTEmDDbjFjs",
@@ -2955,7 +2983,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": true,
-    "manualAllDay": true
+    "manualAllDay": true,
+    "workDayOff": false
   },
   {
     "id": "work-BpwPBS7T-JQoQSxUy8",
@@ -2965,7 +2994,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-PObayCTR0uiE6Jerhd",
@@ -2975,7 +3005,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-u649YLpBTq1xg5eY3k",
@@ -2985,7 +3016,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-6NwMOHcgw_IHLAwrNW",
@@ -2995,7 +3027,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-YRQI9oovkEAXnJdE-M",
@@ -3005,7 +3038,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-ilgZNQVoBQfwT9ITyL",
@@ -3015,7 +3049,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-4xt30bilNicvui2B0a",
@@ -3025,7 +3060,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-mzpl_wPpQ_y-613Wrb",
@@ -3035,7 +3071,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-VdOGcTSctsP_w74Tat",
@@ -3045,7 +3082,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-nYmkGSYpZYgxm6c4W7",
@@ -3055,7 +3093,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-vrTJ5w39n2v2PwX_CV",
@@ -3065,7 +3104,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-5Hnpe6Blv1IQMrRaVA",
@@ -3075,7 +3115,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-2lwjDMXz36u6IZCT2f",
@@ -3085,7 +3126,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work--KniElHBtB8LTsUyos",
@@ -3095,7 +3137,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-Q-gjOD_ylNLJ2WFYdV",
@@ -3105,7 +3148,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "personal-O0QhlLlsTXHHih0y6d",
@@ -3124,7 +3168,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-0QhMH0nlmPV2cT5GUD",
@@ -3134,7 +3179,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-1JCWBC7_SFoqL2XXxE",
@@ -3144,7 +3190,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-Ice6sOA9CG2ckIOG6W",
@@ -3154,7 +3201,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-A48JWanXKsDf5sjlVa",
@@ -3164,7 +3212,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-_JN3vrT6yeDZkyQ6XG",
@@ -3174,7 +3223,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-12ASV5HxNI2XzjjI_Z",
@@ -3184,7 +3234,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-OWsLDdwhXt5cy2qhNW",
@@ -3194,7 +3245,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-XGf7JkJ74a6sF6NN0v",
@@ -3204,7 +3256,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-2nUl1zU481ST_kvNQt",
@@ -3214,7 +3267,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-JJfgIdYWtkPg8cscrT",
@@ -3224,7 +3278,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-dyAIIvsZDI_lw9YZcc",
@@ -3234,7 +3289,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-ul8b5tRHIOXABwmymu",
@@ -3244,7 +3300,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work--u6ZMyC1p3iDhauz2W",
@@ -3254,7 +3311,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-p5FxGU9Du-XS8qsGGz",
@@ -3264,7 +3322,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-Zm-Djrdy0ORuCz7mIt",
@@ -3274,7 +3333,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-l0KgjvhDRkyxLKxqIt",
@@ -3284,7 +3344,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-AQaQSzg1nel7f8UEZo",
@@ -3294,7 +3355,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-OzW1-LXojIXri0T8Li",
@@ -3304,7 +3366,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-LVEw29bo7aG1wcEDxd",
@@ -3314,7 +3377,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-CdZbl6w6RvHJHJG8ri",
@@ -3324,7 +3388,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-OsBhVqrCLEUopDhJ3c",
@@ -3334,7 +3399,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-2FWURAWXHbyyi50L3J",
@@ -3344,7 +3410,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "personal-uXEaMJLCxjyRdhEzeP",
@@ -3363,7 +3430,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-LM-nj8HhRNsbFgKO0V",
@@ -3373,7 +3441,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-pf_PjUmp-I8bkL3bYJ",
@@ -3383,7 +3452,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-x01ocSpnm8c74eFo1i",
@@ -3393,7 +3463,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-qEKH0Pu4uuERZy1JiE",
@@ -3403,7 +3474,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-rzErW5FdbTMZ-RLxbf",
@@ -3413,7 +3485,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-ag83kDORZfBfvIuCyn",
@@ -3423,7 +3496,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-PWBuUDCl0dHTWKXM_H",
@@ -3433,7 +3507,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "personal-st4FzKUUqZFhAA6g__",
@@ -3452,7 +3527,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-g8vcuXGNHYDkIlTSVL",
@@ -3462,7 +3538,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-ChOfVlJYgxesD3Zfa8",
@@ -3472,7 +3549,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-3j8S90yBj027IwF1JQ",
@@ -3482,7 +3560,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-KnTaF_Milo4SFhgbna",
@@ -3492,7 +3571,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-UWczYUSwdOHtTNTyhA",
@@ -3502,7 +3582,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "personal-oOg3hfShw5UAdplDGk",
@@ -3521,7 +3602,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-g4TcKQJMGCXmeeuSqJ",
@@ -3531,7 +3613,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-Y0G0ngcR1JsWkdfrlK",
@@ -3541,7 +3624,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-Phb0zCupBPi5t-8XuH",
@@ -3551,7 +3635,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-0mNr74DXoi9nQwJ_av",
@@ -3561,7 +3646,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-J7yaC1I4fqMjMrI5ZR",
@@ -3571,7 +3657,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-zMyqGMpw49zEeRVTHB",
@@ -3581,7 +3668,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-ivhWJn492-s_AM34cv",
@@ -3591,7 +3679,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-3NsZIswF-Qdti5KDpB",
@@ -3601,7 +3690,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-NE3gYKbr2oD_rEiTpG",
@@ -3611,7 +3701,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-8A3AgcNlYoHbdYIsol",
@@ -3621,7 +3712,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-vofBd6uWOgxZWFvzM4",
@@ -3631,7 +3723,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-im-US6NZqFlUATrwkT",
@@ -3641,7 +3734,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-rDiKE_aUQey-m_9uT1",
@@ -3651,7 +3745,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-9pwDLDYmhnWaSzdQnr",
@@ -3661,7 +3756,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-EWvU_AUxEipGSQGDPY",
@@ -3671,7 +3767,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-5sJkzXLgzcIyT-b-4T",
@@ -3681,7 +3778,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-dLoqeEzRJs6yaFEQu_",
@@ -3691,7 +3789,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-6BGo-YJThUcTgQxmvc",
@@ -3701,7 +3800,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-tuyBHQSqK_jQNOiWFW",
@@ -3711,7 +3811,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-Pkxr_VHhZs6ggBg-FU",
@@ -3721,7 +3822,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-WmjFT9gp45fjiXYCYB",
@@ -3731,7 +3833,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-9TmruOZlDwI5rgCJA0",
@@ -3741,7 +3844,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-KRpGERxpiS1fcXpCev",
@@ -3751,7 +3855,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-OyHwvoYzAof2MNyYGV",
@@ -3761,7 +3866,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-nZFqAbxmCizVpkKmRG",
@@ -3771,7 +3877,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-8CkpHk2pmmxRHkSY8E",
@@ -3781,7 +3888,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-4TtqvcmDKEdmk_YUee",
@@ -3791,7 +3899,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-8IfpNE6MIb0UBFc2LV",
@@ -3801,7 +3910,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-r3qYY1HCDlBna0BZYa",
@@ -3811,7 +3921,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-1rYLauEDR6_rtTJ2vQ",
@@ -3821,7 +3932,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-ue9WLivMVd38rovv1a",
@@ -3831,7 +3943,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-QhBOfT7-6_eklZb3uN",
@@ -3841,7 +3954,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-DAj5j0mLCMKSdtaE0C",
@@ -3851,7 +3965,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-V4-nGlI0lFFc5BBNzM",
@@ -3861,7 +3976,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-b7sxalJeuEF53ZDuu1",
@@ -3871,7 +3987,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-bX-9yP_rimwtp3pvFd",
@@ -3881,7 +3998,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "personal-TBuJTyKAT4fpBHZC72",
@@ -3900,7 +4018,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-6Bj2uOKY-gtSn13KWI",
@@ -3910,7 +4029,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-xJYSctoAPrKZ2CrBsM",
@@ -3920,7 +4040,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-bIHZc_YG2LnH924nnc",
@@ -3930,7 +4051,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-gEokOtZl24HNYdfowd",
@@ -3940,7 +4062,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-IUieGxFTH0AZXtcjZD",
@@ -3950,7 +4073,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-6Ebcu8t1xfdxv7Fjn1",
@@ -3960,7 +4084,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-peVj1iw2zGVz2G5lCd",
@@ -3970,7 +4095,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-Q0_GAvunxyxqGwoo5g",
@@ -3980,7 +4106,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-f8vSjFR4HPAhnBK4KI",
@@ -3990,7 +4117,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-1sASJ2m9MKYmC17oq1",
@@ -4000,7 +4128,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-EnwyOaA3cR_XgaWwQw",
@@ -4010,7 +4139,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-HgbG8toGNmioNTCtyE",
@@ -4020,7 +4150,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "holiday-21TFSTcmVyH7dOsbgw",
@@ -4039,7 +4170,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work--_phka5dtlQYT8MNkO",
@@ -4049,7 +4181,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "holiday-nRVhM6_5c0icWKcZZr",
@@ -4068,7 +4201,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "holiday-AN8L2RnrYOPSAlmZBr",
@@ -4087,7 +4221,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-1UIL9iw6pnaRFA9h_w",
@@ -4097,7 +4232,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-smPytqvlCR7NZTGgSu",
@@ -4107,7 +4243,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-AcJFlI_maX8ZXVVIgJ",
@@ -4117,7 +4254,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-Q2uXeIe9k1SjfXKqh4",
@@ -4127,7 +4265,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-HQ-OMLFM22C412EAff",
@@ -4137,7 +4276,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-932RoqGhBZuAEICTAK",
@@ -4147,7 +4287,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-ioiDGTkdcQ9DPJtQ9-",
@@ -4157,7 +4298,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-LnzBXYCuSVVzpKlEsa",
@@ -4167,7 +4309,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-G7h4rQ1VSzCG9Lj8-t",
@@ -4177,7 +4320,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-PWcmM06UNo6nQQhggD",
@@ -4187,7 +4331,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-0gSRst6iZ7HVop_Ccr",
@@ -4197,7 +4342,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-TiHC3c734fCBdYq_UR",
@@ -4207,7 +4353,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-7btkKKDf-tBsFDH2FB",
@@ -4217,7 +4364,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-qoRbknj7W-1pzFjB1n",
@@ -4227,7 +4375,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-rYEHHwVQIe007eotdp",
@@ -4237,7 +4386,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "personal-h-asqifjyE2TX2N4GA",
@@ -4256,7 +4406,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-PgQliamSEKff3MJRZz",
@@ -4266,7 +4417,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-eDsTyn6dTet-66jV-d",
@@ -4276,7 +4428,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-QPvs8G9B0bGIc_ubVT",
@@ -4286,7 +4439,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-vsUEvyIZdK9kW6n40a",
@@ -4296,7 +4450,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-AYUQKgQyJlow4E_7n5",
@@ -4306,7 +4461,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-mfV6y4I81Fm45aD_EZ",
@@ -4316,7 +4472,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-h8jBJBt47TUJmYjf09",
@@ -4326,7 +4483,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-tGGelaKKX3AIoFj_Ov",
@@ -4336,7 +4494,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "personal-8EExkDfFrzTiYVgHb1",
@@ -4355,7 +4514,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-ifdHOIjP3qHtAxVYGf",
@@ -4365,7 +4525,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-TIl71sWwH1WV2AAlmE",
@@ -4375,7 +4536,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-AlswpL-NxdFawXefdW",
@@ -4385,7 +4547,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-LIY9tq_ACU0ea4hllc",
@@ -4395,7 +4558,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-hpffEjQqdq6JYFRXB2",
@@ -4405,7 +4569,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-WkJoR__jdlUnytv8CX",
@@ -4415,7 +4580,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-FiJmOB2Z1UqbjFcCrW",
@@ -4425,7 +4591,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-HL82CQY_sknSVihmPG",
@@ -4435,7 +4602,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-1yLgzlmPfZ4kIGgrKC",
@@ -4445,7 +4613,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "work-D_F91LNYI16v4_aTw2",
@@ -4455,7 +4624,8 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "work",
     "note": "",
     "allDay": false,
-    "manualAllDay": false
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "holiday-dozXKKlCGUknmJtXs1",
