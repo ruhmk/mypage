@@ -563,10 +563,8 @@ function isKitagawaFullDayOffTitle(title) {
   return (
     text === "【北河】全休" ||
     text === "【北河】全休予定" ||
-    text === "【北河】リモート" ||
     text === "[北河]全休" ||
-    text === "[北河]全休予定" ||
-    text === "[北河]リモート"
+    text === "[北河]全休予定"
   );
 }
 
