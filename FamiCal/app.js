@@ -547,7 +547,9 @@ function normalizeEvents(events) {
 function getDisplayEventTitle(event) {
   const title = String(event && event.title ? event.title : "予定あり").normalize("NFKC").trim();
   if (event && event.source === "work") {
-    return title.replace(/^(?:【|\[)\s*非公開\s*(?:】|\])\s*/, "").trim() || "予定あり";
+    return title
+      .replace(/^(?:【|\[)\s*(?:公開|非公開|限定公開)\s*(?:】|\])\s*/, "")
+      .trim() || "予定あり";
   }
   return title;
 }
