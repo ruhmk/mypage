@@ -558,7 +558,14 @@ function isKitagawaAllDayTitle(title) {
 
 function isKitagawaFullDayOffTitle(title) {
   const text = String(title || "").normalize("NFKC").replace(/\s/g, "");
-  return text === "【北河】全休" || text === "【北河】全休予定" || text === "[北河]全休" || text === "[北河]全休予定";
+  return (
+    text === "【北河】全休" ||
+    text === "【北河】全休予定" ||
+    text === "【北河】リモート" ||
+    text === "[北河]全休" ||
+    text === "[北河]全休予定" ||
+    text === "[北河]リモート"
+  );
 }
 
 function getNextEvent() {
