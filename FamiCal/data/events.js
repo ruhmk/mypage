@@ -1,4 +1,4 @@
-window.FAMILY_CALENDAR_UPDATED_AT = "2026-08-15T00:40:26.274Z";
+window.FAMILY_CALENDAR_UPDATED_AT = "2026-08-16T00:40:26.057Z";
 window.FAMILY_CALENDAR_EVENTS = [
   {
     "id": "work-QiuN5ev4OOzmdVq7oE",
@@ -2934,6 +2934,17 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
+    "id": "work-o5gTgBxN6tX9DzFCsP",
+    "title": "仕事",
+    "start": "2026-08-17T05:30:00.000Z",
+    "end": "2026-08-17T06:00:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": false,
+    "manualAllDay": false,
+    "workDayOff": false
+  },
+  {
     "id": "work-jWAcHwVdUVN0ket7XV",
     "title": "仕事",
     "start": "2026-08-17T07:00:00.000Z",
@@ -4965,6 +4976,17 @@ window.FAMILY_CALENDAR_EVENTS = [
     "allDay": false,
     "manualAllDay": false,
     "workDayOff": false
+  },
+  {
+    "id": "work-CPL_bMROx-D8nj7bVH",
+    "title": "【北河】全休",
+    "start": "2026-10-15T15:00:00.000Z",
+    "end": "2026-10-16T15:00:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": true,
+    "manualAllDay": true,
+    "workDayOff": true
   },
   {
     "id": "personal-PriSqFFkZugGwhky1P",
