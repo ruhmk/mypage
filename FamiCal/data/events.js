@@ -1,4 +1,4 @@
-window.FAMILY_CALENDAR_UPDATED_AT = "2026-08-26T00:40:26.813Z";
+window.FAMILY_CALENDAR_UPDATED_AT = "2026-08-27T00:40:27.460Z";
 window.FAMILY_CALENDAR_EVENTS = [
   {
     "id": "work-QiuN5ev4OOzmdVq7oE",
@@ -3544,7 +3544,7 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
-    "id": "work-mVwyYtU4qq-BXA62Ts",
+    "id": "work-soTH2iJ6pa2DrF3Xlc",
     "title": "朝会",
     "start": "2026-08-27T01:15:00.000Z",
     "end": "2026-08-27T01:30:00.000Z",
@@ -3588,7 +3588,7 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
-    "id": "work-OzW1-LXojIXri0T8Li",
+    "id": "work-MRMwEBT1NuF63n3bxY",
     "title": "仕事",
     "start": "2026-08-27T09:00:00.000Z",
     "end": "2026-08-27T09:30:00.000Z",
@@ -3610,7 +3610,7 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
-    "id": "work-3KPQgy6yCSKXDWyAG6",
+    "id": "work-bQgOc_IwbTPbhvUjNb",
     "title": "朝会",
     "start": "2026-08-28T01:20:00.000Z",
     "end": "2026-08-28T01:30:00.000Z",
@@ -3685,7 +3685,7 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
-    "id": "work-mB87bNenB48kXs7N8o",
+    "id": "work-mFpnfity9Pg1wmv0gR",
     "title": "朝会",
     "start": "2026-08-31T01:20:00.000Z",
     "end": "2026-08-31T01:30:00.000Z",
@@ -3711,6 +3711,17 @@ window.FAMILY_CALENDAR_EVENTS = [
     "title": "仕事",
     "start": "2026-08-31T04:00:00.000Z",
     "end": "2026-08-31T04:05:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": false,
+    "manualAllDay": false,
+    "workDayOff": false
+  },
+  {
+    "id": "work-SF8hdmHw-OQ96IyygX",
+    "title": "仕事",
+    "start": "2026-08-31T05:00:00.000Z",
+    "end": "2026-08-31T06:00:00.000Z",
     "source": "work",
     "note": "",
     "allDay": false,
@@ -3773,7 +3784,7 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
-    "id": "work-LvaN31uMXqVlaRK-V8",
+    "id": "work-kKyQVLsgNIBfS3uNv8",
     "title": "朝会",
     "start": "2026-09-01T01:15:00.000Z",
     "end": "2026-09-01T01:45:00.000Z",
@@ -3815,7 +3826,18 @@ window.FAMILY_CALENDAR_EVENTS = [
     "allDay": false
   },
   {
-    "id": "work-j73Wb7rMn-1kgh3Bk3",
+    "id": "work-bHKjtKrhpDiav_dn4m",
+    "title": "仕事",
+    "start": "2026-09-01T08:30:00.000Z",
+    "end": "2026-09-01T09:00:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": false,
+    "manualAllDay": false,
+    "workDayOff": false
+  },
+  {
+    "id": "work-Qa8SVWqlJ2_zoOKPGM",
     "title": "朝会",
     "start": "2026-09-02T01:20:00.000Z",
     "end": "2026-09-02T01:30:00.000Z",
@@ -3890,7 +3912,7 @@ window.FAMILY_CALENDAR_EVENTS = [
     "allDay": false
   },
   {
-    "id": "work-JRVz3q9uoo0CtoAnz0",
+    "id": "work-L90xBCkfaHhCtBHmE1",
     "title": "朝会",
     "start": "2026-09-03T01:15:00.000Z",
     "end": "2026-09-03T01:30:00.000Z",
@@ -3956,7 +3978,7 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
-    "id": "work-SFxMYrxQth4XjhxtgH",
+    "id": "work-U41EgkJKUaHgoMOytH",
     "title": "朝会",
     "start": "2026-09-04T01:20:00.000Z",
     "end": "2026-09-04T01:30:00.000Z",
@@ -4033,7 +4055,7 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
-    "id": "work-4cp3P94NFWL6rkOIik",
+    "id": "work-PG3kyMFZER9i0HDqQx",
     "title": "朝会",
     "start": "2026-09-07T01:20:00.000Z",
     "end": "2026-09-07T01:30:00.000Z",
@@ -4077,7 +4099,7 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
-    "id": "work-DO6H3nQGtAOisEIb7W",
+    "id": "work-aGAfreT6H2JimL446u",
     "title": "朝会",
     "start": "2026-09-08T01:15:00.000Z",
     "end": "2026-09-08T01:45:00.000Z",
@@ -4110,7 +4132,18 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
-    "id": "work-jvK3jkgTWKlITebJNd",
+    "id": "work-R5VGd-spSx-6w-tl-X",
+    "title": "仕事",
+    "start": "2026-09-08T08:30:00.000Z",
+    "end": "2026-09-08T09:00:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": false,
+    "manualAllDay": false,
+    "workDayOff": false
+  },
+  {
+    "id": "work-GcN50S-aJWIUQm3MB7",
     "title": "朝会",
     "start": "2026-09-09T01:20:00.000Z",
     "end": "2026-09-09T01:30:00.000Z",
@@ -4165,7 +4198,7 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
-    "id": "work-NYDAMNDAoaRvMYXpLD",
+    "id": "work-aKgGRGANv8PFRyoDM1",
     "title": "朝会",
     "start": "2026-09-10T01:15:00.000Z",
     "end": "2026-09-10T01:30:00.000Z",
@@ -4242,7 +4275,7 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
-    "id": "work-yFdiUyGdW8GsPKQXfa",
+    "id": "work-oTyPV9ml8GILdUEivL",
     "title": "朝会",
     "start": "2026-09-11T01:20:00.000Z",
     "end": "2026-09-11T01:30:00.000Z",
@@ -4308,7 +4341,7 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
-    "id": "work-8o5R3OgJW6C-kWuXQd",
+    "id": "work-YS89V6QTqAF7xUyjmP",
     "title": "朝会",
     "start": "2026-09-14T01:20:00.000Z",
     "end": "2026-09-14T01:30:00.000Z",
@@ -4363,7 +4396,7 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
-    "id": "work-w9XlBo0wcjOP2RxHuF",
+    "id": "work-oKy9a8MN7JRYpSTi9n",
     "title": "朝会",
     "start": "2026-09-15T01:15:00.000Z",
     "end": "2026-09-15T01:45:00.000Z",
@@ -4405,7 +4438,18 @@ window.FAMILY_CALENDAR_EVENTS = [
     "allDay": false
   },
   {
-    "id": "work-dos5Ii5oyhNx0XGRiV",
+    "id": "work-T2jil2scTHQH1rfiTR",
+    "title": "仕事",
+    "start": "2026-09-15T08:30:00.000Z",
+    "end": "2026-09-15T09:00:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": false,
+    "manualAllDay": false,
+    "workDayOff": false
+  },
+  {
+    "id": "work-JYcl9GXLeljmZPLSy_",
     "title": "朝会",
     "start": "2026-09-16T01:20:00.000Z",
     "end": "2026-09-16T01:30:00.000Z",
@@ -4449,7 +4493,7 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
-    "id": "work-pcrsUPGpa_Mfn59mzN",
+    "id": "work-hIf-E5ZDG_yeEZaAZs",
     "title": "朝会",
     "start": "2026-09-17T01:15:00.000Z",
     "end": "2026-09-17T01:30:00.000Z",
@@ -4515,7 +4559,7 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
-    "id": "work-HD-CB91PYclJ7oNlke",
+    "id": "work-npKsU-SKONIU0V2LEW",
     "title": "朝会",
     "start": "2026-09-18T01:20:00.000Z",
     "end": "2026-09-18T01:30:00.000Z",
@@ -4630,7 +4674,7 @@ window.FAMILY_CALENDAR_EVENTS = [
     "allDay": true
   },
   {
-    "id": "work-AkuZJTNEr1Je3KsjXr",
+    "id": "work-k_y-8QlwKxF5_7uzlF",
     "title": "朝会",
     "start": "2026-09-24T01:15:00.000Z",
     "end": "2026-09-24T01:30:00.000Z",
@@ -4685,7 +4729,7 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
-    "id": "work-uH14PxbzZ2nkV7AZ9j",
+    "id": "work-PFx1jPFBwcXxxJ8GjP",
     "title": "朝会",
     "start": "2026-09-25T01:20:00.000Z",
     "end": "2026-09-25T01:30:00.000Z",
@@ -4751,7 +4795,7 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
-    "id": "work-F--9NyKxYD5jOrrauy",
+    "id": "work--x_icZAmuSIalQfFDt",
     "title": "朝会",
     "start": "2026-09-28T01:20:00.000Z",
     "end": "2026-09-28T01:30:00.000Z",
@@ -4806,7 +4850,7 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
-    "id": "work-vqmcTjkx2JJpFkgZYN",
+    "id": "work-BxjkhbRXykTK_0he72",
     "title": "朝会",
     "start": "2026-09-29T01:15:00.000Z",
     "end": "2026-09-29T01:45:00.000Z",
@@ -4859,7 +4903,18 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
-    "id": "work-d9wZ2NIRNpeHRIncXR",
+    "id": "work-XJf028LMaFWzfMeKtT",
+    "title": "仕事",
+    "start": "2026-09-29T08:30:00.000Z",
+    "end": "2026-09-29T09:00:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": false,
+    "manualAllDay": false,
+    "workDayOff": false
+  },
+  {
+    "id": "work-KglxySA9znCtcnWSHF",
     "title": "朝会",
     "start": "2026-09-30T01:20:00.000Z",
     "end": "2026-09-30T01:30:00.000Z",
@@ -4903,7 +4958,7 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
-    "id": "work-ztKsgNRAlOzqE1rDqj",
+    "id": "work-M2rl8j35ttsm1qy2Yj",
     "title": "朝会",
     "start": "2026-10-01T01:15:00.000Z",
     "end": "2026-10-01T01:30:00.000Z",
@@ -4945,7 +5000,7 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
-    "id": "work-2OoMXKO_0aHxV7onl5",
+    "id": "work-9_5KyBkKmxqFXH_LDh",
     "title": "朝会",
     "start": "2026-10-05T01:20:00.000Z",
     "end": "2026-10-05T01:30:00.000Z",
@@ -4956,7 +5011,7 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
-    "id": "work-sP9VhiN6cIv9Dp4K6k",
+    "id": "work-wsGfLKzrmkrgw2w_WD",
     "title": "朝会",
     "start": "2026-10-06T01:15:00.000Z",
     "end": "2026-10-06T01:45:00.000Z",
@@ -4978,7 +5033,18 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
-    "id": "work-1wTEZD5fNAf9BXe-KR",
+    "id": "work-O9N0NW4icW31brPRLg",
+    "title": "仕事",
+    "start": "2026-10-06T08:30:00.000Z",
+    "end": "2026-10-06T09:00:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": false,
+    "manualAllDay": false,
+    "workDayOff": false
+  },
+  {
+    "id": "work-VlZ9kyoI7Zxb6tzw3o",
     "title": "朝会",
     "start": "2026-10-07T01:20:00.000Z",
     "end": "2026-10-07T01:30:00.000Z",
@@ -5022,7 +5088,7 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
-    "id": "work-0d-0URfmzK7uh5JFhY",
+    "id": "work-K_LWMhJhZzFRIPs2LG",
     "title": "朝会",
     "start": "2026-10-08T01:15:00.000Z",
     "end": "2026-10-08T01:30:00.000Z",
@@ -5064,7 +5130,7 @@ window.FAMILY_CALENDAR_EVENTS = [
     "allDay": true
   },
   {
-    "id": "work-BR8QA3EXwpWd5g_PvU",
+    "id": "work-0jgpeC5ZceBVwIScVa",
     "title": "朝会",
     "start": "2026-10-13T01:15:00.000Z",
     "end": "2026-10-13T01:45:00.000Z",
@@ -5086,7 +5152,18 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
-    "id": "work-c8kBQa7hfDPrB82abJ",
+    "id": "work-dIrXxCV2zUwg4Qmnx9",
+    "title": "仕事",
+    "start": "2026-10-13T08:30:00.000Z",
+    "end": "2026-10-13T09:00:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": false,
+    "manualAllDay": false,
+    "workDayOff": false
+  },
+  {
+    "id": "work-6bdM6cIpGVV8eKy0m4",
     "title": "朝会",
     "start": "2026-10-14T01:20:00.000Z",
     "end": "2026-10-14T01:30:00.000Z",
@@ -5119,7 +5196,7 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
-    "id": "work-ok0IwxZiy9at5MH8aj",
+    "id": "work--XrbNg_rYrpNRxhSHu",
     "title": "朝会",
     "start": "2026-10-15T01:15:00.000Z",
     "end": "2026-10-15T01:30:00.000Z",
@@ -5152,7 +5229,7 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
-    "id": "work-8DOtHICJswlHgXv1JW",
+    "id": "work-mo_x5bwvskv_UruKO7",
     "title": "朝会",
     "start": "2026-10-19T01:20:00.000Z",
     "end": "2026-10-19T01:30:00.000Z",
@@ -5163,7 +5240,7 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
-    "id": "work-WVppageyjaFV-S0i6G",
+    "id": "work-RF_foTaFV8yUKg893Z",
     "title": "朝会",
     "start": "2026-10-20T01:15:00.000Z",
     "end": "2026-10-20T01:45:00.000Z",
@@ -5185,7 +5262,18 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
-    "id": "work-SmRmxtDfU7IzmPTqe3",
+    "id": "work-GjdXsHnVPE2FwG5ctM",
+    "title": "仕事",
+    "start": "2026-10-20T08:30:00.000Z",
+    "end": "2026-10-20T09:00:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": false,
+    "manualAllDay": false,
+    "workDayOff": false
+  },
+  {
+    "id": "work-u53NbkJbO6qTRQvXWI",
     "title": "朝会",
     "start": "2026-10-21T01:20:00.000Z",
     "end": "2026-10-21T01:30:00.000Z",
@@ -5218,7 +5306,7 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
-    "id": "work-ndHBahgv-Uc-uSn6AI",
+    "id": "work-1nYPHyWUSt9_vxVzhh",
     "title": "朝会",
     "start": "2026-10-22T01:15:00.000Z",
     "end": "2026-10-22T01:30:00.000Z",
@@ -5251,7 +5339,7 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
-    "id": "work-F4RM5LibKXrl3tcobK",
+    "id": "work-TowQAvhu5idVkpeQRp",
     "title": "朝会",
     "start": "2026-10-26T01:20:00.000Z",
     "end": "2026-10-26T01:30:00.000Z",
@@ -5266,6 +5354,50 @@ window.FAMILY_CALENDAR_EVENTS = [
     "title": "同期懇親会",
     "start": "2026-10-26T03:00:00.000Z",
     "end": "2026-10-26T04:30:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": false,
+    "manualAllDay": false,
+    "workDayOff": false
+  },
+  {
+    "id": "work-EtKenZGA_-yHsxEeOa",
+    "title": "朝会",
+    "start": "2026-10-27T01:15:00.000Z",
+    "end": "2026-10-27T01:45:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": false,
+    "manualAllDay": false,
+    "workDayOff": false
+  },
+  {
+    "id": "work-D2pdItnxqcapmvUHDT",
+    "title": "仕事",
+    "start": "2026-10-27T06:00:00.000Z",
+    "end": "2026-10-27T06:30:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": false,
+    "manualAllDay": false,
+    "workDayOff": false
+  },
+  {
+    "id": "work-Cl0XCad3JfPAouP8MA",
+    "title": "仕事",
+    "start": "2026-10-27T08:00:00.000Z",
+    "end": "2026-10-27T09:00:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": false,
+    "manualAllDay": false,
+    "workDayOff": false
+  },
+  {
+    "id": "work-yuim7UrFXQ3W-7anoV",
+    "title": "仕事",
+    "start": "2026-10-27T08:30:00.000Z",
+    "end": "2026-10-27T09:00:00.000Z",
     "source": "work",
     "note": "",
     "allDay": false,
@@ -5304,6 +5436,15 @@ window.FAMILY_CALENDAR_EVENTS = [
     "title": "勤労感謝の日",
     "start": "2026-11-22T15:00:00.000Z",
     "end": "2026-11-23T15:00:00.000Z",
+    "source": "holiday",
+    "note": "",
+    "allDay": true
+  },
+  {
+    "id": "holiday-tuW5imN3TkhM2P6RJa",
+    "title": "クリスマス",
+    "start": "2026-12-24T15:00:00.000Z",
+    "end": "2026-12-25T15:00:00.000Z",
     "source": "holiday",
     "note": "",
     "allDay": true
