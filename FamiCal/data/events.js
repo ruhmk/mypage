@@ -1,4 +1,4 @@
-window.FAMILY_CALENDAR_UPDATED_AT = "2026-08-29T00:40:26.232Z";
+window.FAMILY_CALENDAR_UPDATED_AT = "2026-08-30T00:40:26.576Z";
 window.FAMILY_CALENDAR_EVENTS = [
   {
     "id": "work-QiuN5ev4OOzmdVq7oE",
@@ -3987,6 +3987,15 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
+    "id": "personal-VXg_AUrsMdA6yTUPh8",
+    "title": "ホンダカーズ11時予約",
+    "start": "2026-09-05T01:30:00.000Z",
+    "end": "2026-09-05T03:30:00.000Z",
+    "source": "personal",
+    "note": "",
+    "allDay": false
+  },
+  {
     "id": "work-HTsuIRp-GTtqzB482Z",
     "title": "【北河】リモート",
     "start": "2026-09-06T15:00:00.000Z",
@@ -5267,6 +5276,17 @@ window.FAMILY_CALENDAR_EVENTS = [
     "allDay": false,
     "manualAllDay": false,
     "workDayOff": false
+  },
+  {
+    "id": "work-6DZG8LrBjwfM3A35du",
+    "title": "【北河】全休",
+    "start": "2026-10-29T15:00:00.000Z",
+    "end": "2026-10-30T15:00:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": true,
+    "manualAllDay": true,
+    "workDayOff": true
   },
   {
     "id": "holiday-TAH6Zewibz2gsukYhe",
