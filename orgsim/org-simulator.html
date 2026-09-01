@@ -2094,6 +2094,7 @@
         <button class="text-btn" id="copyCurrentBtn" title="現行を案A/Bへコピー">現行→A/B</button>
         <button class="text-btn" id="saveFileBtn" title="外部ファイルに保存">保存</button>
         <button class="text-btn" id="saveAsFileBtn" title="別ファイルへ保存">別名保存</button>
+        <button class="text-btn" id="exportPptxBtn" title="全案を編集可能なPowerPointとして保存">PPTX保存</button>
         <button class="text-btn" id="exportPngBtn" title="図全体を100% PNGで保存">PNG保存</button>
         <button class="text-btn primary" id="duplicateScenarioBtn" title="現在の案を複製">複製</button>
       </div>
@@ -2142,6 +2143,7 @@
 
   <div class="toast" id="toast"></div>
 
+  <script src="pptxgen.bundle.js"></script>
   <script>
     const STORAGE_KEY = "org-simulator-v1";
     const RECENT_FILE_DB = "org-simulator-recent-files";
@@ -2157,6 +2159,7 @@
     const HISTORY_LIMIT = 80;
     const CARD_COLOR_OVERRIDES = ["core", "external", "added", "candidate", "hiring", "removed"];
     const BORDER_STYLE_OVERRIDES = ["solid", "dashed"];
+    const SLIDES_PAGE = { widthPt: 720, heightPt: 405, marginPt: 18, headerPt: 30 };
 
     const baseNodes = [
       {
@@ -2426,6 +2429,7 @@
     document.getElementById("copyCurrentBtn").addEventListener("click", copyCurrentToPlans);
     document.getElementById("saveFileBtn").addEventListener("click", saveExternalFile);
     document.getElementById("saveAsFileBtn").addEventListener("click", saveAsExternalFile);
+    document.getElementById("exportPptxBtn").addEventListener("click", exportPptx);
     document.getElementById("exportPngBtn").addEventListener("click", exportPng);
     document.getElementById("duplicateScenarioBtn").addEventListener("click", () => duplicateScenario());
     document.getElementById("addNodeBtn").addEventListener("click", addNode);
@@ -3080,8 +3084,7 @@
       });
     }
 
-    function buildLayout(nodes) {
-      const scenario = getActiveScenario();
+    function buildLayout(nodes, scenario = getActiveScenario()) {
       const nodeMap = new Map(nodes.map((node) => [node.id, node]));
       const childrenMap = new Map();
       nodes.forEach((node) => childrenMap.set(node.id, []));
@@ -5208,6 +5211,10 @@
 
     function downloadJson(data, filename = "org-simulator-data.json") {
       const blob = new Blob([data], { type: "application/json" });
+      downloadBlob(blob, filename);
+    }
+
+    function downloadBlob(blob, filename) {
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -5215,12 +5222,802 @@
       document.body.appendChild(link);
       link.click();
       link.remove();
-      URL.revokeObjectURL(url);
+      setTimeout(() => URL.revokeObjectURL(url), 0);
     }
 
     function exportJson() {
       downloadJson(JSON.stringify(state, null, 2));
       notify("JSONを書き出しました");
+    }
+
+    async function exportPptx() {
+      const button = document.getElementById("exportPptxBtn");
+      if (typeof PptxGenJS !== "function") {
+        notify("PPTX生成機能を読み込めませんでした");
+        return;
+      }
+      const originalText = button.textContent;
+      button.disabled = true;
+      button.textContent = "作成中...";
+      try {
+        const model = buildSlidesExportPayload();
+        const pptx = new PptxGenJS();
+        pptx.defineLayout({ name: "GOOGLE_WIDE", width: 10, height: 5.625 });
+        pptx.layout = "GOOGLE_WIDE";
+        pptx.author = "体制シミュレーター";
+        pptx.company = "VISION";
+        pptx.subject = "体制図";
+        pptx.title = model.source.documentTitle || "体制図";
+        pptx.lang = "ja-JP";
+        pptx.theme = {
+          headFontFace: "Arial",
+          bodyFontFace: "Arial",
+          lang: "ja-JP"
+        };
+        model.slides.forEach((slideModel) => renderPptxSlide(pptx, slideModel));
+        const filename = `${safeFileName(model.source.documentTitle || "体制図")}-体制図.pptx`;
+        const generated = await pptx.write({ outputType: "blob" });
+        const connected = await bindPptxConnectors(generated, model);
+        downloadBlob(connected, filename);
+        notify(`PPTXを書き出しました（${model.slides.length}案）`);
+      } catch (error) {
+        console.error(error);
+        notify("PPTXの作成に失敗しました");
+      } finally {
+        button.disabled = false;
+        button.textContent = originalText;
+      }
+    }
+
+    function buildSlidesExportPayload() {
+      const generatedAt = new Date().toISOString();
+      const palettes = slidesPalettes();
+      const documentTitle = `${fileHandle?.name || "体制図"}`.replace(/\.json$/i, "");
+      return {
+        schema: "org-simulator.google-slides",
+        schemaVersion: 1,
+        generatedAt,
+        source: {
+          application: "体制シミュレーター",
+          storageSchema: STORAGE_KEY,
+          fileName: fileHandle?.name || null,
+          documentTitle,
+          activeScenarioId
+        },
+        target: {
+          application: "Google Slides",
+          page: {
+            widthPt: SLIDES_PAGE.widthPt,
+            heightPt: SLIDES_PAGE.heightPt,
+            aspectRatio: "16:9",
+            coordinateOrigin: "top-left",
+            unit: "PT"
+          },
+          reference: {
+            presentationId: "1o2zmu6mYFlV2VIx3t6TeKC0tWQ1yNe3fZJnfyxdkMfk",
+            slideObjectId: "g39f4b84d498_0_0",
+            style: "editable rounded cards, light fills and native connectors"
+          },
+          drawingOrder: ["zones", "visualLines", "knots", "cards", "header"]
+        },
+        palettes,
+        slides: state.scenarios.map((scenario, index) => buildSlidesExportSlide(scenario, index, palettes, documentTitle))
+      };
+    }
+
+    function buildSlidesExportSlide(scenario, index, palettes, documentTitle) {
+      const layout = buildLayout(scenario.nodes || [], scenario);
+      const sourceBounds = layout.contentBounds || layoutContentBounds([...layout.positions.values()], layout.knots || [], layout.zones || []);
+      const sourceWidth = Math.max(1, sourceBounds.maxX - sourceBounds.minX);
+      const sourceHeight = Math.max(1, sourceBounds.maxY - sourceBounds.minY);
+      const contentRect = {
+        x: SLIDES_PAGE.marginPt,
+        y: SLIDES_PAGE.marginPt + SLIDES_PAGE.headerPt,
+        width: SLIDES_PAGE.widthPt - SLIDES_PAGE.marginPt * 2,
+        height: SLIDES_PAGE.heightPt - SLIDES_PAGE.marginPt * 2 - SLIDES_PAGE.headerPt
+      };
+      const scale = Math.min(.46, contentRect.width / sourceWidth, contentRect.height / sourceHeight);
+      const drawnWidth = sourceWidth * scale;
+      const drawnHeight = sourceHeight * scale;
+      const offsetX = contentRect.x + (contentRect.width - drawnWidth) / 2 - sourceBounds.minX * scale;
+      const offsetY = contentRect.y + (contentRect.height - drawnHeight) / 2 - sourceBounds.minY * scale;
+      const mapPoint = (point) => ({
+        x: slideNumber(point.x * scale + offsetX),
+        y: slideNumber(point.y * scale + offsetY)
+      });
+      const mapRect = (rect) => ({
+        x: slideNumber(rect.x * scale + offsetX),
+        y: slideNumber(rect.y * scale + offsetY),
+        width: slideNumber(rect.width * scale),
+        height: slideNumber(rect.height * scale)
+      });
+      const nodeMap = new Map(layout.nodes.map((node) => [node.id, node]));
+      const cards = layout.nodes.map((node, nodeIndex) => {
+        const position = layout.positions.get(node.id);
+        const palette = slidesNodePalette(node, nodeMap, palettes);
+        const geometry = referenceSlidesCardGeometry(mapRect(position), node, layout.nodes);
+        const fontScale = clamp(geometry.height / 38, .82, 1.06);
+        return {
+          objectId: slidesObjectId("card", scenario.id, node.id, nodeIndex),
+          pptxObjectName: `ORG_CARD_${nodeIndex + 1}`,
+          sourceId: node.id,
+          shapeType: "ROUND_RECTANGLE",
+          geometry,
+          text: {
+            role: node.role || "役割未設定",
+            name: nodeDisplayName(node),
+            team: node.team || "",
+            requirement: node.requirement || "",
+            paragraphAlignment: "CENTER",
+            contentAlignment: "MIDDLE",
+            roleFontSizePt: slideNumber(5.5 * fontScale),
+            nameFontSizePt: slideNumber(8.5 * fontScale),
+            teamFontSizePt: slideNumber(5 * fontScale),
+            fontFamily: "Arial"
+          },
+          style: {
+            palette: palette.key,
+            fillHex: palette.fill,
+            fillAlpha: palette.alpha,
+            outlineHex: palette.outline,
+            outlineWidthPt: palette.outlineWidthPt,
+            outlineDash: palette.dash,
+            textHex: "#202124"
+          },
+          data: {
+            parentId: node.parent || null,
+            lane: node.lane || "core",
+            status: node.status || "current",
+            hiring: Boolean(node.hiring),
+            decision: node.decision || "",
+            note: node.note || "",
+            colorOverride: node.colorOverride || null,
+            borderStyleOverride: node.borderStyleOverride || null,
+            avatarAvailable: Boolean(node.slackAvatar)
+          }
+        };
+      });
+      const zones = (layout.zones || []).map((zone, zoneIndex) => ({
+        objectId: slidesObjectId("zone", scenario.id, zone.id, zoneIndex),
+        sourceId: zone.id,
+        shapeType: "ROUND_RECTANGLE",
+        geometry: mapRect(zone),
+        label: zone.label || "追加枠",
+        locked: Boolean(zone.locked),
+        style: {
+          fillHex: zone.id === "external" ? "#FFF2CC" : "#EAF3F8",
+          fillAlpha: zone.id === "external" ? .42 : .3,
+          outlineHex: zone.locked ? "#9AA0A6" : "#7AA7B8",
+          outlineWidthPt: 1,
+          outlineDash: "SOLID",
+          labelHex: "#3C4043",
+          labelFontSizePt: 8
+        }
+      }));
+      const knots = (layout.knots || []).map((knot, knotIndex) => ({
+        objectId: slidesObjectId("knot", scenario.id, knot.id, knotIndex),
+        pptxObjectName: `ORG_KNOT_${knotIndex + 1}`,
+        sourceId: knot.id,
+        code: knot.code,
+        parentId: knot.parent || null,
+        point: mapPoint(knot),
+        locked: Boolean(knot.locked),
+        lockedLinks: [...(knot.lockedLinks || [])],
+        visible: false,
+        purpose: "connector routing and bundling"
+      }));
+      const relationships = buildSlidesRelationships(layout, mapPoint);
+      return {
+        slideIndex: index,
+        scenarioId: scenario.id,
+        scenarioName: scenario.name || `案${index + 1}`,
+        active: scenario.id === activeScenarioId,
+        header: {
+          title: documentTitle || "体制図",
+          scenarioLabel: scenario.name || `案${index + 1}`,
+          date: slidesMonthLabel(new Date()),
+          titleFontFamily: "Arial",
+          titleFontSizePt: 20,
+          titleBold: true
+        },
+        transform: {
+          sourceUnit: "canvas-px",
+          targetUnit: "PT",
+          sourceBounds: {
+            minX: slideNumber(sourceBounds.minX),
+            minY: slideNumber(sourceBounds.minY),
+            maxX: slideNumber(sourceBounds.maxX),
+            maxY: slideNumber(sourceBounds.maxY)
+          },
+          scale: slideNumber(scale),
+          offsetXPt: slideNumber(offsetX),
+          offsetYPt: slideNumber(offsetY)
+        },
+        zones,
+        cards,
+        knots,
+        relationships,
+        visualLines: buildSlidesConnectorLines(relationships, cards, knots)
+      };
+    }
+
+    function referenceSlidesCardGeometry(mapped, node, nodes) {
+      const hasChildren = nodes.some((candidate) => candidate.parent === node.id);
+      const prominent = !node.parent || hasChildren || node.hiring || node.status === "hiring";
+      const widthRatio = prominent ? .94 : .72;
+      const minWidth = prominent ? 74 : 58;
+      const maxWidth = prominent ? 88 : 72;
+      const width = clamp(mapped.width * widthRatio, minWidth, maxWidth);
+      const height = clamp(mapped.height * .8, 32, 39);
+      return {
+        x: slideNumber(mapped.x + (mapped.width - width) / 2),
+        y: slideNumber(mapped.y + (mapped.height - height) / 2),
+        width: slideNumber(width),
+        height: slideNumber(height)
+      };
+    }
+
+    function slidesPalettes() {
+      return {
+        core: { fill: "#CFE2F3", outline: "#5B8DB8", alpha: 1 },
+        external: { fill: "#FFF2CC", outline: "#B89B42", alpha: 1 },
+        added: { fill: "#D9EAD3", outline: "#6AA56A", alpha: 1 },
+        candidate: { fill: "#D9D2E9", outline: "#8172A8", alpha: 1 },
+        hiring: { fill: "#FFE599", outline: "#D29A00", alpha: 1 },
+        removed: { fill: "#E4E7EB", outline: "#7B8794", alpha: .65 }
+      };
+    }
+
+    function slidesNodePalette(node, nodeMap, palettes) {
+      let key = node.colorOverride;
+      if (!key) {
+        if (node.status === "removed") key = "removed";
+        else if (node.status === "hiring" || node.hiring) key = "hiring";
+        else if (node.status === "added") key = "added";
+        else if (node.status === "candidate") key = "candidate";
+        else key = node.lane === "external" ? "external" : "core";
+      }
+      const base = palettes[key] || palettes.core;
+      const atRisk = node.status === "risk" || (node.parent && nodeMap.get(node.parent)?.status === "removed");
+      return {
+        key,
+        fill: base.fill,
+        alpha: base.alpha,
+        outline: atRisk ? "#EA4335" : base.outline,
+        outlineWidthPt: atRisk ? 2 : 1,
+        dash: node.borderStyleOverride === "dashed" || node.status === "removed" ? "DASH" : "SOLID"
+      };
+    }
+
+    function buildSlidesRelationships(layout, mapPoint) {
+      const relationships = [];
+      buildKnotParentRoutes(layout).forEach((route) => {
+        relationships.push({
+          id: route.linkId,
+          kind: "knot-parent",
+          sourceId: route.parentId,
+          targetId: route.knot.id,
+          viaKnotId: null,
+          sourceSide: route.parentAnchor.type === "node" ? slidesAnchorSide(route.parentAnchor.rect, route.source) : null,
+          targetSide: null,
+          points: [mapPoint(route.source), mapPoint(route.target)],
+          locked: Boolean(route.knot.locked),
+          line: { category: "ELBOW", colorHex: "#5F6368", widthPt: 1, dash: "SOLID", startArrow: "NONE", endArrow: "NONE" }
+        });
+      });
+      buildLinkRoutes(layout).forEach((route) => {
+        relationships.push({
+          id: route.linkId,
+          kind: "node-parent",
+          sourceId: route.parentId,
+          targetId: route.node.id,
+          viaKnotId: route.knot?.id || null,
+          sourceSide: route.parentAnchor.type === "node" ? slidesAnchorSide(route.parentAnchor.rect, route.source) : null,
+          targetSide: slidesAnchorSide(route.child, route.target),
+          points: [route.source, ...(route.knot ? [{ x: route.knot.x, y: route.knot.y }] : []), route.target].map(mapPoint),
+          locked: Boolean(route.knot?.locked || (route.parentAnchor.type === "knot" && route.parentAnchor.knot.locked)),
+          removed: route.removed,
+          line: { category: "ELBOW", colorHex: route.removed ? "#9AA0A6" : "#5F6368", widthPt: 1, dash: route.removed ? "DASH" : "SOLID", startArrow: "NONE", endArrow: "NONE" }
+        });
+      });
+      return relationships;
+    }
+
+    function buildSlidesConnectorLines(relationships, cards, knots) {
+      const entities = new Map();
+      cards.forEach((card) => entities.set(card.sourceId, {
+        kind: "card",
+        sourceId: card.sourceId,
+        objectName: card.pptxObjectName,
+        geometry: card.geometry
+      }));
+      knots.forEach((knot) => entities.set(knot.sourceId, {
+        kind: "knot",
+        sourceId: knot.sourceId,
+        objectName: knot.pptxObjectName,
+        point: knot.point
+      }));
+
+      const connectorMap = new Map();
+      const addConnector = (sourceId, targetId, relationshipId, removed = false) => {
+        if (!sourceId || !targetId || sourceId === targetId) return;
+        const source = entities.get(sourceId);
+        const target = entities.get(targetId);
+        if (!source || !target) return;
+        const key = `${sourceId}->${targetId}`;
+        const existing = connectorMap.get(key);
+        if (existing) {
+          if (!existing.relationshipIds.includes(relationshipId)) existing.relationshipIds.push(relationshipId);
+          existing.removed = existing.removed && Boolean(removed);
+          existing.line.dash = existing.removed ? "DASH" : "SOLID";
+          existing.line.colorHex = existing.removed ? "#9AA0A6" : "#6E93A4";
+          return;
+        }
+        const sourceCenter = slidesEntityCenter(source);
+        const targetCenter = slidesEntityCenter(target);
+        const sourceAnchor = slidesEntityAnchor(source, targetCenter);
+        const targetAnchor = slidesEntityAnchor(target, sourceCenter);
+        connectorMap.set(key, {
+          id: `connector-${connectorMap.size + 1}`,
+          relationshipIds: [relationshipId],
+          sourceId,
+          targetId,
+          sourceObjectName: source.objectName,
+          targetObjectName: target.objectName,
+          sourceSide: sourceAnchor.side,
+          targetSide: targetAnchor.side,
+          points: [sourceAnchor.point, targetAnchor.point],
+          removed: Boolean(removed),
+          line: {
+            category: Math.abs(sourceAnchor.point.x - targetAnchor.point.x) < .5 || Math.abs(sourceAnchor.point.y - targetAnchor.point.y) < .5
+              ? "STRAIGHT"
+              : "ELBOW",
+            colorHex: removed ? "#9AA0A6" : "#6E93A4",
+            widthPt: .9,
+            dash: removed ? "DASH" : "SOLID",
+            startArrow: "NONE",
+            endArrow: "NONE"
+          }
+        });
+      };
+
+      relationships.forEach((relationship) => {
+        if (relationship.kind === "node-parent" && relationship.viaKnotId) {
+          addConnector(relationship.sourceId, relationship.viaKnotId, relationship.id, relationship.removed);
+          addConnector(relationship.viaKnotId, relationship.targetId, relationship.id, relationship.removed);
+          return;
+        }
+        addConnector(relationship.sourceId, relationship.targetId, relationship.id, relationship.removed);
+      });
+
+      return [...connectorMap.values()].map((connector, index) => ({
+        ...connector,
+        pptxObjectName: `ORG_CONNECTOR_${index + 1}`
+      }));
+    }
+
+    function slidesEntityCenter(entity) {
+      if (entity.kind === "knot") return { x: entity.point.x, y: entity.point.y };
+      return {
+        x: entity.geometry.x + entity.geometry.width / 2,
+        y: entity.geometry.y + entity.geometry.height / 2
+      };
+    }
+
+    function slidesEntityAnchor(entity, toward) {
+      const center = slidesEntityCenter(entity);
+      const side = slidesDirectionSide(center, toward);
+      if (entity.kind === "knot") return { side, point: center };
+      const geometry = entity.geometry;
+      const points = {
+        LEFT: { x: geometry.x, y: center.y },
+        RIGHT: { x: geometry.x + geometry.width, y: center.y },
+        TOP: { x: center.x, y: geometry.y },
+        BOTTOM: { x: center.x, y: geometry.y + geometry.height }
+      };
+      return { side, point: points[side] };
+    }
+
+    function slidesDirectionSide(origin, toward) {
+      const dx = toward.x - origin.x;
+      const dy = toward.y - origin.y;
+      if (Math.abs(dx) > Math.abs(dy)) return dx >= 0 ? "RIGHT" : "LEFT";
+      return dy >= 0 ? "BOTTOM" : "TOP";
+    }
+
+    function buildSlidesVisualLines(layout, mapPoint) {
+      const visualLines = [];
+      buildKnotParentRoutes(layout).forEach((route) => {
+        visualLines.push(slidesVisualLine(`knot-parent-${route.linkId}`, [route.source, route.target], [route.linkId], false, mapPoint));
+      });
+      const routes = buildLinkRoutes(layout);
+      const grouped = new Map();
+      routes.forEach((route) => {
+        if (!route.knot) return;
+        const key = `${route.knot.id}|${route.parentId}`;
+        if (!grouped.has(key)) grouped.set(key, []);
+        grouped.get(key).push(route);
+      });
+      const groupedRouteIds = new Set();
+      grouped.forEach((group) => {
+        if (group.length < 2) return;
+        const first = group[0];
+        const source = anchorEdgePoint(first.parentAnchor, { x: first.knot.x, y: first.knot.y });
+        visualLines.push(slidesVisualLine(
+          `bundle-${first.knot.id}-${first.parentId}`,
+          [source, first.knot],
+          group.map((route) => route.linkId),
+          group.every((route) => route.removed),
+          mapPoint
+        ));
+        group.forEach((route) => {
+          groupedRouteIds.add(route.linkId);
+          visualLines.push(slidesVisualLine(`branch-${route.linkId}`, [route.knot, route.target], [route.linkId], route.removed, mapPoint));
+        });
+      });
+      routes.forEach((route) => {
+        if (groupedRouteIds.has(route.linkId)) return;
+        visualLines.push(slidesVisualLine(
+          `link-${route.linkId}`,
+          [route.source, ...(route.knot ? [route.knot] : []), route.target],
+          [route.linkId],
+          route.removed,
+          mapPoint
+        ));
+      });
+      return visualLines;
+    }
+
+    function slidesVisualLine(id, points, relationshipIds, removed, mapPoint) {
+      return {
+        id,
+        relationshipIds,
+        points: points.map((point) => mapPoint({ x: point.x, y: point.y })),
+        line: {
+          category: points.length > 2 ? "ELBOW" : "STRAIGHT",
+          colorHex: removed ? "#9AA0A6" : "#5F6368",
+          widthPt: 1,
+          dash: removed ? "DASH" : "SOLID",
+          startArrow: "NONE",
+          endArrow: "NONE"
+        }
+      };
+    }
+
+    function slidesAnchorSide(rect, point) {
+      const distances = [
+        ["LEFT", Math.abs(point.x - rect.x)],
+        ["RIGHT", Math.abs(point.x - (rect.x + rect.width))],
+        ["TOP", Math.abs(point.y - rect.y)],
+        ["BOTTOM", Math.abs(point.y - (rect.y + rect.height))]
+      ];
+      distances.sort((a, b) => a[1] - b[1]);
+      return distances[0][0];
+    }
+
+    function slidesObjectId(prefix, scenarioId, sourceId, index) {
+      const normalized = `${prefix}_${scenarioId}_${sourceId}_${index}`.replace(/[^A-Za-z0-9_-]/g, "_");
+      return normalized.length >= 5 ? normalized.slice(0, 50) : `${normalized}_item`;
+    }
+
+    function slideNumber(value) {
+      return Math.round(Number(value || 0) * 1000) / 1000;
+    }
+
+    function slidesMonthLabel(date) {
+      return `${date.getFullYear()}.${date.getMonth() + 1}`;
+    }
+
+    function renderPptxSlide(pptx, slideModel) {
+      const slide = pptx.addSlide();
+      slide.background = { color: "FFFFFF" };
+      slideModel.zones.forEach((zone) => renderPptxZone(pptx, slide, zone));
+      slideModel.knots.forEach((knot) => renderPptxKnotAnchor(pptx, slide, knot));
+      slideModel.visualLines.forEach((line) => renderPptxVisualLine(pptx, slide, line));
+      slideModel.cards.forEach((card) => renderPptxCard(pptx, slide, card));
+      renderPptxHeader(pptx, slide, slideModel.header);
+    }
+
+    function renderPptxZone(pptx, slide, zone) {
+      const rect = pptxRect(zone.geometry);
+      slide.addShape(pptx.ShapeType.roundRect, {
+        ...rect,
+        rectRadius: .12,
+        fill: {
+          color: pptxHex(zone.style.fillHex),
+          transparency: pptxTransparency(zone.style.fillAlpha)
+        },
+        line: {
+          color: pptxHex(zone.style.outlineHex),
+          width: zone.style.outlineWidthPt || 1,
+          dashType: pptxDash(zone.style.outlineDash)
+        }
+      });
+      slide.addText(zone.label || "追加枠", {
+        x: rect.x + .12,
+        y: rect.y + .08,
+        w: Math.max(.1, rect.w - .24),
+        h: Math.min(.24, Math.max(.12, rect.h - .08)),
+        margin: 0,
+        fontFace: "Arial",
+        fontSize: zone.style.labelFontSizePt || 8,
+        bold: true,
+        color: pptxHex(zone.style.labelHex),
+        breakLine: false,
+        fit: "shrink"
+      });
+    }
+
+    function renderPptxVisualLine(pptx, slide, visualLine) {
+      const points = visualLine.points || [];
+      if (points.length < 2) return;
+      const start = pptxPoint(points[0]);
+      const end = pptxPoint(points[points.length - 1]);
+      const dx = end.x - start.x;
+      const dy = end.y - start.y;
+      if (Math.abs(dx) < .0001 && Math.abs(dy) < .0001) return;
+      const style = visualLine.line || {};
+      const shape = style.category === "STRAIGHT" ? pptx.ShapeType.line : "bentConnector3";
+      slide.addShape(shape, {
+        x: Math.min(start.x, end.x),
+        y: Math.min(start.y, end.y),
+        w: Math.abs(dx),
+        h: Math.abs(dy),
+        flipH: dx < 0,
+        flipV: dy < 0,
+        objectName: visualLine.pptxObjectName,
+        line: {
+          color: pptxHex(style.colorHex || "#6E93A4"),
+          width: style.widthPt || .9,
+          dashType: pptxDash(style.dash),
+          beginArrowType: "none",
+          endArrowType: "none"
+        }
+      });
+    }
+
+    function renderPptxKnotAnchor(pptx, slide, knot) {
+      const point = pptxPoint(knot.point);
+      slide.addShape(pptx.ShapeType.ellipse, {
+        x: point.x - .015,
+        y: point.y - .015,
+        w: .03,
+        h: .03,
+        objectName: knot.pptxObjectName,
+        fill: { color: "FFFFFF", transparency: 100 },
+        line: { color: "FFFFFF", transparency: 100, width: .1 }
+      });
+    }
+
+    function addPptxLineSegment(pptx, slide, startPt, endPt, style) {
+      const start = pptxPoint(startPt);
+      const end = pptxPoint(endPt);
+      const dx = end.x - start.x;
+      const dy = end.y - start.y;
+      if (Math.abs(dx) < .0001 && Math.abs(dy) < .0001) return;
+      slide.addShape(pptx.ShapeType.line, {
+        x: Math.min(start.x, end.x),
+        y: Math.min(start.y, end.y),
+        w: Math.abs(dx),
+        h: Math.abs(dy),
+        flipV: dx * dy < 0,
+        line: {
+          color: pptxHex(style.colorHex || "#5F6368"),
+          width: style.widthPt || 1,
+          dashType: pptxDash(style.dash),
+          beginArrowType: "none",
+          endArrowType: "none"
+        }
+      });
+    }
+
+    function renderPptxCard(pptx, slide, card) {
+      const rect = pptxRect(card.geometry);
+      const role = card.data.hiring && card.text.requirement
+        ? card.text.requirement
+        : card.text.role;
+      const runs = [
+        {
+          text: role || "役割未設定",
+          options: {
+            breakLine: true,
+            fontFace: card.text.fontFamily || "Arial",
+            fontSize: card.text.roleFontSizePt,
+            color: pptxHex(card.style.textHex)
+          }
+        },
+        {
+          text: card.text.name || "未定",
+          options: {
+            breakLine: Boolean(card.text.team),
+            fontFace: card.text.fontFamily || "Arial",
+            fontSize: card.text.nameFontSizePt,
+            bold: true,
+            color: pptxHex(card.style.textHex)
+          }
+        }
+      ];
+      if (card.text.team) {
+        runs.push({
+          text: card.text.team,
+          options: {
+            fontFace: card.text.fontFamily || "Arial",
+            fontSize: card.text.teamFontSizePt,
+            bold: true,
+            color: pptxHex(card.style.textHex)
+          }
+        });
+      }
+      slide.addText(runs, {
+        ...rect,
+        shape: pptx.ShapeType.roundRect,
+        rectRadius: .08,
+        objectName: card.pptxObjectName,
+        margin: .02,
+        align: "center",
+        valign: "mid",
+        fit: "shrink",
+        breakLine: false,
+        fill: {
+          color: pptxHex(card.style.fillHex),
+          transparency: pptxTransparency(card.style.fillAlpha)
+        },
+        line: {
+          color: pptxHex(card.style.outlineHex),
+          width: card.style.outlineWidthPt || 1,
+          dashType: pptxDash(card.style.outlineDash)
+        }
+      });
+    }
+
+    function renderPptxHeader(pptx, slide, header) {
+      slide.addText(header.title || "体制図", {
+        x: .18,
+        y: .07,
+        w: 7.45,
+        h: .3,
+        margin: 0,
+        fontFace: header.titleFontFamily || "Arial",
+        fontSize: header.titleFontSizePt || 20,
+        bold: header.titleBold !== false,
+        color: "202124",
+        fit: "shrink",
+        breakLine: false
+      });
+      slide.addText(header.scenarioLabel || "", {
+        x: .18,
+        y: .39,
+        w: 4.5,
+        h: .16,
+        margin: 0,
+        fontFace: "Arial",
+        fontSize: 8,
+        bold: true,
+        color: "5F6368",
+        fit: "shrink",
+        breakLine: false
+      });
+      slide.addText(header.date || "", {
+        x: 8.35,
+        y: .09,
+        w: 1.45,
+        h: .22,
+        margin: 0,
+        fontFace: "Arial",
+        fontSize: 10,
+        color: "5F6368",
+        align: "right",
+        breakLine: false
+      });
+      slide.addShape(pptx.ShapeType.line, {
+        x: .18,
+        y: .59,
+        w: 9.64,
+        h: 0,
+        line: { color: "DADCE0", width: .8 }
+      });
+    }
+
+    async function bindPptxConnectors(pptxBlob, model) {
+      if (typeof JSZip !== "function" || typeof DOMParser !== "function") return pptxBlob;
+      try {
+        const zip = await JSZip.loadAsync(pptxBlob);
+        const presentationNs = "http://schemas.openxmlformats.org/presentationml/2006/main";
+        const drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        for (let index = 0; index < model.slides.length; index += 1) {
+          const path = `ppt/slides/slide${index + 1}.xml`;
+          const entry = zip.file(path);
+          if (!entry) continue;
+          const xml = await entry.async("string");
+          const documentXml = new DOMParser().parseFromString(xml, "application/xml");
+          if (documentXml.getElementsByTagName("parsererror").length) continue;
+          const namesToIds = new Map();
+          [...documentXml.getElementsByTagNameNS(presentationNs, "cNvPr")].forEach((item) => {
+            namesToIds.set(item.getAttribute("name"), item.getAttribute("id"));
+          });
+          const bindings = new Map(model.slides[index].visualLines.map((line) => [line.pptxObjectName, line]));
+          [...documentXml.getElementsByTagNameNS(presentationNs, "sp")].forEach((shape) => {
+            const cNvPr = shape.getElementsByTagNameNS(presentationNs, "cNvPr")[0];
+            const binding = cNvPr ? bindings.get(cNvPr.getAttribute("name")) : null;
+            if (!binding) return;
+            replacePptxShapeWithConnector(documentXml, shape, binding, namesToIds, presentationNs, drawingNs);
+          });
+          const serialized = new XMLSerializer().serializeToString(documentXml);
+          zip.file(path, serialized.startsWith("<?xml") ? serialized : `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>${serialized}`);
+        }
+        return await zip.generateAsync({
+          type: "blob",
+          compression: "DEFLATE",
+          mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        });
+      } catch (error) {
+        console.warn("PPTX connector binding skipped", error);
+        return pptxBlob;
+      }
+    }
+
+    function replacePptxShapeWithConnector(documentXml, shape, binding, namesToIds, presentationNs, drawingNs) {
+      const oldNv = [...shape.childNodes].find((node) => node.localName === "nvSpPr");
+      const cNvPr = oldNv?.getElementsByTagNameNS(presentationNs, "cNvPr")[0];
+      const nvPr = oldNv?.getElementsByTagNameNS(presentationNs, "nvPr")[0];
+      if (!oldNv || !cNvPr || !nvPr) return;
+      const connector = documentXml.createElementNS(presentationNs, "p:cxnSp");
+      const nvConnector = documentXml.createElementNS(presentationNs, "p:nvCxnSpPr");
+      const connectionProperties = documentXml.createElementNS(presentationNs, "p:cNvCxnSpPr");
+      const sourceShapeId = namesToIds.get(binding.sourceObjectName);
+      const targetShapeId = namesToIds.get(binding.targetObjectName);
+      if (sourceShapeId) {
+        const startConnection = documentXml.createElementNS(drawingNs, "a:stCxn");
+        startConnection.setAttribute("id", sourceShapeId);
+        startConnection.setAttribute("idx", `${pptxConnectionSite(binding.sourceSide)}`);
+        connectionProperties.appendChild(startConnection);
+      }
+      if (targetShapeId) {
+        const endConnection = documentXml.createElementNS(drawingNs, "a:endCxn");
+        endConnection.setAttribute("id", targetShapeId);
+        endConnection.setAttribute("idx", `${pptxConnectionSite(binding.targetSide)}`);
+        connectionProperties.appendChild(endConnection);
+      }
+      nvConnector.appendChild(cNvPr.cloneNode(true));
+      nvConnector.appendChild(connectionProperties);
+      nvConnector.appendChild(nvPr.cloneNode(true));
+      connector.appendChild(nvConnector);
+      [...shape.childNodes].forEach((node) => {
+        if (node !== oldNv) connector.appendChild(node);
+      });
+      shape.parentNode.replaceChild(connector, shape);
+    }
+
+    function pptxConnectionSite(side) {
+      return { TOP: 0, LEFT: 1, BOTTOM: 2, RIGHT: 3 }[side] ?? 0;
+    }
+
+    function pptxRect(rect) {
+      return {
+        x: slideNumber(rect.x / 72),
+        y: slideNumber(rect.y / 72),
+        w: slideNumber(Math.max(.01, rect.width / 72)),
+        h: slideNumber(Math.max(.01, rect.height / 72))
+      };
+    }
+
+    function pptxPoint(point) {
+      return {
+        x: slideNumber(point.x / 72),
+        y: slideNumber(point.y / 72)
+      };
+    }
+
+    function pptxHex(value) {
+      return `${value || "000000"}`.replace(/^#/, "").toUpperCase();
+    }
+
+    function pptxTransparency(alpha) {
+      return clamp(Math.round((1 - Number(alpha ?? 1)) * 100), 0, 100);
+    }
+
+    function pptxDash(value) {
+      return `${value || "SOLID"}`.toUpperCase() === "DASH" ? "dash" : "solid";
     }
 
     async function exportPng() {
