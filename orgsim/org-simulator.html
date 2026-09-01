@@ -1,0 +1,5781 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>体制シミュレーター</title>
+  <style>
+    :root {
+      --bg: #e7edf2;
+      --surface: #ffffff;
+      --ink: #20242a;
+      --muted: #68707d;
+      --line: #1298cc;
+      --core: #cfe7ff;
+      --external: #ffd54f;
+      --added: #c9f3d2;
+      --candidate: #ecddff;
+      --hiring: #ffe08a;
+      --removed: #e7e7e2;
+      --risk: #ef4444;
+      --green: #0f8f68;
+      --violet: #7552bf;
+      --panel: #f7f9fb;
+      --border: #d6dfe7;
+      --board-bg: #edf2f5;
+      --card-shadow: 0 10px 20px rgba(21, 29, 38, .14), 0 2px 4px rgba(21, 29, 38, .07);
+      --shadow: 0 16px 34px rgba(31, 36, 43, .14);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      height: 100%;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--bg);
+      font-family: "Segoe UI", "Yu Gothic UI", "Hiragino Sans", Meiryo, sans-serif;
+      min-height: 0;
+      overflow: visible;
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+      font: inherit;
+    }
+
+    button {
+      border: 1px solid transparent;
+      background: var(--surface);
+      color: var(--ink);
+      cursor: pointer;
+      transition: background .15s ease, border-color .15s ease, box-shadow .15s ease, color .15s ease, transform .12s ease;
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: .42;
+    }
+
+    button:focus-visible,
+    input:focus-visible,
+    select:focus-visible,
+    textarea:focus-visible {
+      outline: 3px solid rgba(14, 165, 199, .24);
+      outline-offset: 2px;
+    }
+
+    .app {
+      display: grid;
+      grid-template-rows: 66px 1fr;
+      height: 100vh;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns: minmax(240px, 380px) 1fr auto;
+      align-items: center;
+      gap: 18px;
+      padding: 0 20px;
+      background: rgba(255, 255, 255, .96);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 6px 18px rgba(31, 36, 43, .08);
+      position: relative;
+      z-index: 10;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .mark {
+      width: 36px;
+      height: 36px;
+      border-radius: 12px;
+      background:
+        linear-gradient(135deg, #14b8a6 0 45%, transparent 45%),
+        linear-gradient(315deg, #ef4444 0 45%, transparent 45%),
+        #20242a;
+      box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .9);
+      flex: 0 0 auto;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.1;
+      letter-spacing: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .brand p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .scenario-tabs {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      overflow-x: auto;
+      scrollbar-width: thin;
+      padding: 8px 2px 4px;
+    }
+
+    .tab-item {
+      position: relative;
+      flex: 0 0 auto;
+    }
+
+    .tab {
+      height: 36px;
+      min-width: 72px;
+      max-width: 180px;
+      padding: 0 16px;
+      border-radius: 12px;
+      border-color: var(--border);
+      color: #3f4650;
+      background: #f3f6f8;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .tab.active {
+      background: #087fb2;
+      color: #fff;
+      border-color: #087fb2;
+      box-shadow: 0 5px 12px rgba(8, 127, 178, .2);
+    }
+
+    .tab-actions {
+      position: absolute;
+      top: -7px;
+      right: -7px;
+      display: flex;
+      gap: 3px;
+      opacity: 0;
+      transform: translateY(2px);
+      pointer-events: none;
+      transition: opacity .14s ease, transform .14s ease;
+      z-index: 3;
+    }
+
+    .scenario-tabs:hover .tab-actions,
+    .tab-item:focus-within .tab-actions {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+
+    .tab-mini {
+      width: 20px;
+      height: 20px;
+      padding: 0;
+      border-radius: 999px;
+      border: 1px solid rgba(32, 36, 42, .18);
+      background: #fff;
+      color: #20242a;
+      font-size: 14px;
+      font-weight: 900;
+      line-height: 1;
+      box-shadow: 0 4px 12px rgba(32, 36, 42, .16);
+    }
+
+    .tab-mini.delete {
+      color: #b3261e;
+      border-color: rgba(179, 38, 30, .22);
+      background: #fff8f7;
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .file-controls {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .recent-file-select {
+      width: 190px;
+      max-width: 24vw;
+      height: 36px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #fff;
+      color: var(--ink);
+      padding: 0 9px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .recent-file-remove {
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      border-radius: 999px;
+      border-color: var(--border);
+      background: #fff8f7;
+      color: #b3261e;
+      font-size: 16px;
+      font-weight: 900;
+      line-height: 1;
+    }
+
+    .icon-btn,
+    .text-btn {
+      height: 36px;
+      border-radius: 10px;
+      border-color: var(--border);
+      background: #fbfcfd;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      font-weight: 700;
+      color: #252a32;
+    }
+
+    .icon-btn:hover,
+    .text-btn:hover,
+    .board-size-btn:hover,
+    .recent-file-remove:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 18px rgba(31, 36, 43, .12);
+    }
+
+    .icon-btn:active,
+    .text-btn:active,
+    .board-size-btn:active,
+    .recent-file-remove:active {
+      transform: translateY(0) scale(.98);
+    }
+
+    .icon-btn {
+      width: 38px;
+      padding: 0;
+      font-size: 19px;
+    }
+
+    .text-btn {
+      padding: 0 12px;
+      font-size: 13px;
+    }
+
+    .text-btn.primary {
+      background: #0d93c5;
+      border-color: #087eac;
+      color: #fff;
+    }
+
+    .text-btn.warn {
+      background: #fff6f4;
+      color: #b3261e;
+      border-color: #f0c7c2;
+    }
+
+    .main {
+      display: grid;
+      grid-template-columns: 74px minmax(0, 1fr) 360px;
+      height: calc(100vh - 66px);
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .main.board-maximized {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .main.board-maximized .rail,
+    .main.board-maximized .inspector {
+      display: none;
+    }
+
+    .main.board-maximized .workspace {
+      grid-column: 1 / -1;
+      width: 100%;
+    }
+
+    .rail {
+      position: sticky;
+      top: 66px;
+      height: calc(100vh - 66px);
+      background: #f8fafc;
+      border-right: 1px solid var(--border);
+      padding: 16px 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      overflow-y: auto;
+      overflow-x: hidden;
+      z-index: 12;
+    }
+
+    .rail .icon-btn {
+      width: 48px;
+      height: 48px;
+      border-radius: 16px;
+      background: #fff;
+      border-color: #d4e1e8;
+      box-shadow: 0 5px 12px rgba(31, 41, 55, .07);
+    }
+
+    .rail .divider {
+      width: 36px;
+      height: 1px;
+      background: var(--border);
+      margin: 3px 0;
+    }
+
+    .workspace {
+      min-width: 0;
+      min-height: 0;
+      height: 100%;
+      display: grid;
+      grid-template-rows: 52px 1fr;
+      overflow: hidden;
+    }
+
+    .contextbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 8px 16px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(248, 250, 252, .92);
+      box-shadow: 0 1px 0 rgba(255, 255, 255, .88) inset;
+    }
+
+    .search {
+      min-width: 230px;
+      height: 36px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 0 12px;
+      background: #fff;
+      color: var(--ink);
+    }
+
+    .stats {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      min-width: 0;
+      overflow-x: auto;
+      scrollbar-width: thin;
+    }
+
+    .context-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .board-size-btn {
+      flex: 0 0 auto;
+      height: 34px;
+      min-width: 58px;
+      padding: 0 10px;
+      border-radius: 10px;
+      border-color: var(--border);
+      background: #fbfcfd;
+      color: #252a32;
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .board-size-btn:hover,
+    .board-size-btn:focus-visible {
+      background: #087fb2;
+      border-color: #087fb2;
+      color: #fff;
+    }
+
+    .stat {
+      min-width: 76px;
+      height: 34px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #fff;
+      display: grid;
+      place-items: center;
+      padding: 3px 9px;
+      white-space: nowrap;
+      box-shadow: 0 3px 9px rgba(31, 36, 43, .06);
+    }
+
+    .stat b {
+      font-size: 14px;
+      line-height: 1;
+    }
+
+    .stat span {
+      font-size: 10px;
+      color: var(--muted);
+      line-height: 1;
+    }
+
+    .board-scroll {
+      position: relative;
+      min-height: 0;
+      height: 100%;
+      overflow: auto;
+      padding: 22px 22px 78px;
+      cursor: grab;
+      overscroll-behavior: contain;
+      background: #dfe7ed;
+    }
+
+    .board-scroll.panning,
+    .board-scroll.zooming {
+      cursor: grabbing;
+    }
+
+    .board {
+      position: relative;
+      min-width: 1060px;
+      min-height: 720px;
+      background:
+        linear-gradient(0deg, rgba(18, 152, 204, .08) 0 70px, transparent 70px),
+        linear-gradient(180deg, #f8fafb 0%, var(--board-bg) 100%);
+      border: 1px solid #c2cbd4;
+      box-shadow: var(--shadow);
+      border-radius: 18px;
+      overflow: hidden;
+      transform-origin: 0 0;
+    }
+
+    .board::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(32, 36, 42, .07) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(32, 36, 42, .07) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+    }
+
+    .zone {
+      position: absolute;
+      border-radius: 22px;
+      border: 1px solid rgba(198, 126, 31, .28);
+      background: rgba(255, 218, 179, .5);
+      pointer-events: auto;
+      cursor: grab;
+      z-index: 1;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5), 0 12px 30px rgba(198, 126, 31, .08);
+    }
+
+    .zone.dragging {
+      cursor: grabbing;
+      outline: 4px solid rgba(198, 126, 31, .18);
+    }
+
+    .zone.locked {
+      cursor: default;
+      background: rgba(226, 232, 240, .48);
+      border-color: rgba(100, 116, 139, .34);
+    }
+
+    .zone.selected {
+      border-color: #0d93c5;
+      outline: 3px solid rgba(13, 147, 197, .22);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5), 0 0 0 1px rgba(255, 255, 255, .92), 0 14px 28px rgba(13, 147, 197, .16);
+    }
+
+    .zone-label {
+      position: absolute;
+      top: 14px;
+      left: 18px;
+      font-size: 13px;
+      font-weight: 800;
+      color: #7c3f10;
+      pointer-events: none;
+    }
+
+    .zone.locked .zone-label {
+      color: #475569;
+    }
+
+    .zone-lock {
+      position: absolute;
+      top: 10px;
+      right: 12px;
+      width: 30px;
+      height: 28px;
+      border-radius: 8px;
+      border: 1px solid rgba(124, 63, 16, .28);
+      background: rgba(255, 255, 255, .9);
+      color: #3c424c;
+      cursor: pointer;
+      font-size: 15px;
+      font-weight: 900;
+      line-height: 1;
+      display: grid;
+      place-items: center;
+      box-shadow: 0 3px 8px rgba(32, 36, 42, .08);
+      opacity: 0;
+      pointer-events: none;
+      translate: 0 -3px;
+      transition: opacity .14s ease, translate .14s ease;
+    }
+
+    .zone:hover .zone-lock {
+      opacity: 1;
+      pointer-events: auto;
+      translate: 0 0;
+    }
+
+    .zone.locked .zone-lock {
+      border-color: rgba(71, 85, 105, .34);
+      color: #475569;
+    }
+
+    .zone-handle {
+      position: absolute;
+      background: rgba(255, 255, 255, .9);
+      border: 1px solid rgba(124, 63, 16, .38);
+      border-radius: 6px;
+      box-shadow: 0 3px 8px rgba(32, 36, 42, .12);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .14s ease;
+    }
+
+    .zone:hover .zone-handle,
+    .zone.dragging .zone-handle {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .zone.locked .zone-handle {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .zone-handle.e {
+      width: 12px;
+      height: 54px;
+      right: -7px;
+      top: 50%;
+      transform: translateY(-50%);
+      cursor: ew-resize;
+    }
+
+    .zone-handle.s {
+      width: 54px;
+      height: 12px;
+      left: 50%;
+      bottom: -7px;
+      transform: translateX(-50%);
+      cursor: ns-resize;
+    }
+
+    .zone-handle.se {
+      width: 16px;
+      height: 16px;
+      right: -8px;
+      bottom: -8px;
+      cursor: nwse-resize;
+    }
+
+    .links {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      pointer-events: none;
+      overflow: visible;
+    }
+
+    .link {
+      fill: none;
+      stroke: var(--line);
+      stroke-width: 2.2;
+      stroke-linecap: round;
+      filter: none;
+    }
+
+    .link-hit {
+      fill: none;
+      stroke: transparent;
+      stroke-width: 26;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      vector-effect: non-scaling-stroke;
+      pointer-events: stroke;
+      cursor: grab;
+    }
+
+    .link-hit.locked {
+      cursor: not-allowed;
+    }
+
+    .link-hover-dot {
+      fill: #e0f2fe;
+      stroke: #086c8e;
+      stroke-width: 2.5;
+      vector-effect: non-scaling-stroke;
+      opacity: 0;
+      pointer-events: none;
+      transform-box: fill-box;
+      transform-origin: center;
+      transform: scale(.72);
+      transition: opacity .1s ease, transform .1s ease, fill .1s ease, stroke .1s ease;
+    }
+
+    .link-hover-dot.visible {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    .link-hover-dot.target {
+      fill: #fef9c3;
+      stroke: #d29a00;
+    }
+
+    .link-hover-dot.dragging {
+      fill: #dcfce7;
+      stroke: #0f8f68;
+      transform: scale(1.2);
+    }
+
+    .link-hover-dot.locked.visible {
+      fill: #ede9fe;
+      stroke: #8b5cf6;
+      opacity: .62;
+    }
+
+    .knot {
+      position: absolute;
+      z-index: 5;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      border: 3px solid #0e7490;
+      background: #ecfeff;
+      box-shadow: 0 5px 12px rgba(32, 36, 42, .14);
+      cursor: grab;
+      touch-action: none;
+    }
+
+    .knot.selected {
+      outline: 4px solid rgba(14, 116, 144, .22);
+    }
+
+    .knot.drop-target {
+      outline: 5px solid rgba(15, 143, 104, .28);
+      border-color: #0f8f68;
+      background: #dcfce7;
+    }
+
+    .knot.locked {
+      border-color: #7c3aed;
+      background: #f3e8ff;
+    }
+
+    .knot.locked::after {
+      content: "L";
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      color: #5b21b6;
+      font-size: 10px;
+      font-weight: 900;
+    }
+
+    .knot.dragging {
+      cursor: grabbing;
+      transform: scale(1.12);
+    }
+
+    .knot-label {
+      position: absolute;
+      z-index: 5;
+      padding: 1px 5px;
+      border-radius: 6px;
+      border: 1px solid rgba(14, 116, 144, .22);
+      background: rgba(255, 255, 255, .92);
+      color: #0e7490;
+      font-size: 10px;
+      font-weight: 900;
+      line-height: 1.25;
+      pointer-events: none;
+      opacity: 0;
+      transform: translateY(2px);
+      transition: opacity .12s ease, transform .12s ease;
+    }
+
+    .knot-label.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .node {
+      --node-accent: #1298cc;
+      --node-ring: rgba(18, 152, 204, .34);
+      position: absolute;
+      z-index: 3;
+      width: 168px;
+      min-height: 74px;
+      border: 2px solid rgba(71, 85, 105, .84);
+      border-radius: 32px;
+      background: var(--core);
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      gap: 4px;
+      padding: 13px 10px 9px;
+      box-shadow: var(--card-shadow);
+      user-select: none;
+      touch-action: none;
+      cursor: grab;
+      overflow: hidden;
+      --float-duration: 5.8s;
+      --float-delay: 0s;
+      --float-rotate: .65deg;
+      --float-x-start: -.6px;
+      --float-y-start: 1.2px;
+      --float-r-start: -.3deg;
+      --float-x-peak: 1.4px;
+      --float-y-peak: -4.2px;
+      --float-r-peak: .5deg;
+      --float-x-return: -1px;
+      --float-y-return: -1.4px;
+      --float-r-return: -.45deg;
+      animation: card-float var(--float-duration) ease-in-out var(--float-delay) infinite;
+      transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease, opacity .12s ease, filter .14s ease;
+    }
+
+    .node:nth-of-type(4n) {
+      --float-duration: 6.8s;
+      --float-delay: -3.2s;
+      --float-rotate: .88deg;
+    }
+
+    .node:nth-of-type(4n + 1) {
+      --float-duration: 5.1s;
+      --float-delay: -1.9s;
+      --float-rotate: .52deg;
+    }
+
+    .node:nth-of-type(4n + 2) {
+      --float-duration: 7.4s;
+      --float-delay: -4.4s;
+      --float-rotate: .78deg;
+    }
+
+    .node::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      right: 0;
+      height: 7px;
+      background: var(--node-accent);
+      pointer-events: none;
+    }
+
+    .node > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    .node:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 14px 26px rgba(21, 29, 38, .18), 0 3px 8px rgba(21, 29, 38, .09);
+    }
+
+    .node.selected {
+      border-color: #111827;
+      outline: 3px solid rgba(18, 152, 204, .26);
+      box-shadow: 0 0 0 1px rgba(255, 255, 255, .86), 0 14px 28px rgba(21, 29, 38, .2);
+    }
+
+    .node.dragging {
+      cursor: grabbing;
+      transform: translateY(-2px) scale(1.02);
+      translate: 0 -5px;
+      rotate: 0deg;
+      z-index: 6;
+      animation: none !important;
+    }
+
+    .node.drop-target {
+      outline: 4px solid rgba(15, 143, 104, .24);
+      border-color: var(--green);
+    }
+
+    .node.core {
+      --node-accent: #168fd1;
+      --node-ring: rgba(22, 143, 209, .3);
+      border-color: var(--risk);
+      background: var(--core);
+      min-height: 86px;
+    }
+
+    .node.external {
+      --node-accent: #f59e0b;
+      --node-ring: rgba(245, 158, 11, .32);
+      background: var(--external);
+      border-color: #7d6500;
+    }
+
+    .node.added {
+      --node-accent: #10b981;
+      --node-ring: rgba(16, 185, 129, .3);
+      background: var(--added);
+      border-color: var(--green);
+    }
+
+    .node.candidate {
+      --node-accent: #8b5cf6;
+      --node-ring: rgba(139, 92, 246, .32);
+      background: var(--candidate);
+      border-color: var(--violet);
+      border-style: dashed;
+    }
+
+    .node.hiring {
+      --node-accent: #f97316;
+      --node-ring: rgba(249, 115, 22, .34);
+      background: var(--hiring);
+      border-color: #9a6700;
+      border-style: dashed;
+    }
+
+    .node.removed {
+      --node-accent: #94a3b8;
+      --node-ring: rgba(148, 163, 184, .32);
+      background: var(--removed);
+      border-color: #9a9a94;
+      border-style: dashed;
+      opacity: .62;
+    }
+
+    .node.risk {
+      border-color: var(--risk);
+      box-shadow: 0 0 0 3px rgba(239, 68, 68, .12), 0 16px 28px rgba(32, 36, 42, .16);
+    }
+
+    .node.manual-color {
+      opacity: 1;
+    }
+
+    .node.manual-color.risk {
+      box-shadow: var(--card-shadow);
+    }
+
+    .node.manual-color.palette-core {
+      --node-accent: #168fd1;
+      --node-ring: rgba(22, 143, 209, .3);
+      background: var(--core);
+      border-color: #64748b;
+    }
+
+    .node.manual-color.palette-external {
+      --node-accent: #f59e0b;
+      --node-ring: rgba(245, 158, 11, .32);
+      background: var(--external);
+      border-color: #7d6500;
+    }
+
+    .node.manual-color.palette-added {
+      --node-accent: #10b981;
+      --node-ring: rgba(16, 185, 129, .3);
+      background: var(--added);
+      border-color: var(--green);
+    }
+
+    .node.manual-color.palette-candidate {
+      --node-accent: #8b5cf6;
+      --node-ring: rgba(139, 92, 246, .32);
+      background: var(--candidate);
+      border-color: var(--violet);
+    }
+
+    .node.manual-color.palette-hiring {
+      --node-accent: #f97316;
+      --node-ring: rgba(249, 115, 22, .34);
+      background: var(--hiring);
+      border-color: #9a6700;
+    }
+
+    .node.manual-color.palette-removed {
+      --node-accent: #94a3b8;
+      --node-ring: rgba(148, 163, 184, .32);
+      background: var(--removed);
+      border-color: #9a9a94;
+    }
+
+    .node.manual-border.border-solid {
+      border-style: solid;
+    }
+
+    .node.manual-border.border-dashed {
+      border-style: dashed;
+    }
+
+    .node.action-pulse {
+      animation: node-pop .42s cubic-bezier(.2, .9, .2, 1);
+    }
+
+    .node.action-pulse::after {
+      content: "";
+      position: absolute;
+      inset: 3px;
+      border-radius: 25px;
+      border: 2px solid var(--node-ring);
+      pointer-events: none;
+      animation: node-ring .72s ease-out;
+    }
+
+    .role {
+      font-size: 12px;
+      font-weight: 800;
+      text-align: center;
+      line-height: 1.18;
+      overflow-wrap: anywhere;
+    }
+
+    .person {
+      font-size: 16px;
+      font-weight: 900;
+      text-align: center;
+      line-height: 1.15;
+      overflow-wrap: anywhere;
+    }
+
+    .meta {
+      display: flex;
+      align-items: end;
+      justify-content: center;
+      gap: 5px;
+      flex-wrap: wrap;
+      min-height: 20px;
+    }
+
+    .pill {
+      border-radius: 999px;
+      background: rgba(255, 255, 255, .78);
+      border: 1px solid rgba(32, 36, 42, .14);
+      color: #303741;
+      font-size: 10px;
+      font-weight: 800;
+      line-height: 1;
+      padding: 4px 6px;
+    }
+
+    .pill.high {
+      background: #fff1f1;
+      color: #b3261e;
+      border-color: #eab0aa;
+    }
+
+    .pill.diff {
+      background: #20242a;
+      color: #fff;
+      border-color: #20242a;
+    }
+
+    .pill.requirement {
+      background: #ecfdf5;
+      color: #047857;
+      border-color: #a7f3d0;
+    }
+
+    .node.hidden-by-filter {
+      opacity: .15;
+      filter: grayscale(.8);
+    }
+
+    .inspector {
+      min-width: 0;
+      min-height: 0;
+      height: calc(100vh - 66px);
+      background: #f7f9fb;
+      border-left: 1px solid var(--border);
+      box-shadow: -10px 0 24px rgba(31, 41, 55, .05);
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      overflow: hidden;
+    }
+
+    .panel-head {
+      padding: 20px 20px 16px;
+      border-bottom: 1px solid var(--border);
+      background: #fff;
+      box-shadow: 0 5px 14px rgba(31, 41, 55, .04);
+    }
+
+    .panel-head h2 {
+      margin: 0;
+      font-size: 17px;
+      line-height: 1.2;
+    }
+
+    .panel-head p {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .panel-body {
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 18px 20px 28px;
+    }
+
+    .section {
+      border-top: 1px solid #e1e7ed;
+      padding-top: 18px;
+      margin-top: 18px;
+    }
+
+    .section:first-child {
+      border-top: 0;
+      margin-top: 0;
+      padding-top: 0;
+    }
+
+    .section-title {
+      margin: 0 0 11px;
+      font-size: 11px;
+      font-weight: 900;
+      color: #087fb2;
+      text-transform: uppercase;
+    }
+
+    .field {
+      display: grid;
+      gap: 7px;
+      margin-bottom: 14px;
+    }
+
+    .field label {
+      font-size: 12px;
+      font-weight: 800;
+      color: #4b5563;
+    }
+
+    .field input,
+    .field select,
+    .field textarea {
+      width: 100%;
+      min-height: 38px;
+      border: 1px solid #d4dee7;
+      border-radius: 12px;
+      padding: 8px 11px;
+      background: #fff;
+      color: var(--ink);
+      outline: none;
+    }
+
+    .field textarea {
+      min-height: 72px;
+      resize: vertical;
+      line-height: 1.45;
+    }
+
+    .field input:focus,
+    .field select:focus,
+    .field textarea:focus {
+      border-color: #0d93c5;
+      box-shadow: 0 0 0 3px rgba(13, 147, 197, .14);
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .button-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .button-row .text-btn {
+      height: 38px;
+      border-radius: 12px;
+    }
+
+    .insight-list {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .insight {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--panel);
+      padding: 10px;
+      display: grid;
+      gap: 4px;
+    }
+
+    .insight b {
+      font-size: 12px;
+    }
+
+    .insight span {
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    .empty {
+      min-height: 220px;
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      text-align: center;
+      border: 1px dashed var(--border);
+      border-radius: 16px;
+      padding: 18px;
+      background: var(--panel);
+    }
+
+    .legend {
+      position: fixed;
+      left: 92px;
+      right: 382px;
+      bottom: 12px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      z-index: 30;
+      max-width: none;
+      pointer-events: none;
+    }
+
+    .legend-item {
+      height: 28px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 9px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, .88);
+      border: 1px solid var(--border);
+      font-size: 11px;
+      font-weight: 800;
+      color: #3c424c;
+      pointer-events: auto;
+      box-shadow: 0 6px 18px rgba(32, 36, 42, .08);
+    }
+
+    .swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+      border: 1px solid rgba(32, 36, 42, .24);
+    }
+
+    .swatch.core { background: var(--core); border-color: var(--risk); }
+    .swatch.external { background: var(--external); }
+    .swatch.added { background: var(--added); border-color: var(--green); }
+    .swatch.removed { background: var(--removed); border-style: dashed; }
+    .swatch.candidate { background: var(--candidate); border-color: var(--violet); }
+
+    .toast {
+      position: fixed;
+      right: 380px;
+      bottom: 24px;
+      z-index: 20;
+      background: #20242a;
+      color: #fff;
+      border-radius: 8px;
+      padding: 12px 14px;
+      box-shadow: var(--shadow);
+      font-size: 13px;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(10px);
+      transition: opacity .18s ease, transform .18s ease;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    @keyframes node-pop {
+      0% {
+        transform: translateY(4px) scale(.96);
+        filter: saturate(.9);
+      }
+      64% {
+        transform: translateY(-4px) scale(1.035);
+        filter: saturate(1.1);
+      }
+      100% {
+        transform: translateY(0) scale(1);
+        filter: saturate(1);
+      }
+    }
+
+    @keyframes node-ring {
+      0% {
+        opacity: .9;
+        transform: scale(.92);
+      }
+      100% {
+        opacity: 0;
+        transform: scale(1.12);
+      }
+    }
+
+    .file-input {
+      display: none;
+    }
+
+    /* Aurora Operations: dark, high-contrast work surface with restrained motion. */
+    :root {
+      --bg: #071018;
+      --surface: #111c26;
+      --ink: #e7f1f8;
+      --muted: #9eb0bd;
+      --line: #22c7df;
+      --core: #152c3d;
+      --external: #3c3117;
+      --added: #123b31;
+      --candidate: #2c2144;
+      --hiring: #443313;
+      --removed: #252c33;
+      --risk: #ff7180;
+      --green: #31d2a4;
+      --violet: #a78bfa;
+      --panel: #0e1923;
+      --border: #263b4a;
+      --board-bg: #08131d;
+      --card-shadow: 0 10px 22px rgba(0, 0, 0, .3);
+      --shadow: 0 18px 40px rgba(0, 0, 0, .32);
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--ink);
+    }
+
+    button:focus-visible,
+    input:focus-visible,
+    select:focus-visible,
+    textarea:focus-visible {
+      outline-color: rgba(34, 199, 223, .46);
+    }
+
+    .topbar {
+      background: #0b151f;
+      border-bottom-color: #203443;
+      box-shadow: 0 9px 24px rgba(0, 0, 0, .28);
+    }
+
+    .mark {
+      background: #16b9c9;
+      box-shadow: inset 0 0 0 2px rgba(222, 253, 255, .82), 0 0 18px rgba(34, 199, 223, .28);
+    }
+
+    .brand h1,
+    .panel-head h2 {
+      color: #f4fbff;
+    }
+
+    .brand p,
+    .panel-head p,
+    .stat span,
+    .insight span {
+      color: var(--muted);
+    }
+
+    .tab {
+      color: #b7c7d3;
+      border-color: #223746;
+      background: #101c27;
+    }
+
+    .tab:hover {
+      background: #162634;
+      color: #f2fbff;
+    }
+
+    .tab.active {
+      background: #0c7899;
+      border-color: #23cbe1;
+      color: #effcff;
+      box-shadow: 0 0 18px rgba(34, 199, 223, .24);
+    }
+
+    .tab-mini,
+    .recent-file-remove {
+      background: #152330;
+      border-color: #365163;
+      color: #d7e8f2;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, .28);
+    }
+
+    .tab-mini.delete,
+    .recent-file-remove {
+      background: #2a1b23;
+      border-color: #6b3a48;
+      color: #ffbdc5;
+    }
+
+    .recent-file-select,
+    .search,
+    .field input,
+    .field select,
+    .field textarea {
+      background: #0b151f;
+      border-color: #2b4353;
+      color: #e6f1f7;
+    }
+
+    .recent-file-select option,
+    .field select option {
+      background: #101c27;
+      color: #e6f1f7;
+    }
+
+    .icon-btn,
+    .text-btn,
+    .board-size-btn {
+      background: #111f2b;
+      border-color: #2b4353;
+      color: #ddecf5;
+    }
+
+    .icon-btn:hover,
+    .text-btn:hover,
+    .board-size-btn:hover,
+    .recent-file-remove:hover {
+      background: #173142;
+      border-color: #3bd5e6;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, .28), 0 0 14px rgba(34, 199, 223, .12);
+    }
+
+    .text-btn.primary {
+      background: #0e86a9;
+      border-color: #31cce0;
+      color: #f3fdff;
+      box-shadow: 0 0 16px rgba(34, 199, 223, .2);
+    }
+
+    .text-btn.warn {
+      background: #2a1b23;
+      color: #ffbbc4;
+      border-color: #6a3846;
+    }
+
+    .rail {
+      background: #0a141e;
+      border-right-color: #203443;
+    }
+
+    .rail .icon-btn {
+      background: #111f2b;
+      border-color: #2a4353;
+      color: #e7f7ff;
+      box-shadow: 0 7px 16px rgba(0, 0, 0, .22);
+    }
+
+    .rail .icon-btn:hover {
+      background: #0f5165;
+      border-color: #43d9e9;
+      box-shadow: 0 0 18px rgba(34, 199, 223, .25);
+    }
+
+    .contextbar {
+      background: #0d1822;
+      border-bottom-color: #203443;
+      box-shadow: none;
+    }
+
+    .stat {
+      background: #101d28;
+      border-color: #273f50;
+      box-shadow: none;
+    }
+
+    .stat b {
+      color: #eaf7ff;
+    }
+
+    .board-size-btn:hover,
+    .board-size-btn:focus-visible {
+      background: #0f5165;
+      border-color: #42dcec;
+      color: #effcff;
+    }
+
+    .board-scroll {
+      background: #071018;
+    }
+
+    .board {
+      background: var(--board-bg);
+      border-color: #254556;
+      box-shadow: var(--shadow), 0 0 38px rgba(28, 188, 210, .08);
+    }
+
+    .board::before {
+      z-index: 0;
+      background-image:
+        linear-gradient(rgba(83, 150, 170, .14) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(83, 150, 170, .14) 1px, transparent 1px);
+    }
+
+    .board::after {
+      content: "";
+      position: absolute;
+      inset: -40% -18%;
+      z-index: 0;
+      pointer-events: none;
+      opacity: .3;
+      background-image: repeating-linear-gradient(116deg, transparent 0 132px, rgba(47, 211, 225, .12) 133px 134px, transparent 135px 240px);
+      animation: ambient-flow 24s linear infinite;
+    }
+
+    .zone {
+      background: rgba(27, 66, 76, .22);
+      border-color: rgba(41, 206, 218, .68);
+      box-shadow: inset 0 0 0 1px rgba(72, 230, 240, .08), 0 0 24px rgba(25, 196, 211, .1);
+    }
+
+    .zone.locked {
+      background: rgba(37, 47, 59, .44);
+      border-color: rgba(135, 158, 178, .52);
+    }
+
+    .zone.selected {
+      border-color: #50e5ef;
+      outline-color: rgba(57, 218, 234, .24);
+      box-shadow: inset 0 0 0 1px rgba(80, 229, 239, .2), 0 0 26px rgba(34, 199, 223, .24);
+    }
+
+    .zone-label,
+    .zone.locked .zone-label {
+      color: #d4f8fb;
+      text-shadow: 0 0 10px rgba(34, 199, 223, .32);
+    }
+
+    .zone-lock,
+    .zone-handle {
+      background: #132431;
+      color: #cfeaf3;
+      border-color: #3d6675;
+      box-shadow: 0 4px 11px rgba(0, 0, 0, .3);
+    }
+
+    .link {
+      stroke: #24cbe1;
+      stroke-width: 2.1;
+      filter: none;
+    }
+
+    .link.removed {
+      stroke: #8c9baa;
+      filter: none;
+    }
+
+    .link-hover-dot {
+      fill: #12303a;
+      stroke: #36d7e7;
+    }
+
+    .link-hover-dot.target {
+      fill: #433514;
+      stroke: #f6c646;
+    }
+
+    .link-hover-dot.dragging {
+      fill: #12362f;
+      stroke: #4ade80;
+    }
+
+    .link-hover-dot.locked.visible {
+      fill: #2d2840;
+      stroke: #a78bfa;
+    }
+
+    .knot {
+      background: #0d2731;
+      border-color: #3ce2ef;
+      box-shadow: 0 0 16px rgba(34, 199, 223, .45);
+    }
+
+    .knot.selected {
+      outline-color: rgba(62, 224, 239, .28);
+    }
+
+    .knot.locked {
+      background: #282044;
+      border-color: #a78bfa;
+      box-shadow: 0 0 16px rgba(167, 139, 250, .38);
+    }
+
+    .knot.locked::after { color: #ded6ff; }
+
+    .knot-label {
+      background: #10232e;
+      border-color: #2d7581;
+      color: #8eeff5;
+    }
+
+    .node {
+      color: #edf8ff;
+      border-color: #2f6378;
+      box-shadow: var(--card-shadow);
+    }
+
+    .node:hover {
+      box-shadow: 0 14px 28px rgba(0, 0, 0, .38), 0 0 16px rgba(34, 199, 223, .12);
+    }
+
+    .node.selected:not(.action-pulse) {
+      border-color: #54e5ef;
+      outline-color: rgba(54, 215, 231, .28);
+      box-shadow: 0 0 0 1px rgba(220, 255, 255, .1), 0 0 22px rgba(34, 199, 223, .32), 0 14px 30px rgba(0, 0, 0, .38);
+    }
+
+    .node.core { background: var(--core); border-color: #2786ac; }
+    .node.external { background: var(--external); border-color: #b28728; }
+    .node.added { background: var(--added); border-color: #2fba91; }
+    .node.candidate { background: var(--candidate); border-color: #9d86e7; }
+    .node.hiring { background: var(--hiring); border-color: #d79731; }
+    .node.removed { background: var(--removed); border-color: #65798a; opacity: .72; }
+
+    .node.risk {
+      border-color: #ff7180;
+      box-shadow: 0 0 0 3px rgba(255, 113, 128, .16), 0 16px 28px rgba(0, 0, 0, .34);
+    }
+
+    .node.manual-color.palette-core { background: var(--core); border-color: #2786ac; }
+    .node.manual-color.palette-external { background: var(--external); border-color: #b28728; }
+    .node.manual-color.palette-added { background: var(--added); border-color: #2fba91; }
+    .node.manual-color.palette-candidate { background: var(--candidate); border-color: #9d86e7; }
+    .node.manual-color.palette-hiring { background: var(--hiring); border-color: #d79731; }
+    .node.manual-color.palette-removed { background: var(--removed); border-color: #65798a; }
+
+    .role,
+    .person { color: #f4fbff; }
+
+    .node-avatar {
+      position: absolute;
+      top: 18px;
+      left: 12px;
+      width: 29px;
+      height: 29px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 1px solid rgba(218, 253, 255, .72);
+      box-shadow: 0 0 12px rgba(34, 199, 223, .28);
+    }
+
+    .node.has-avatar .role,
+    .node.has-avatar .person {
+      padding-left: 50px;
+      text-align: left;
+    }
+
+    .node.has-avatar .meta {
+      padding-left: 0;
+      justify-content: center;
+    }
+
+    .pill {
+      background: rgba(5, 14, 21, .52);
+      border-color: rgba(174, 218, 231, .26);
+      color: #d5e7ef;
+    }
+
+    .pill.diff { background: #20394b; border-color: #3c7490; color: #e8fbff; }
+    .pill.requirement { background: #17372d; color: #a8f1d4; border-color: #2f8369; }
+
+    .inspector {
+      background: #0b151f;
+      border-left-color: #203443;
+      box-shadow: -12px 0 28px rgba(0, 0, 0, .26);
+    }
+
+    .panel-head {
+      background: #101d28;
+      border-bottom-color: #294251;
+      box-shadow: 0 7px 16px rgba(0, 0, 0, .16);
+    }
+
+    .section { border-top-color: #1f3645; }
+    .section-title { color: #67e4ed; }
+    .field label { color: #b7ccd7; }
+    .field input:focus,
+    .field select:focus,
+    .field textarea:focus { border-color: #38d8e8; box-shadow: 0 0 0 3px rgba(34, 199, 223, .16); }
+
+    .empty,
+    .insight { background: #101c27; border-color: #2a4353; color: #d7e8f1; }
+
+    .legend-item {
+      background: rgba(11, 24, 34, .92);
+      border-color: #2a4555;
+      color: #c8dbe5;
+      box-shadow: 0 7px 18px rgba(0, 0, 0, .26);
+    }
+
+    .toast {
+      background: #102530;
+      border: 1px solid #347386;
+      color: #e7fbff;
+      box-shadow: 0 12px 26px rgba(0, 0, 0, .34), 0 0 16px rgba(34, 199, 223, .14);
+    }
+
+    @keyframes ambient-flow {
+      from { transform: translate3d(-7%, -4%, 0); }
+      to { transform: translate3d(7%, 4%, 0); }
+    }
+
+    @keyframes selected-glow {
+      0%, 100% { box-shadow: 0 0 0 1px rgba(220, 255, 255, .1), 0 0 18px rgba(34, 199, 223, .22), 0 14px 30px rgba(0, 0, 0, .38); }
+      50% { box-shadow: 0 0 0 1px rgba(220, 255, 255, .15), 0 0 28px rgba(34, 199, 223, .4), 0 14px 30px rgba(0, 0, 0, .42); }
+    }
+
+    @keyframes card-float {
+      0%, 100% {
+        translate: var(--float-x-start) var(--float-y-start);
+        rotate: var(--float-r-start);
+      }
+      38% {
+        translate: var(--float-x-peak) var(--float-y-peak);
+        rotate: var(--float-r-peak);
+      }
+      72% {
+        translate: var(--float-x-return) var(--float-y-return);
+        rotate: var(--float-r-return);
+      }
+    }
+
+    /* Today Fragments inspired: floating glass controls over a quiet work surface. */
+    :root {
+      --bg: #07090f;
+      --surface: rgba(16, 20, 31, .82);
+      --border: rgba(188, 205, 226, .16);
+      --board-bg: #090d16;
+      --panel: rgba(12, 16, 26, .84);
+      --card-shadow: 0 8px 0 rgba(0, 0, 0, .12), 0 14px 30px rgba(0, 0, 0, .3);
+      --shadow: 0 14px 30px rgba(0, 0, 0, .32);
+    }
+
+    body,
+    .app,
+    .board-scroll {
+      background: #07090f;
+    }
+
+    .app {
+      grid-template-rows: 54px minmax(0, 1fr);
+      gap: 10px;
+      padding: 12px;
+    }
+
+    .topbar {
+      min-height: 54px;
+      padding: 0 14px;
+      background: rgba(10, 14, 23, .78);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, .28);
+      backdrop-filter: none;
+    }
+
+    .main {
+      grid-template-columns: 64px minmax(0, 1fr) 342px;
+      gap: 10px;
+      height: 100%;
+    }
+
+    .rail,
+    .workspace,
+    .inspector {
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: rgba(10, 14, 23, .76);
+      box-shadow: 0 10px 24px rgba(0, 0, 0, .26);
+      backdrop-filter: none;
+    }
+
+    .rail {
+      position: relative;
+      top: auto;
+      height: auto;
+      padding: 10px 8px;
+      border-right: 1px solid var(--border);
+    }
+
+    .rail .icon-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, .06);
+      border-color: var(--border);
+      box-shadow: none;
+    }
+
+    .workspace {
+      grid-template-rows: 48px minmax(0, 1fr);
+      overflow: hidden;
+    }
+
+    .contextbar {
+      padding: 6px 12px;
+      background: rgba(12, 16, 26, .74);
+      border-bottom-color: var(--border);
+    }
+
+    .search,
+    .recent-file-select,
+    .field input,
+    .field select,
+    .field textarea {
+      background: rgba(5, 8, 15, .7);
+      border-color: var(--border);
+    }
+
+    .stat,
+    .icon-btn,
+    .text-btn,
+    .board-size-btn {
+      background: rgba(255, 255, 255, .06);
+      border-color: var(--border);
+      box-shadow: none;
+    }
+
+    .board-scroll {
+      padding: 16px 16px 70px;
+    }
+
+    .board {
+      background: #090d16;
+      border-color: rgba(188, 205, 226, .14);
+      border-radius: 24px;
+      box-shadow: 0 22px 70px rgba(0, 0, 0, .46);
+    }
+
+    .board::before {
+      background-image:
+        linear-gradient(rgba(188, 205, 226, .055) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(188, 205, 226, .055) 1px, transparent 1px);
+      background-size: 48px 48px;
+    }
+
+    .board::after {
+      display: none;
+    }
+
+    .zone {
+      border-radius: 28px;
+      background: rgba(67, 155, 165, .11);
+      border-color: rgba(103, 232, 249, .3);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1), 0 22px 56px rgba(0, 0, 0, .2);
+    }
+
+    .zone.locked {
+      background: rgba(87, 99, 122, .14);
+      border-color: rgba(188, 205, 226, .2);
+    }
+
+    .node {
+      background: rgba(17, 22, 34, .94);
+      border-color: rgba(188, 205, 226, .18);
+      border-radius: 26px;
+      box-shadow: var(--card-shadow);
+      backdrop-filter: none;
+    }
+
+    .node::before {
+      height: 5px;
+      border-radius: 24px 24px 5px 5px;
+    }
+
+    .node.core { background: #287ead; border-color: #91e5f5; }
+    .node.external { background: #a77a24; border-color: #ffe08c; }
+    .node.added { background: #258b69; border-color: #a8f2cf; }
+    .node.candidate { background: #7354bb; border-color: #cdbdff; }
+    .node.hiring { background: #c58522; border-color: #ffe7a0; }
+    .node.removed { background: #60758a; border-color: #c0cfdb; }
+
+    .node.manual-color.palette-core { background: #287ead; border-color: #91e5f5; }
+    .node.manual-color.palette-external { background: #a77a24; border-color: #ffe08c; }
+    .node.manual-color.palette-added { background: #258b69; border-color: #a8f2cf; }
+    .node.manual-color.palette-candidate { background: #7354bb; border-color: #cdbdff; }
+    .node.manual-color.palette-hiring { background: #c58522; border-color: #ffe7a0; }
+    .node.manual-color.palette-removed { background: #60758a; border-color: #c0cfdb; }
+
+    /* Photo cards use a stable left portrait and a separate affiliation row. */
+    .node,
+    .node.core {
+      width: 196px;
+      min-height: 104px;
+      height: 104px;
+      border-radius: 34px;
+    }
+
+    .node::before {
+      border-radius: 32px 32px 5px 5px;
+    }
+
+    .node.has-avatar {
+      display: grid;
+      grid-template-columns: 52px minmax(0, 1fr);
+      grid-template-rows: minmax(0, 1fr);
+      align-items: center;
+      gap: 12px;
+      padding: 0 14px;
+    }
+
+    .node.has-avatar .node-avatar {
+      position: relative;
+      top: auto;
+      left: auto;
+      width: 52px;
+      height: 52px;
+      border: 2px solid rgba(245, 253, 255, .94);
+      box-shadow: 0 0 0 3px rgba(88, 231, 247, .24);
+    }
+
+    .node.has-avatar .default-avatar {
+      display: block;
+      overflow: hidden;
+      background: #e7f5fa;
+      box-shadow: 0 0 0 3px rgba(88, 231, 247, .24);
+    }
+
+    .node.has-avatar .default-avatar::before,
+    .node.has-avatar .default-avatar::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      translate: -50% 0;
+      background: #4c8093;
+    }
+
+    .node.has-avatar .default-avatar::before {
+      top: 10px;
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+    }
+
+    .node.has-avatar .default-avatar::after {
+      bottom: -5px;
+      width: 34px;
+      height: 27px;
+      border-radius: 18px 18px 0 0;
+    }
+
+    .node.has-avatar .node-copy {
+      display: grid;
+      align-content: center;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .node.has-avatar .role,
+    .node.has-avatar .person {
+      padding-left: 0;
+      text-align: left;
+    }
+
+    .node.has-avatar .role {
+      max-height: 28px;
+      overflow: hidden;
+      font-size: 12px;
+      line-height: 1.12;
+    }
+
+    .node.has-avatar .person {
+      font-size: 20px;
+      line-height: 1.02;
+      white-space: nowrap;
+      word-break: keep-all;
+      overflow: hidden;
+    }
+
+    .node.has-avatar .meta {
+      min-height: 18px;
+      margin-top: 5px;
+      padding-top: 5px;
+      justify-content: flex-start;
+      flex-wrap: nowrap;
+      overflow: hidden;
+      border-top: 2px solid rgba(247, 253, 255, .88);
+    }
+
+    .node.has-avatar .pill {
+      flex: 0 0 auto;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      color: #f5fbff;
+      font-size: 11px;
+      line-height: 1.1;
+      white-space: nowrap;
+    }
+
+    .node.has-avatar .pill + .pill::before {
+      content: " / ";
+      color: rgba(245, 251, 255, .72);
+    }
+
+    .node:hover {
+      border-color: rgba(103, 232, 249, .54);
+      box-shadow: 0 9px 0 rgba(0, 0, 0, .13), 0 18px 34px rgba(0, 0, 0, .34);
+    }
+
+    .inspector {
+      overflow: hidden;
+      border-left: 1px solid var(--border);
+      background: rgba(10, 14, 23, .76);
+    }
+
+    .panel-head {
+      background: rgba(20, 26, 39, .56);
+      border-bottom-color: var(--border);
+    }
+
+    .link {
+      fill: none;
+      stroke: #67e8f9;
+      stroke-width: 2.35;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      vector-effect: non-scaling-stroke;
+      opacity: .82;
+      filter: none;
+    }
+
+    .link.removed {
+      stroke: #aebdca;
+      opacity: .58;
+      filter: none;
+    }
+
+    .link-flow {
+      display: none;
+    }
+
+    .link-draft {
+      fill: none;
+      stroke: #f5fbff;
+      stroke-width: 2.4;
+      stroke-linecap: round;
+      stroke-dasharray: 10 8;
+      filter: none;
+      opacity: .98;
+      animation: link-draft-flow 1.35s linear infinite;
+      pointer-events: none;
+    }
+
+    @keyframes link-draft-flow {
+      to { stroke-dashoffset: -36; }
+    }
+
+    @media (max-width: 980px) {
+      body {
+        overflow: auto;
+      }
+
+      .app {
+        height: auto;
+        min-height: 100vh;
+        overflow: visible;
+      }
+
+      .topbar {
+        grid-template-columns: 1fr;
+        height: auto;
+        padding: 12px;
+      }
+
+      .main {
+        grid-template-columns: 1fr;
+        height: auto;
+        overflow: visible;
+      }
+
+      .rail {
+        position: sticky;
+        top: 0;
+        height: auto;
+        flex-direction: row;
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
+        overflow-x: auto;
+        overflow-y: hidden;
+      }
+
+      .workspace {
+        height: 720px;
+        min-height: 640px;
+      }
+
+      .inspector {
+        height: 520px;
+        border-left: 0;
+        border-top: 1px solid var(--border);
+      }
+
+      .legend {
+        left: 12px;
+        right: 12px;
+        bottom: 10px;
+      }
+
+      .toast {
+        right: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="mark" aria-hidden="true"></div>
+        <div>
+          <h1>体制シミュレーター</h1>
+          <p>入替・追加・人員減の検討ボード</p>
+        </div>
+      </div>
+      <nav class="scenario-tabs" id="scenarioTabs" aria-label="シナリオ"></nav>
+      <div class="top-actions">
+        <button class="icon-btn" id="undoBtn" title="Undo" aria-label="Undo">↶</button>
+        <button class="icon-btn" id="redoBtn" title="Redo" aria-label="Redo">↷</button>
+        <button class="text-btn" id="openFileBtn" title="JSONファイルを開く">開く</button>
+        <div class="file-controls">
+          <select class="recent-file-select" id="recentFileSelect" title="最近開いたファイル" aria-label="最近開いたファイル"></select>
+          <button class="recent-file-remove" id="removeRecentFileBtn" type="button" title="プルダウンから削除" aria-label="プルダウンから削除">-</button>
+        </div>
+        <button class="text-btn" id="copyCurrentBtn" title="現行を案A/Bへコピー">現行→A/B</button>
+        <button class="text-btn" id="saveFileBtn" title="外部ファイルに保存">保存</button>
+        <button class="text-btn" id="saveAsFileBtn" title="別ファイルへ保存">別名保存</button>
+        <button class="text-btn" id="exportPngBtn" title="図全体を100% PNGで保存">PNG保存</button>
+        <button class="text-btn primary" id="duplicateScenarioBtn" title="現在の案を複製">複製</button>
+      </div>
+    </header>
+
+    <main class="main">
+      <aside class="rail" aria-label="操作">
+        <button class="icon-btn" id="addNodeBtn" title="人員・枠を追加" aria-label="人員・枠を追加">+</button>
+        <button class="icon-btn" id="addZoneBtn" title="枠を追加" aria-label="枠を追加">枠</button>
+        <button class="icon-btn" id="addKnotBtn" title="線ノットを追加" aria-label="線ノットを追加">K</button>
+        <input class="file-input" id="fileInput" type="file" accept="application/json">
+      </aside>
+
+      <section class="workspace">
+        <div class="contextbar">
+          <input class="search" id="searchInput" type="search" placeholder="名前・役割・所属で検索">
+          <div class="context-actions">
+            <div class="stats" id="stats"></div>
+            <button class="board-size-btn" id="boardSizeBtn" type="button" title="図を最大化" aria-label="図を最大化">最大</button>
+          </div>
+        </div>
+
+        <div class="board-scroll" id="boardScroll">
+          <div class="board" id="board" aria-label="体制図">
+            <svg class="links" id="links" aria-hidden="true"></svg>
+            <div class="legend">
+              <div class="legend-item"><span class="swatch core"></span>中核</div>
+              <div class="legend-item"><span class="swatch external"></span>C&amp;Rライン</div>
+              <div class="legend-item"><span class="swatch added"></span>追加</div>
+              <div class="legend-item"><span class="swatch removed"></span>人員減</div>
+              <div class="legend-item"><span class="swatch candidate"></span>候補</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="inspector">
+        <div class="panel-head">
+          <h2 id="panelTitle">カード詳細</h2>
+          <p id="panelSubtitle">カードを選ぶと編集できます。</p>
+        </div>
+        <div class="panel-body" id="panelBody"></div>
+      </aside>
+    </main>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const STORAGE_KEY = "org-simulator-v1";
+    const RECENT_FILE_DB = "org-simulator-recent-files";
+    const RECENT_FILE_STORE = "files";
+    const RECENT_FILE_LIMIT = 12;
+    const CANVAS = { width: 5600, height: 4400, centerX: 2800, centerY: 2200, originX: 2300, originY: 1600, version: 2 };
+    const CARD = { width: 196, height: 104, gapX: 44, gapY: 134, top: CANVAS.originY, left: CANVAS.originX };
+    const BOARD_MARGIN = { right: CANVAS.originX, bottom: CANVAS.originY };
+    const GRID = 20;
+    const KNOT_SIZE = 20;
+    const KNOT_CAPTURE_DISTANCE = 120;
+    const HANDLE_REVEAL_DISTANCE = 84;
+    const HISTORY_LIMIT = 80;
+    const CARD_COLOR_OVERRIDES = ["core", "external", "added", "candidate", "hiring", "removed"];
+    const BORDER_STYLE_OVERRIDES = ["solid", "dashed"];
+
+    const baseNodes = [
+      {
+        id: "kitagawa",
+        name: "北河",
+        role: "ADV D",
+        team: "QUA",
+        parent: null,
+        lane: "core",
+        status: "current",
+        load: "high",
+        decision: "最終判断",
+        note: "体制構築、品質ディレクション、上流判断"
+      },
+      {
+        id: "akabane",
+        name: "赤羽",
+        role: "3月〜2D",
+        team: "C&R",
+        parent: "kitagawa",
+        lane: "external",
+        status: "current",
+        load: "medium",
+        decision: "進行管理",
+        note: "スケジュール把握、差分共有"
+      },
+      {
+        id: "kato",
+        name: "加藤",
+        role: "2D ADV D/リード",
+        team: "C&R",
+        parent: "kitagawa",
+        lane: "core",
+        status: "current",
+        load: "high",
+        decision: "2D一次判断",
+        note: "2D側の判断・相談切り分け"
+      },
+      {
+        id: "koga",
+        name: "古賀",
+        role: "3D ADV D/リード",
+        team: "C&R",
+        parent: "kato",
+        lane: "core",
+        status: "current",
+        load: "high",
+        decision: "3D一次判断",
+        note: "3D側の判断・相談切り分け"
+      },
+      {
+        id: "segawa",
+        name: "瀬川",
+        role: "2D",
+        team: "C&R",
+        parent: "kato",
+        lane: "core",
+        status: "current",
+        load: "medium",
+        decision: "2D制作",
+        note: ""
+      },
+      {
+        id: "miyamoto",
+        name: "宮本",
+        role: "2D/連携",
+        team: "内部",
+        parent: "kato",
+        lane: "core",
+        status: "current",
+        load: "medium",
+        decision: "連携",
+        note: ""
+      },
+      {
+        id: "yanagisawa",
+        name: "柳澤",
+        role: "2D",
+        team: "内部",
+        parent: "segawa",
+        lane: "core",
+        status: "current",
+        load: "medium",
+        decision: "2D制作",
+        note: ""
+      },
+      {
+        id: "yamanoi",
+        name: "山野井",
+        role: "3D",
+        team: "C&R",
+        parent: "koga",
+        lane: "core",
+        status: "current",
+        load: "medium",
+        decision: "3D制作",
+        note: ""
+      },
+      {
+        id: "otsuka",
+        name: "大塚",
+        role: "3D",
+        team: "CP",
+        parent: "koga",
+        lane: "core",
+        status: "current",
+        load: "medium",
+        decision: "3D制作",
+        note: ""
+      },
+      {
+        id: "aono",
+        name: "青野",
+        role: "3D",
+        team: "C&R",
+        parent: "akabane",
+        lane: "external",
+        status: "current",
+        load: "medium",
+        decision: "3D制作",
+        note: ""
+      },
+      {
+        id: "takashima",
+        name: "高島",
+        role: "3D",
+        team: "内部",
+        parent: "aono",
+        lane: "external",
+        status: "current",
+        load: "medium",
+        decision: "3D制作",
+        note: ""
+      },
+      {
+        id: "nagayama",
+        name: "永山",
+        role: "2D",
+        team: "内部",
+        parent: "akabane",
+        lane: "external",
+        status: "current",
+        load: "medium",
+        decision: "2D制作",
+        note: ""
+      },
+      {
+        id: "okuno",
+        name: "奥野",
+        role: "2D",
+        team: "内部",
+        parent: "nagayama",
+        lane: "external",
+        status: "current",
+        load: "medium",
+        decision: "2D制作",
+        note: ""
+      },
+      {
+        id: "sakamoto",
+        name: "坂本",
+        role: "2D",
+        team: "内部",
+        parent: "nagayama",
+        lane: "external",
+        status: "current",
+        load: "medium",
+        decision: "2D制作",
+        note: ""
+      },
+      {
+        id: "yamamoto",
+        name: "山本",
+        role: "2D",
+        team: "内部",
+        parent: "nagayama",
+        lane: "external",
+        status: "current",
+        load: "medium",
+        decision: "2D制作",
+        note: ""
+      }
+    ];
+
+    const sampleScenarios = [
+      {
+        id: "current",
+        name: "現行",
+        nodes: cloneNodes(baseNodes)
+      },
+      {
+        id: "plan-load",
+        name: "案A 役割分担",
+        nodes: cloneNodes(baseNodes).map((node) => {
+          if (node.id === "nagayama") {
+            return { ...node, parent: "kato", role: "2D サブリード", status: "added", decision: "2D進行補佐" };
+          }
+          if (node.id === "kato") {
+            return { ...node, note: "2D判断に集中。進行補佐を永山へ分担" };
+          }
+          if (node.id === "okuno" || node.id === "sakamoto" || node.id === "yamamoto") {
+            return { ...node, parent: "nagayama" };
+          }
+          return node;
+        })
+      },
+      {
+        id: "plan-reduce",
+        name: "案B 人員減",
+        nodes: cloneNodes(baseNodes).map((node) => {
+          if (node.id === "segawa") {
+            return { ...node, status: "removed", note: "人員減の影響を見るため一時的に外す" };
+          }
+          if (node.id === "kato") {
+            return { ...node, status: "risk", note: "瀬川分の吸収で2D判断と進行が集中" };
+          }
+          if (node.id === "yanagisawa") {
+            return { ...node, parent: "kato", status: "risk" };
+          }
+          return node;
+        })
+      }
+    ];
+
+    let state = normalizeState(loadState());
+    let activeScenarioId = state.scenarios[0].id;
+    let selectedNodeId = state.scenarios[0].nodes[0]?.id || null;
+    let selectedKnotId = null;
+    let selectedZoneId = null;
+    let searchTerm = "";
+    let currentLayout = null;
+    let nodeElements = new Map();
+    let knotElements = new Map();
+    let interaction = null;
+    let connectorDraftEl = null;
+    let linkDrawFrame = null;
+    let fileHandle = null;
+    let recentFiles = [];
+    let currentFileId = null;
+    let cardClipboard = null;
+    let actionPulseNodeId = null;
+    let undoStack = [];
+    let redoStack = [];
+    let autoCenteredScenarioIds = new Set();
+    let boardMaximized = false;
+    const floatEpoch = performance.now();
+    const viewport = { scale: 1 };
+
+    const tabsEl = document.getElementById("scenarioTabs");
+    const mainEl = document.querySelector(".main");
+    const boardScrollEl = document.getElementById("boardScroll");
+    const boardEl = document.getElementById("board");
+    const linksEl = document.getElementById("links");
+    const statsEl = document.getElementById("stats");
+    const panelTitleEl = document.getElementById("panelTitle");
+    const panelSubtitleEl = document.getElementById("panelSubtitle");
+    const panelBodyEl = document.getElementById("panelBody");
+    const boardSizeBtn = document.getElementById("boardSizeBtn");
+    const recentFileSelectEl = document.getElementById("recentFileSelect");
+    const removeRecentFileBtn = document.getElementById("removeRecentFileBtn");
+    const toastEl = document.getElementById("toast");
+    const fileInputEl = document.getElementById("fileInput");
+
+    document.getElementById("undoBtn").addEventListener("click", undo);
+    document.getElementById("redoBtn").addEventListener("click", redo);
+    document.getElementById("openFileBtn").addEventListener("click", openExternalFile);
+    document.getElementById("copyCurrentBtn").addEventListener("click", copyCurrentToPlans);
+    document.getElementById("saveFileBtn").addEventListener("click", saveExternalFile);
+    document.getElementById("saveAsFileBtn").addEventListener("click", saveAsExternalFile);
+    document.getElementById("exportPngBtn").addEventListener("click", exportPng);
+    document.getElementById("duplicateScenarioBtn").addEventListener("click", () => duplicateScenario());
+    document.getElementById("addNodeBtn").addEventListener("click", addNode);
+    document.getElementById("addZoneBtn").addEventListener("click", addZone);
+    document.getElementById("addKnotBtn").addEventListener("click", addKnot);
+    boardSizeBtn.addEventListener("click", toggleBoardSize);
+    recentFileSelectEl.addEventListener("change", () => openRecentFile(recentFileSelectEl.value));
+    removeRecentFileBtn.addEventListener("click", removeSelectedRecentFile);
+    document.getElementById("searchInput").addEventListener("input", (event) => {
+      searchTerm = event.target.value.trim().toLowerCase();
+      render();
+    });
+    document.addEventListener("keydown", handleKeyDown);
+    fileInputEl.addEventListener("change", importJson);
+
+    boardScrollEl.addEventListener("pointerdown", startBoardPointer);
+    boardScrollEl.addEventListener("pointermove", movePointer);
+    boardScrollEl.addEventListener("pointerup", endPointer);
+    boardScrollEl.addEventListener("pointercancel", endPointer);
+    boardScrollEl.addEventListener("pointerleave", hideConnectorHandles);
+    boardScrollEl.addEventListener("wheel", zoomByWheel, { passive: false });
+    boardScrollEl.addEventListener("auxclick", (event) => {
+      if (event.button === 1) event.preventDefault();
+    });
+    boardScrollEl.addEventListener("contextmenu", (event) => {
+      if (event.target.closest(".node") || ["zoom", "connector", "new-connector"].includes(interaction?.type)) event.preventDefault();
+    });
+
+    render();
+    initRecentFiles();
+
+    function toggleBoardSize() {
+      boardMaximized = !boardMaximized;
+      applyBoardSize();
+    }
+
+    function applyBoardSize() {
+      mainEl.classList.toggle("board-maximized", boardMaximized);
+      boardSizeBtn.textContent = boardMaximized ? "戻す" : "最大";
+      const label = boardMaximized ? "図を通常幅に戻す" : "図を最大化";
+      boardSizeBtn.title = label;
+      boardSizeBtn.setAttribute("aria-label", label);
+    }
+
+    async function initRecentFiles() {
+      renderRecentFiles();
+      recentFiles = await loadRecentFiles();
+      renderRecentFiles();
+    }
+
+    function renderRecentFiles() {
+      const selectedId = currentFileId && recentFiles.some((entry) => entry.id === currentFileId) ? currentFileId : "";
+      recentFileSelectEl.innerHTML = [
+        `<option value="">最近開いたファイル</option>`,
+        ...recentFiles.map((entry) => `<option value="${escapeAttr(entry.id)}">${escapeHtml(entry.name || "名称未設定")}</option>`)
+      ].join("");
+      recentFileSelectEl.value = selectedId;
+      removeRecentFileBtn.disabled = !selectedId;
+    }
+
+    function filePickerTypes() {
+      return [
+        {
+          description: "体制シミュレーター JSON",
+          accept: { "application/json": [".json"] }
+        }
+      ];
+    }
+
+    function fileAccessAvailable() {
+      return "showOpenFilePicker" in window && "showSaveFilePicker" in window;
+    }
+
+    async function openRecentDb() {
+      if (!("indexedDB" in window)) return null;
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(RECENT_FILE_DB, 1);
+        request.onupgradeneeded = () => {
+          const db = request.result;
+          if (!db.objectStoreNames.contains(RECENT_FILE_STORE)) {
+            db.createObjectStore(RECENT_FILE_STORE, { keyPath: "id" });
+          }
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    function transactionDone(transaction) {
+      return new Promise((resolve, reject) => {
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+        transaction.onabort = () => reject(transaction.error);
+      });
+    }
+
+    async function loadRecentFiles() {
+      try {
+        const db = await openRecentDb();
+        if (!db) return [];
+        const transaction = db.transaction(RECENT_FILE_STORE, "readonly");
+        const request = transaction.objectStore(RECENT_FILE_STORE).getAll();
+        const rows = await new Promise((resolve, reject) => {
+          request.onsuccess = () => resolve(request.result || []);
+          request.onerror = () => reject(request.error);
+        });
+        db.close();
+        return rows
+          .filter((entry) => entry && entry.id && entry.handle)
+          .sort((a, b) => (b.lastOpened || 0) - (a.lastOpened || 0))
+          .slice(0, RECENT_FILE_LIMIT);
+      } catch (error) {
+        console.warn(error);
+        return [];
+      }
+    }
+
+    async function persistRecentFiles() {
+      try {
+        const db = await openRecentDb();
+        if (!db) return;
+        const transaction = db.transaction(RECENT_FILE_STORE, "readwrite");
+        const store = transaction.objectStore(RECENT_FILE_STORE);
+        store.clear();
+        recentFiles.forEach((entry) => store.put(entry));
+        await transactionDone(transaction);
+        db.close();
+      } catch (error) {
+        console.warn(error);
+      }
+    }
+
+    async function sameFileHandle(left, right) {
+      if (!left || !right) return false;
+      if (left === right) return true;
+      if (typeof left.isSameEntry === "function") {
+        try {
+          return await left.isSameEntry(right);
+        } catch (error) {
+          console.warn(error);
+        }
+      }
+      return false;
+    }
+
+    async function rememberFileHandle(handle) {
+      if (!handle) return;
+      let existing = null;
+      for (const entry of recentFiles) {
+        if (await sameFileHandle(entry.handle, handle)) {
+          existing = entry;
+          break;
+        }
+      }
+      const entry = {
+        id: existing?.id || `file-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+        name: handle.name || existing?.name || "名称未設定",
+        handle,
+        lastOpened: Date.now()
+      };
+      recentFiles = [entry, ...recentFiles.filter((item) => item.id !== entry.id)].slice(0, RECENT_FILE_LIMIT);
+      fileHandle = handle;
+      currentFileId = entry.id;
+      await persistRecentFiles();
+      renderRecentFiles();
+    }
+
+    async function ensureHandlePermission(handle, mode) {
+      if (!handle || typeof handle.queryPermission !== "function" || typeof handle.requestPermission !== "function") return true;
+      const options = { mode };
+      if (await handle.queryPermission(options) === "granted") return true;
+      return await handle.requestPermission(options) === "granted";
+    }
+
+    function applyImportedState(parsed) {
+      if (!parsed.scenarios || !Array.isArray(parsed.scenarios)) throw new Error("invalid");
+      pushHistory();
+      state = normalizeState(parsed);
+      activeScenarioId = state.scenarios[0].id;
+      selectedNodeId = state.scenarios[0].nodes[0]?.id || null;
+      selectedKnotId = null;
+      selectedZoneId = null;
+      autoCenteredScenarioIds.clear();
+      render();
+    }
+
+    async function loadFromFileHandle(handle, remember = true) {
+      if (!handle) return;
+      const allowed = await ensureHandlePermission(handle, "read");
+      if (!allowed) {
+        notify("ファイルを開く権限がありません");
+        renderRecentFiles();
+        return;
+      }
+      const file = await handle.getFile();
+      const text = await file.text();
+      applyImportedState(JSON.parse(text));
+      if (remember) await rememberFileHandle(handle);
+      notify(`${handle.name || file.name}を開きました`);
+    }
+
+    async function openExternalFile() {
+      try {
+        if ("showOpenFilePicker" in window) {
+          const handles = await window.showOpenFilePicker({
+            multiple: false,
+            types: filePickerTypes()
+          });
+          await loadFromFileHandle(handles[0], true);
+          return;
+        }
+        fileInputEl.click();
+      } catch (error) {
+        if (error?.name !== "AbortError") notify("読み込みに失敗しました");
+      }
+    }
+
+    async function openRecentFile(id) {
+      if (!id) {
+        currentFileId = null;
+        fileHandle = null;
+        renderRecentFiles();
+        return;
+      }
+      const entry = recentFiles.find((item) => item.id === id);
+      if (!entry?.handle) {
+        notify("ファイルを開けませんでした");
+        return;
+      }
+      try {
+        await loadFromFileHandle(entry.handle, true);
+      } catch (error) {
+        if (error?.name !== "AbortError") notify("読み込みに失敗しました");
+      }
+    }
+
+    async function removeSelectedRecentFile() {
+      const id = recentFileSelectEl.value || currentFileId;
+      if (!id) return;
+      const entry = recentFiles.find((item) => item.id === id);
+      recentFiles = recentFiles.filter((item) => item.id !== id);
+      if (currentFileId === id) {
+        currentFileId = null;
+        fileHandle = null;
+      }
+      await persistRecentFiles();
+      renderRecentFiles();
+      notify(`${entry?.name || "ファイル"}をプルダウンから外しました`);
+    }
+
+    function cloneNodes(nodes) {
+      return nodes.map((node) => ({ ...node }));
+    }
+
+    function cloneScenarioPayload(scenario) {
+      return {
+        nodes: cloneNodes(scenario.nodes || []),
+        knots: (scenario.knots || []).map((knot) => ({ ...knot })),
+        extZone: scenario.extZone ? { ...scenario.extZone } : null,
+        extraZones: (scenario.extraZones || []).map((zone) => ({ ...zone })),
+        canvasVersion: scenario.canvasVersion || CANVAS.version
+      };
+    }
+
+    function createDefaultState() {
+      return {
+        scenarios: [{
+          id: "current",
+          name: "現行",
+          nodes: [],
+          knots: [],
+          extZone: null,
+          extraZones: [],
+          canvasVersion: CANVAS.version
+        }]
+      };
+    }
+
+    function normalizeState(input) {
+      const normalized = input && Array.isArray(input.scenarios) && input.scenarios.length
+        ? input
+        : createDefaultState();
+      normalized.scenarios.forEach((scenario) => {
+        scenario.nodes = cloneNodes(scenario.nodes || []).map((node) => {
+          const status = ["removed", "added", "risk"].includes(node.status)
+            ? node.status
+            : (node.status === "hiring" || node.hiring ? "hiring" : (node.status || "current"));
+          const colorOverride = CARD_COLOR_OVERRIDES.includes(node.colorOverride) ? node.colorOverride : null;
+          const borderStyleOverride = BORDER_STYLE_OVERRIDES.includes(node.borderStyleOverride) ? node.borderStyleOverride : null;
+          return {
+            ...node,
+            status,
+            hiring: status === "hiring",
+            colorOverride,
+            borderStyleOverride,
+            slackEmail: `${node.slackEmail || ""}`.trim(),
+            slackUserId: `${node.slackUserId || ""}`.trim(),
+            slackAvatar: safeSlackAvatar(node.slackAvatar),
+            requirement: node.requirement || ""
+          };
+        });
+        scenario.knots = (scenario.knots || []).map((knot) => ({
+          ...knot,
+          x: snap(knot.x || 0),
+          y: snap(knot.y || 0),
+          code: `${knot.code || ""}`.trim(),
+          parent: knot.parent || null,
+          locked: Boolean(knot.locked),
+          lockedLinks: Array.isArray(knot.lockedLinks) ? knot.lockedLinks : []
+        }));
+        ensureKnotCodes(scenario);
+        normalizeNodeParentRefs(scenario);
+        if (scenario.extZone) {
+          scenario.extZone = {
+            label: scenario.extZone.label || "C&R ライン",
+            x: snap(scenario.extZone.x || 0),
+            y: snap(scenario.extZone.y || 0),
+            width: snap(scenario.extZone.width || 0),
+            height: snap(scenario.extZone.height || 0),
+            locked: Boolean(scenario.extZone.locked)
+          };
+        }
+        scenario.extraZones = (scenario.extraZones || []).map((zone) => ({
+          id: zone.id || `zone-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+          label: zone.label || "追加枠",
+          x: snap(zone.x || 0),
+          y: snap(zone.y || 0),
+          width: snap(zone.width || 360),
+          height: snap(zone.height || 240),
+          locked: Boolean(zone.locked)
+        }));
+        centerScenarioOnCanvas(scenario);
+      });
+      return normalized;
+    }
+
+    function safeSlackAvatar(value) {
+      const avatar = `${value || ""}`;
+      return /^data:image\/(png|jpeg|jpg|webp|gif);base64,/i.test(avatar) && avatar.length <= 350000 ? avatar : "";
+    }
+
+    function loadState() {
+      return createDefaultState();
+    }
+
+    function centerScenarioOnCanvas(scenario) {
+      if (scenario.canvasVersion === CANVAS.version) return;
+      const bounds = scenarioBounds(scenario);
+      if (bounds) {
+        const centerX = (bounds.minX + bounds.maxX) / 2;
+        const centerY = (bounds.minY + bounds.maxY) / 2;
+        const looksNearCorner = bounds.minX < CANVAS.originX * .55 || bounds.minY < CANVAS.originY * .55;
+        if (looksNearCorner) {
+          const dx = snap(CANVAS.centerX - centerX);
+          const dy = snap(CANVAS.centerY - centerY);
+          shiftScenario(scenario, dx, dy);
+        }
+      }
+      scenario.canvasVersion = CANVAS.version;
+    }
+
+    function scenarioBounds(scenario) {
+      const points = [];
+      (scenario.nodes || []).forEach((node) => {
+        if (Number.isFinite(node.x) && Number.isFinite(node.y)) {
+          points.push({ x: node.x, y: node.y, width: CARD.width, height: CARD.height });
+        }
+      });
+      (scenario.knots || []).forEach((knot) => {
+        if (Number.isFinite(knot.x) && Number.isFinite(knot.y)) {
+          points.push({ x: knot.x, y: knot.y, width: KNOT_SIZE, height: KNOT_SIZE });
+        }
+      });
+      if (scenario.extZone && Number.isFinite(scenario.extZone.x) && Number.isFinite(scenario.extZone.y)) {
+        points.push({ x: scenario.extZone.x, y: scenario.extZone.y, width: scenario.extZone.width || 0, height: scenario.extZone.height || 0 });
+      }
+      (scenario.extraZones || []).forEach((zone) => {
+        if (Number.isFinite(zone.x) && Number.isFinite(zone.y)) {
+          points.push({ x: zone.x, y: zone.y, width: zone.width || 0, height: zone.height || 0 });
+        }
+      });
+      if (!points.length) return null;
+      return {
+        minX: Math.min(...points.map((point) => point.x)),
+        minY: Math.min(...points.map((point) => point.y)),
+        maxX: Math.max(...points.map((point) => point.x + point.width)),
+        maxY: Math.max(...points.map((point) => point.y + point.height))
+      };
+    }
+
+    function shiftScenario(scenario, dx, dy) {
+      (scenario.nodes || []).forEach((node) => {
+        if (!Number.isFinite(node.x) || !Number.isFinite(node.y)) return;
+        node.x = Math.max(0, snap(node.x + dx));
+        node.y = Math.max(0, snap(node.y + dy));
+      });
+      (scenario.knots || []).forEach((knot) => {
+        if (!Number.isFinite(knot.x) || !Number.isFinite(knot.y)) return;
+        knot.x = Math.max(0, snap(knot.x + dx));
+        knot.y = Math.max(0, snap(knot.y + dy));
+      });
+      if (scenario.extZone && Number.isFinite(scenario.extZone.x) && Number.isFinite(scenario.extZone.y)) {
+        scenario.extZone.x = Math.max(0, snap(scenario.extZone.x + dx));
+        scenario.extZone.y = Math.max(0, snap(scenario.extZone.y + dy));
+      }
+      (scenario.extraZones || []).forEach((zone) => {
+        if (!Number.isFinite(zone.x) || !Number.isFinite(zone.y)) return;
+        zone.x = Math.max(0, snap(zone.x + dx));
+        zone.y = Math.max(0, snap(zone.y + dy));
+      });
+    }
+
+    function ensureKnotCodes(scenario) {
+      const used = new Set();
+      (scenario.knots || []).forEach((knot) => {
+        let code = `${knot.code || ""}`.trim().toUpperCase();
+        if (!/^K\d+$/.test(code) || used.has(code)) code = nextKnotCodeFromUsed(used);
+        knot.code = code;
+        used.add(code);
+      });
+    }
+
+    function nextKnotCode(scenario) {
+      const used = new Set((scenario.knots || []).map((knot) => `${knot.code || ""}`.trim().toUpperCase()).filter(Boolean));
+      return nextKnotCodeFromUsed(used);
+    }
+
+    function nextKnotCodeFromUsed(used) {
+      let index = 1;
+      while (used.has(`K${index}`)) index += 1;
+      return `K${index}`;
+    }
+
+    function normalizeNodeParentRefs(scenario) {
+      const codeToId = new Map((scenario.knots || []).map((knot) => [knot.code, knot.id]));
+      const validIds = new Set([
+        ...(scenario.nodes || []).map((node) => node.id),
+        ...(scenario.knots || []).map((knot) => knot.id)
+      ]);
+      (scenario.nodes || []).forEach((node) => {
+        if (codeToId.has(node.parent)) node.parent = codeToId.get(node.parent);
+        if (node.parent && !validIds.has(node.parent)) node.parent = null;
+      });
+      (scenario.knots || []).forEach((knot) => {
+        if (codeToId.has(knot.parent)) knot.parent = codeToId.get(knot.parent);
+        if (knot.parent === knot.id || (knot.parent && !validIds.has(knot.parent))) knot.parent = null;
+      });
+    }
+
+    function saveState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+
+    function snapshot() {
+      return JSON.stringify({ state, activeScenarioId, selectedNodeId, selectedKnotId, selectedZoneId });
+    }
+
+    function restoreSnapshot(serialized) {
+      const restored = JSON.parse(serialized);
+      state = normalizeState(restored.state);
+      activeScenarioId = restored.activeScenarioId || state.scenarios[0]?.id;
+      selectedNodeId = restored.selectedNodeId || null;
+      selectedKnotId = restored.selectedKnotId || null;
+      selectedZoneId = restored.selectedZoneId || null;
+      if (!state.scenarios.some((scenario) => scenario.id === activeScenarioId)) {
+        activeScenarioId = state.scenarios[0]?.id;
+      }
+      render();
+      updateHistoryButtons();
+    }
+
+    function pushHistory() {
+      const current = snapshot();
+      if (undoStack[undoStack.length - 1] === current) return;
+      undoStack.push(current);
+      if (undoStack.length > HISTORY_LIMIT) undoStack.shift();
+      redoStack = [];
+      updateHistoryButtons();
+    }
+
+    function pushHistorySnapshot(serialized) {
+      if (!serialized || serialized === snapshot() || undoStack[undoStack.length - 1] === serialized) return;
+      undoStack.push(serialized);
+      if (undoStack.length > HISTORY_LIMIT) undoStack.shift();
+      redoStack = [];
+      updateHistoryButtons();
+    }
+
+    function undo() {
+      if (!undoStack.length) return;
+      redoStack.push(snapshot());
+      restoreSnapshot(undoStack.pop());
+      notify("Undoしました");
+    }
+
+    function redo() {
+      if (!redoStack.length) return;
+      undoStack.push(snapshot());
+      restoreSnapshot(redoStack.pop());
+      notify("Redoしました");
+    }
+
+    function updateHistoryButtons() {
+      document.getElementById("undoBtn").disabled = !undoStack.length;
+      document.getElementById("redoBtn").disabled = !redoStack.length;
+    }
+
+    function getActiveScenario() {
+      return state.scenarios.find((scenario) => scenario.id === activeScenarioId) || state.scenarios[0];
+    }
+
+    function getCurrentNodes() {
+      return getActiveScenario().nodes;
+    }
+
+    function getCurrentKnots() {
+      const scenario = getActiveScenario();
+      scenario.knots ||= [];
+      return scenario.knots;
+    }
+
+    function getNode(id) {
+      return getCurrentNodes().find((node) => node.id === id);
+    }
+
+    function getKnot(id) {
+      return getCurrentKnots().find((knot) => knot.id === id);
+    }
+
+    function knotDisplayName(knot) {
+      return knot?.code || knot?.id || "K?";
+    }
+
+    function getLayoutZone(id) {
+      return (currentLayout?.zones || []).find((zone) => zone.id === id);
+    }
+
+    function zonePayload(zone) {
+      return {
+        id: zone.id,
+        label: zone.label,
+        x: snap(zone.x),
+        y: snap(zone.y),
+        width: snap(zone.width),
+        height: snap(zone.height),
+        locked: Boolean(zone.locked)
+      };
+    }
+
+    function saveZoneToScenario(zone) {
+      const scenario = getActiveScenario();
+      const payload = zonePayload(zone);
+      if (zone.id === "external") {
+        scenario.extZone = {
+          label: payload.label || "C&R ライン",
+          x: payload.x,
+          y: payload.y,
+          width: payload.width,
+          height: payload.height,
+          locked: payload.locked
+        };
+        return;
+      }
+      scenario.extraZones ||= [];
+      const index = scenario.extraZones.findIndex((item) => item.id === zone.id);
+      if (index >= 0) {
+        scenario.extraZones[index] = payload;
+      } else {
+        scenario.extraZones.push(payload);
+      }
+    }
+
+    function baseMap() {
+      const current = state.scenarios.find((scenario) => scenario.id === "current") || state.scenarios[0];
+      return new Map(current.nodes.map((node) => [node.id, node]));
+    }
+
+    function render() {
+      renderTabs();
+      const layout = buildLayout(getCurrentNodes());
+      saveState();
+      renderStats();
+      renderBoard(layout);
+      actionPulseNodeId = null;
+      centerViewportOnContent(layout);
+      renderInspector();
+      updateHistoryButtons();
+    }
+
+    function centerViewportOnContent(layout) {
+      if (!layout?.contentBounds || autoCenteredScenarioIds.has(activeScenarioId)) return;
+      autoCenteredScenarioIds.add(activeScenarioId);
+      requestAnimationFrame(() => {
+        const bounds = layout.contentBounds;
+        const centerX = (bounds.minX + bounds.maxX) / 2;
+        const centerY = (bounds.minY + bounds.maxY) / 2;
+        boardScrollEl.scrollLeft = Math.max(0, centerX * viewport.scale - boardScrollEl.clientWidth / 2);
+        boardScrollEl.scrollTop = Math.max(0, centerY * viewport.scale - boardScrollEl.clientHeight / 2);
+      });
+    }
+
+    function renderTabs() {
+      tabsEl.innerHTML = "";
+      state.scenarios.forEach((scenario) => {
+        const item = document.createElement("div");
+        item.className = "tab-item";
+        const button = document.createElement("button");
+        button.className = `tab ${scenario.id === activeScenarioId ? "active" : ""}`;
+        button.type = "button";
+        button.textContent = scenario.name;
+        button.title = "クリックで切替 / ダブルクリックで案名変更";
+        button.addEventListener("click", () => {
+          activeScenarioId = scenario.id;
+          selectedNodeId = scenario.nodes[0]?.id || null;
+          selectedKnotId = null;
+          selectedZoneId = null;
+          render();
+        });
+        button.addEventListener("dblclick", (event) => {
+          event.preventDefault();
+          renameScenario(scenario.id);
+        });
+
+        const actions = document.createElement("div");
+        actions.className = "tab-actions";
+        const duplicateButton = document.createElement("button");
+        duplicateButton.className = "tab-mini";
+        duplicateButton.type = "button";
+        duplicateButton.textContent = "+";
+        duplicateButton.title = "この案を複製";
+        duplicateButton.setAttribute("aria-label", "この案を複製");
+        duplicateButton.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          duplicateScenario(scenario.id);
+        });
+        const deleteButton = document.createElement("button");
+        deleteButton.className = "tab-mini delete";
+        deleteButton.type = "button";
+        deleteButton.textContent = "-";
+        deleteButton.title = state.scenarios.length <= 1 ? "最後の案は削除できません" : "この案を削除";
+        deleteButton.setAttribute("aria-label", "この案を削除");
+        deleteButton.disabled = state.scenarios.length <= 1;
+        deleteButton.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          deleteScenario(scenario.id);
+        });
+        actions.append(duplicateButton, deleteButton);
+        item.append(button, actions);
+        tabsEl.appendChild(item);
+      });
+    }
+
+    function buildLayout(nodes) {
+      const scenario = getActiveScenario();
+      const nodeMap = new Map(nodes.map((node) => [node.id, node]));
+      const childrenMap = new Map();
+      nodes.forEach((node) => childrenMap.set(node.id, []));
+      nodes.forEach((node) => {
+        if (node.parent && nodeMap.has(node.parent) && node.parent !== node.id) {
+          childrenMap.get(node.parent).push(node);
+        }
+      });
+      childrenMap.forEach((children) => {
+        children.sort((a, b) => laneSort(a) - laneSort(b) || a.role.localeCompare(b.role, "ja") || a.name.localeCompare(b.name, "ja"));
+      });
+
+      const roots = nodes
+        .filter((node) => !node.parent || !nodeMap.has(node.parent) || node.parent === node.id)
+        .sort((a, b) => laneSort(a) - laneSort(b));
+
+      const positions = new Map();
+      const subtreeWidth = new Map();
+      const levels = new Map();
+      let maxDepth = 0;
+
+      function measure(node, depth) {
+        maxDepth = Math.max(maxDepth, depth);
+        levels.set(node.id, depth);
+        const children = childrenMap.get(node.id) || [];
+        if (!children.length) {
+          subtreeWidth.set(node.id, CARD.width);
+          return CARD.width;
+        }
+        const width = children.reduce((sum, child) => sum + measure(child, depth + 1), 0) + CARD.gapX * (children.length - 1);
+        subtreeWidth.set(node.id, Math.max(CARD.width, width));
+        return subtreeWidth.get(node.id);
+      }
+
+      roots.forEach((root) => measure(root, 0));
+
+      let cursorX = CARD.left;
+      function place(node, depth, left) {
+        const width = subtreeWidth.get(node.id) || CARD.width;
+        const x = left + width / 2 - CARD.width / 2;
+        const y = CARD.top + depth * CARD.gapY + (node.lane === "external" ? 42 : 0);
+        positions.set(node.id, { x, y, width: CARD.width, height: CARD.height, depth });
+        const children = childrenMap.get(node.id) || [];
+        let childLeft = left;
+        children.forEach((child) => {
+          place(child, depth + 1, childLeft);
+          childLeft += (subtreeWidth.get(child.id) || CARD.width) + CARD.gapX;
+        });
+      }
+
+      roots.forEach((root) => {
+        place(root, 0, cursorX);
+        cursorX += (subtreeWidth.get(root.id) || CARD.width) + CARD.gapX * 1.7;
+      });
+
+      positions.forEach((pos, id) => {
+        const node = nodeMap.get(id);
+        if (!node) return;
+        if (Number.isFinite(node.x) && Number.isFinite(node.y)) {
+          pos.x = snap(node.x);
+          pos.y = snap(node.y);
+        } else {
+          node.x = snap(pos.x);
+          node.y = snap(pos.y);
+          pos.x = node.x;
+          pos.y = node.y;
+        }
+      });
+
+      const extPositions = [...positions.entries()]
+        .filter(([id]) => nodeMap.get(id)?.lane === "external")
+        .map(([, pos]) => pos);
+
+      let extZone = extPositions.length ? {
+        x: snap(Math.max(18, Math.min(...extPositions.map((pos) => pos.x)) - 34)),
+        y: snap(Math.max(120, Math.min(...extPositions.map((pos) => pos.y)) - 42)),
+        width: snap(Math.max(...extPositions.map((pos) => pos.x + pos.width)) - Math.min(...extPositions.map((pos) => pos.x)) + 68),
+        height: snap(Math.max(...extPositions.map((pos) => pos.y + pos.height)) - Math.min(...extPositions.map((pos) => pos.y)) + 76)
+      } : null;
+      if (extZone && scenario.extZone) {
+        extZone = { ...extZone, ...scenario.extZone };
+      } else if (extZone) {
+        scenario.extZone = { ...extZone };
+      }
+      if (extZone) {
+        extZone.x = snap(extZone.x);
+        extZone.y = snap(extZone.y);
+        extZone.width = snap(extZone.width);
+        extZone.height = snap(extZone.height);
+        extZone = { ...extZone, id: "external", label: extZone.label || "C&R ライン", locked: Boolean(extZone.locked) };
+        scenario.extZone = {
+          label: extZone.label,
+          x: extZone.x,
+          y: extZone.y,
+          width: extZone.width,
+          height: extZone.height,
+          locked: extZone.locked
+        };
+      }
+
+      scenario.extraZones ||= [];
+      const extraZones = scenario.extraZones.map((zone) => ({
+        id: zone.id || `zone-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+        label: zone.label || "追加枠",
+        x: snap(zone.x || 0),
+        y: snap(zone.y || 0),
+        width: snap(clamp(zone.width || 360, 260, 2400)),
+        height: snap(clamp(zone.height || 240, 180, 1800)),
+        locked: Boolean(zone.locked)
+      }));
+      scenario.extraZones = extraZones.map(zonePayload);
+      const zones = extZone ? [extZone, ...extraZones] : extraZones;
+      const knots = scenario.knots || [];
+      const positioned = [...positions.values()];
+      const contentBounds = layoutContentBounds(positioned, knots, zones);
+      const boardWidth = Math.max(CANVAS.width, 1060, ...positioned.map((pos) => pos.x + pos.width + BOARD_MARGIN.right), ...knots.map((knot) => knot.x + BOARD_MARGIN.right), ...zones.map((zone) => zone.x + zone.width + BOARD_MARGIN.right));
+      const boardHeight = Math.max(CANVAS.height, 1040, ...positioned.map((pos) => pos.y + pos.height + BOARD_MARGIN.bottom), ...knots.map((knot) => knot.y + BOARD_MARGIN.bottom), ...zones.map((zone) => zone.y + zone.height + BOARD_MARGIN.bottom));
+
+      return { nodes, nodeMap, childrenMap, positions, knots, extZone, zones, contentBounds, boardWidth, boardHeight };
+    }
+
+    function layoutContentBounds(positions, knots, zones) {
+      const items = [
+        ...positions.map((pos) => ({ x: pos.x, y: pos.y, width: pos.width, height: pos.height })),
+        ...knots.map((knot) => ({ x: knot.x - KNOT_SIZE / 2, y: knot.y - KNOT_SIZE / 2, width: KNOT_SIZE, height: KNOT_SIZE })),
+        ...zones.map((zone) => ({ x: zone.x, y: zone.y, width: zone.width, height: zone.height }))
+      ].filter((item) => Number.isFinite(item.x) && Number.isFinite(item.y));
+      if (!items.length) {
+        return { minX: CANVAS.centerX, minY: CANVAS.centerY, maxX: CANVAS.centerX, maxY: CANVAS.centerY };
+      }
+      return {
+        minX: Math.min(...items.map((item) => item.x)),
+        minY: Math.min(...items.map((item) => item.y)),
+        maxX: Math.max(...items.map((item) => item.x + item.width)),
+        maxY: Math.max(...items.map((item) => item.y + item.height))
+      };
+    }
+
+    function laneSort(node) {
+      if (node.id === "kitagawa") return 0;
+      if (node.lane === "core") return 1;
+      if (node.lane === "external") return 2;
+      return 3;
+    }
+
+    function nodeDisplayName(node) {
+      if (node.hiring && (!node.name || node.name === "未定")) return "採用枠";
+      return node.name || "未定";
+    }
+
+    function nodeMetaHtml(node) {
+      const requirementLabel = node.requirement ? "要件あり" : (node.hiring ? "採用" : "");
+      return `
+        ${node.team ? `<span class="pill">${escapeHtml(node.team)}</span>` : ""}
+        ${requirementLabel ? `<span class="pill requirement">${requirementLabel}</span>` : ""}
+        ${diffLabel(node) ? `<span class="pill diff">${diffLabel(node)}</span>` : ""}
+      `;
+    }
+
+    function nodeAvatarHtml(node) {
+      if (node.slackAvatar) return `<img class="node-avatar" src="${escapeAttr(node.slackAvatar)}" alt="">`;
+      return `<span class="node-avatar default-avatar" aria-hidden="true"></span>`;
+    }
+
+    function renderBoard(layout) {
+      cancelScheduledLinkDraw();
+      currentLayout = layout;
+      nodeElements = new Map();
+      knotElements = new Map();
+      boardEl.style.width = `${layout.boardWidth}px`;
+      boardEl.style.height = `${layout.boardHeight}px`;
+      applyZoom();
+      boardEl.querySelectorAll(".node,.zone,.knot,.knot-label").forEach((el) => el.remove());
+      linksEl.setAttribute("width", layout.boardWidth);
+      linksEl.setAttribute("height", layout.boardHeight);
+      linksEl.setAttribute("viewBox", `0 0 ${layout.boardWidth} ${layout.boardHeight}`);
+      drawLinks(layout);
+
+      (layout.zones || []).forEach((zoneConfig) => {
+        const zone = document.createElement("div");
+        zone.className = `zone ${selectedZoneId === zoneConfig.id ? "selected" : ""} ${zoneConfig.locked ? "locked" : ""}`;
+        zone.style.left = `${zoneConfig.x}px`;
+        zone.style.top = `${zoneConfig.y}px`;
+        zone.style.width = `${zoneConfig.width}px`;
+        zone.style.height = `${zoneConfig.height}px`;
+        zone.dataset.zoneId = zoneConfig.id;
+        zone.innerHTML = `
+          <div class="zone-label">${escapeHtml(zoneConfig.label || "追加枠")}</div>
+          <button class="zone-lock" type="button" title="${zoneConfig.locked ? "位置ロックを解除" : "位置をロック"}" aria-label="${zoneConfig.locked ? "位置ロックを解除" : "位置をロック"}">${zoneConfig.locked ? "&#128275;" : "&#128274;"}</button>
+          <div class="zone-handle e" data-resize="e" title="横幅を変更"></div>
+          <div class="zone-handle s" data-resize="s" title="高さを変更"></div>
+          <div class="zone-handle se" data-resize="se" title="サイズを変更"></div>
+        `;
+        zone.addEventListener("pointerdown", startZonePointer);
+        zone.querySelector(".zone-lock").addEventListener("pointerdown", (event) => {
+          event.stopPropagation();
+        });
+        zone.querySelector(".zone-lock").addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          toggleZoneLock(zoneConfig.id);
+        });
+        zone.querySelectorAll(".zone-handle").forEach((handle) => {
+          handle.addEventListener("pointerdown", startZoneResizePointer);
+        });
+        boardEl.appendChild(zone);
+      });
+
+      layout.knots.forEach((knot) => {
+        const knotEl = document.createElement("button");
+        knotEl.type = "button";
+        knotEl.className = `knot ${selectedKnotId === knot.id ? "selected" : ""} ${knot.locked ? "locked" : ""}`;
+        knotEl.style.left = `${knot.x - KNOT_SIZE / 2}px`;
+        knotEl.style.top = `${knot.y - KNOT_SIZE / 2}px`;
+        knotEl.dataset.knotId = knot.id;
+        knotEl.title = `${knotDisplayName(knot)} / 線ノット`;
+        knotEl.setAttribute("aria-label", `${knotDisplayName(knot)} / 線ノット`);
+        knotEl.addEventListener("pointerdown", startKnotPointer);
+        boardEl.appendChild(knotEl);
+        knotElements.set(knot.id, knotEl);
+        const labelEl = document.createElement("div");
+        labelEl.className = "knot-label";
+        labelEl.dataset.knotLabelId = knot.id;
+        labelEl.style.left = `${knot.x + 12}px`;
+        labelEl.style.top = `${knot.y - 18}px`;
+        labelEl.textContent = knotDisplayName(knot);
+        boardEl.appendChild(labelEl);
+      });
+
+      layout.nodes.forEach((node) => {
+        const pos = layout.positions.get(node.id);
+        if (!pos) return;
+        const nodeEl = document.createElement("button");
+        nodeEl.type = "button";
+        nodeEl.className = buildNodeClass(node, layout.nodeMap);
+        nodeEl.style.left = `${pos.x}px`;
+        nodeEl.style.top = `${pos.y}px`;
+        applyCardFloatPhase(nodeEl, node);
+        nodeEl.setAttribute("data-node-id", node.id);
+        nodeEl.title = `${node.role} / ${nodeDisplayName(node)}`;
+        nodeEl.innerHTML = `
+          ${nodeAvatarHtml(node)}
+          <div class="node-copy">
+            <div class="role">${escapeHtml(node.role || "役割未設定")}</div>
+            <div class="person">${escapeHtml(nodeDisplayName(node))}</div>
+            <div class="meta">${nodeMetaHtml(node)}</div>
+          </div>
+        `;
+        nodeEl.addEventListener("pointerdown", startNodePointer);
+        nodeEl.addEventListener("dblclick", startNodeEdit);
+        boardEl.appendChild(nodeEl);
+        fitPersonName(nodeEl);
+        nodeElements.set(node.id, nodeEl);
+      });
+    }
+
+    function drawLinks(layout, options = {}) {
+      const renderHandles = options.renderHandles !== false;
+      linksEl.innerHTML = "";
+      const knotParentRoutes = buildKnotParentRoutes(layout);
+      knotParentRoutes.forEach((route) => {
+        appendLinkPath(
+          directPath(route.source.x, route.source.y, route.target.x, route.target.y),
+          false,
+          renderHandles ? knotParentConnector(route) : null
+        );
+      });
+      const routes = buildLinkRoutes(layout);
+
+      const grouped = new Map();
+      routes.forEach((route) => {
+        if (!route.knot) return;
+        const key = `${route.knot.id}|${route.parentId}`;
+        if (!grouped.has(key)) grouped.set(key, []);
+        grouped.get(key).push(route);
+      });
+      const groupedRouteIds = new Set();
+      grouped.forEach((group) => {
+        if (group.length < 2) return;
+        const first = group[0];
+        const parentSource = anchorEdgePoint(first.parentAnchor, { x: first.knot.x, y: first.knot.y });
+        appendLinkPath(directPath(parentSource.x, parentSource.y, first.knot.x, first.knot.y), group.every((route) => route.removed));
+        group.forEach((route) => {
+          groupedRouteIds.add(route.linkId);
+          const source = { x: route.knot.x, y: route.knot.y };
+          appendLinkPath(
+            directPath(source.x, source.y, route.target.x, route.target.y),
+            route.removed,
+            renderHandles ? nodeRouteConnector(route, source, route.target) : null
+          );
+        });
+      });
+
+      routes.forEach((route) => {
+        if (!groupedRouteIds.has(route.linkId)) {
+          appendLinkPath(
+            route.knot
+              ? knotPath(route.source.x, route.source.y, route.knot.x, route.knot.y, route.target.x, route.target.y)
+              : directPath(route.source.x, route.source.y, route.target.x, route.target.y),
+            route.removed,
+            renderHandles ? nodeRouteConnector(route, route.source, route.target) : null
+          );
+        }
+      });
+    }
+
+    function nodeRouteConnector(route, source, target) {
+      return {
+        type: "node",
+        linkId: route.linkId,
+        nodeId: route.node.id,
+        parentId: route.parentId,
+        source,
+        target,
+        locked: Boolean(route.knot?.locked || (route.parentAnchor.type === "knot" && route.parentAnchor.knot.locked))
+      };
+    }
+
+    function knotParentConnector(route) {
+      return {
+        type: "knot-parent",
+        connectorKind: "parent",
+        knotId: route.knot.id,
+        linkId: route.linkId,
+        nodeId: route.knot.id,
+        parentId: route.parentId,
+        source: route.source,
+        target: route.target,
+        locked: Boolean(route.knot.locked || (route.parentAnchor.type === "knot" && route.parentAnchor.knot.locked))
+      };
+    }
+
+    function appendLinkPath(d, removed = false, connector = null) {
+      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.setAttribute("class", `link${removed ? " removed" : ""}`);
+      path.setAttribute("d", d);
+      if (removed) {
+        path.setAttribute("stroke-dasharray", "7 6");
+        path.setAttribute("opacity", ".55");
+      }
+      linksEl.appendChild(path);
+      if (connector) appendInteractiveLinkHit(d, connector);
+    }
+
+    function appendInteractiveLinkHit(d, connector) {
+      const hitPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      hitPath.setAttribute("class", `link-hit${connector.locked ? " locked" : ""}`);
+      hitPath.setAttribute("d", d);
+      hitPath.dataset.linkId = connector.linkId;
+      hitPath.dataset.nodeId = connector.nodeId;
+      hitPath.dataset.parentId = connector.parentId;
+      if (connector.knotId) hitPath.dataset.knotId = connector.knotId;
+      if (connector.connectorKind) hitPath.dataset.connectorKind = connector.connectorKind;
+
+      const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      dot.setAttribute("r", "7.5");
+      dot.setAttribute("class", `link-hover-dot source${connector.locked ? " locked" : ""}`);
+      hitPath.hoverDot = dot;
+
+      const positionDot = (event) => {
+        const nearest = closestPointOnSvgPath(hitPath, clientToBoardPoint(event.clientX, event.clientY));
+        const endpoint = nearest.length <= nearest.totalLength / 2 ? "source" : "target";
+        const opposite = endpoint === "source" ? connector.target : connector.source;
+        dot.setAttribute("cx", nearest.x);
+        dot.setAttribute("cy", nearest.y);
+        dot.classList.toggle("source", endpoint === "source");
+        dot.classList.toggle("target", endpoint === "target");
+        dot.classList.add("visible");
+        hitPath.dataset.endpoint = endpoint;
+        hitPath.dataset.oppositeX = opposite.x;
+        hitPath.dataset.oppositeY = opposite.y;
+        hitPath.setAttribute("aria-label", connector.locked
+          ? "ロック中の接続線"
+          : (endpoint === "source" ? "親側の接続先を変更" : "子側の接続先を変更"));
+      };
+
+      hitPath.addEventListener("pointermove", (event) => {
+        if (!interaction) positionDot(event);
+      });
+      hitPath.addEventListener("pointerleave", () => {
+        if (!interaction) dot.classList.remove("visible");
+      });
+      hitPath.addEventListener("pointerdown", (event) => {
+        positionDot(event);
+        if (connector.locked) return;
+        if (connector.type === "knot-parent") {
+          startKnotConnectorPointer(event);
+        } else {
+          startConnectorPointer(event);
+        }
+      });
+      linksEl.appendChild(hitPath);
+      linksEl.appendChild(dot);
+    }
+
+    function closestPointOnSvgPath(path, point) {
+      const totalLength = Math.max(0, path.getTotalLength());
+      if (!totalLength) return { x: point.x, y: point.y, length: 0, totalLength: 0 };
+      const sampleCount = clamp(Math.ceil(totalLength / 64), 10, 28);
+      let bestLength = 0;
+      let bestPoint = path.getPointAtLength(0);
+      let bestDistance = Infinity;
+      const consider = (length) => {
+        const boundedLength = clamp(length, 0, totalLength);
+        const sample = path.getPointAtLength(boundedLength);
+        const distance = (sample.x - point.x) ** 2 + (sample.y - point.y) ** 2;
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          bestLength = boundedLength;
+          bestPoint = sample;
+        }
+      };
+      for (let index = 0; index <= sampleCount; index += 1) {
+        consider(totalLength * index / sampleCount);
+      }
+      let radius = totalLength / sampleCount;
+      for (let pass = 0; pass < 3; pass += 1) {
+        const step = radius / 4;
+        for (let offset = -4; offset <= 4; offset += 1) {
+          consider(bestLength + step * offset);
+        }
+        radius = step;
+      }
+      return { x: bestPoint.x, y: bestPoint.y, length: bestLength, totalLength };
+    }
+
+    function scheduleLightweightLinkDraw(layout) {
+      if (linkDrawFrame !== null) return;
+      linkDrawFrame = requestAnimationFrame(() => {
+        linkDrawFrame = null;
+        drawLinks(layout, { renderHandles: false });
+      });
+    }
+
+    function cancelScheduledLinkDraw() {
+      if (linkDrawFrame === null) return;
+      cancelAnimationFrame(linkDrawFrame);
+      linkDrawFrame = null;
+    }
+
+    function directPath(x1, y1, x2, y2) {
+      const bend = Math.max(56, Math.abs(x2 - x1) * .45);
+      const direction = x2 >= x1 ? 1 : -1;
+      return `M ${x1} ${y1} C ${x1 + bend * direction} ${y1}, ${x2 - bend * direction} ${y2}, ${x2} ${y2}`;
+    }
+
+    function edgePoint(rect, toward) {
+      const cx = rect.x + rect.width / 2;
+      const cy = rect.y + rect.height / 2;
+      const dx = toward.x - cx;
+      const dy = toward.y - cy;
+      if (Math.abs(dx) / rect.width > Math.abs(dy) / rect.height) {
+        return { x: cx + Math.sign(dx || 1) * rect.width / 2, y: cy + dy * (rect.width / 2) / Math.max(1, Math.abs(dx)) };
+      }
+      return { x: cx + dx * (rect.height / 2) / Math.max(1, Math.abs(dy)), y: cy + Math.sign(dy || 1) * rect.height / 2 };
+    }
+
+    function getParentAnchor(layout, parentId) {
+      const pos = layout.positions.get(parentId);
+      if (pos) return { id: parentId, type: "node", rect: pos };
+      const knot = (layout.knots || []).find((item) => item.id === parentId);
+      if (knot) return { id: parentId, type: "knot", knot };
+      return null;
+    }
+
+    function anchorCenter(anchor) {
+      if (anchor.type === "knot") return { x: anchor.knot.x, y: anchor.knot.y };
+      return { x: anchor.rect.x + anchor.rect.width / 2, y: anchor.rect.y + anchor.rect.height / 2 };
+    }
+
+    function anchorEdgePoint(anchor, toward) {
+      if (anchor.type === "knot") return anchorCenter(anchor);
+      return edgePoint(anchor.rect, toward);
+    }
+
+    function knotPath(x1, y1, kx, ky, x2, y2) {
+      const bendA = Math.max(36, Math.abs(kx - x1) * .34);
+      const bendB = Math.max(36, Math.abs(x2 - kx) * .34);
+      const dirA = kx >= x1 ? 1 : -1;
+      const dirB = x2 >= kx ? 1 : -1;
+      return `M ${x1} ${y1} C ${x1 + bendA * dirA} ${y1}, ${kx - bendA * dirA} ${ky}, ${kx} ${ky} C ${kx + bendB * dirB} ${ky}, ${x2 - bendB * dirB} ${y2}, ${x2} ${y2}`;
+    }
+
+    function findRouteKnot(start, end, knots, linkId, excludeIds = []) {
+      const excluded = excludeIds instanceof Set ? excludeIds : new Set(excludeIds.filter(Boolean));
+      const locked = knots.find((knot) => !excluded.has(knot.id) && knot.locked && (knot.lockedLinks || []).includes(linkId));
+      if (locked) return locked;
+      let best = null;
+      let bestDistance = Infinity;
+      knots.forEach((knot) => {
+        if (excluded.has(knot.id)) return;
+        if (knot.locked) return;
+        const distance = distanceToSegment(knot, start, end);
+        if (distance < KNOT_CAPTURE_DISTANCE && distance < bestDistance) {
+          best = knot;
+          bestDistance = distance;
+        }
+      });
+      return best;
+    }
+
+    function distanceToSegment(point, start, end) {
+      const dx = end.x - start.x;
+      const dy = end.y - start.y;
+      if (dx === 0 && dy === 0) return Math.hypot(point.x - start.x, point.y - start.y);
+      const t = clamp(((point.x - start.x) * dx + (point.y - start.y) * dy) / (dx * dx + dy * dy), 0, 1);
+      return Math.hypot(point.x - (start.x + t * dx), point.y - (start.y + t * dy));
+    }
+
+    function linkIdFor(node) {
+      return `${node.parent}->${node.id}`;
+    }
+
+    function startBoardPointer(event) {
+      if (event.button === 1) {
+        event.preventDefault();
+        interaction = {
+          type: "zoom",
+          pointerId: event.pointerId,
+          startY: event.clientY,
+          startScale: viewport.scale,
+          centerX: event.clientX,
+          centerY: event.clientY
+        };
+        boardScrollEl.classList.add("zooming");
+        capturePointer(event.pointerId);
+      }
+      if (event.target.closest(".node")) return;
+      if (event.button === 0) {
+        event.preventDefault();
+        interaction = {
+          type: "pan",
+          pointerId: event.pointerId,
+          startX: event.clientX,
+          startY: event.clientY,
+          scrollLeft: boardScrollEl.scrollLeft,
+          scrollTop: boardScrollEl.scrollTop
+        };
+        boardScrollEl.classList.add("panning");
+        capturePointer(event.pointerId);
+      }
+    }
+
+    function startNodePointer(event) {
+      if (event.button !== 0 && event.button !== 2) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const nodeId = event.currentTarget.dataset.nodeId;
+      const node = getNode(nodeId);
+      const pos = currentLayout?.positions.get(nodeId);
+      if (!node || !pos) return;
+      selectedNodeId = nodeId;
+      selectedKnotId = null;
+      selectedZoneId = null;
+      setSelectedNodeClass(nodeId);
+      setSelectedKnotClass(null);
+      setSelectedZoneClass(null);
+      renderInspector();
+      if (event.button === 2) {
+        const pointer = clientToBoardPoint(event.clientX, event.clientY);
+        const draftStart = edgePoint(pos, pointer);
+        interaction = {
+          type: "new-connector",
+          pointerId: event.pointerId,
+          nodeId,
+          targetId: null,
+          targetKnotId: null,
+          draftStart,
+          moved: false
+        };
+        startConnectorDraft(draftStart, pointer);
+        capturePointer(event.pointerId);
+        return;
+      }
+      interaction = {
+        type: "node",
+        pointerId: event.pointerId,
+        nodeId,
+        startX: event.clientX,
+        startY: event.clientY,
+        nodeX: pos.x,
+        nodeY: pos.y,
+        moved: false,
+        targetId: null
+      };
+      event.currentTarget.classList.add("dragging");
+      capturePointer(event.pointerId);
+    }
+
+    function startNodeEdit(event) {
+      event.preventDefault();
+      event.stopPropagation();
+      const nodeId = event.currentTarget.dataset.nodeId;
+      if (!getNode(nodeId)) return;
+      selectedNodeId = nodeId;
+      selectedKnotId = null;
+      selectedZoneId = null;
+      setSelectedNodeClass(nodeId);
+      setSelectedKnotClass(null);
+      setSelectedZoneClass(null);
+      renderInspector();
+      focusPersonEditor();
+    }
+
+    function startKnotPointer(event) {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const knotId = event.currentTarget.dataset.knotId;
+      const knot = getKnot(knotId);
+      if (!knot) return;
+      selectedNodeId = null;
+      selectedKnotId = knotId;
+      selectedZoneId = null;
+      setSelectedNodeClass(null);
+      setSelectedKnotClass(knotId);
+      setSelectedZoneClass(null);
+      renderInspector();
+      interaction = {
+        type: "knot",
+        pointerId: event.pointerId,
+        knotId,
+        startX: event.clientX,
+        startY: event.clientY,
+        knotX: knot.x,
+        knotY: knot.y,
+        moved: false
+      };
+      event.currentTarget.classList.add("dragging");
+      capturePointer(event.pointerId);
+    }
+
+    function startConnectorPointer(event) {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const handle = event.currentTarget;
+      if (handle.classList.contains("locked")) return;
+      const draftStart = { x: Number(handle.dataset.oppositeX), y: Number(handle.dataset.oppositeY) };
+      interaction = {
+        type: "connector",
+        pointerId: event.pointerId,
+        endpoint: handle.dataset.endpoint,
+        linkId: handle.dataset.linkId,
+        nodeId: handle.dataset.nodeId,
+        parentId: handle.dataset.parentId,
+        targetId: null,
+        targetKnotId: null,
+        draftStart,
+        moved: false
+      };
+      handle.classList.add("dragging");
+      handle.hoverDot?.classList.add("dragging");
+      selectedNodeId = handle.dataset.nodeId;
+      selectedKnotId = null;
+      selectedZoneId = null;
+      setSelectedNodeClass(selectedNodeId);
+      renderInspector();
+      startConnectorDraft(draftStart, clientToBoardPoint(event.clientX, event.clientY));
+      capturePointer(event.pointerId);
+    }
+
+    function startKnotConnectorPointer(event) {
+      if (event.button !== 0) return;
+      const handle = event.currentTarget;
+      const knot = getKnot(handle.dataset.knotId);
+      if (!knot || knot.locked || handle.classList.contains("locked")) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const connectorKind = handle.dataset.connectorKind;
+      const draftStart = { x: Number(handle.dataset.oppositeX), y: Number(handle.dataset.oppositeY) };
+      interaction = {
+        type: "knot-connector",
+        pointerId: event.pointerId,
+        connectorKind,
+        endpoint: handle.dataset.endpoint,
+        knotId: knot.id,
+        linkId: handle.dataset.linkId,
+        nodeId: handle.dataset.nodeId,
+        parentId: handle.dataset.parentId,
+        targetId: null,
+        targetKnotId: null,
+        draftStart,
+        moved: false
+      };
+      handle.classList.add("dragging");
+      handle.hoverDot?.classList.add("dragging");
+      selectedNodeId = connectorKind === "branch" ? handle.dataset.nodeId : null;
+      selectedKnotId = connectorKind === "parent" ? knot.id : null;
+      selectedZoneId = null;
+      setSelectedNodeClass(selectedNodeId);
+      setSelectedKnotClass(selectedKnotId);
+      setSelectedZoneClass(null);
+      renderInspector();
+      startConnectorDraft(draftStart, clientToBoardPoint(event.clientX, event.clientY));
+      capturePointer(event.pointerId);
+    }
+
+    function startConnectorDraft(start, end) {
+      clearConnectorDraft();
+      connectorDraftEl = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      connectorDraftEl.setAttribute("class", "link-draft");
+      linksEl.appendChild(connectorDraftEl);
+      updateConnectorDraft(start, end);
+    }
+
+    function updateConnectorDraft(start, end) {
+      if (!connectorDraftEl) return;
+      connectorDraftEl.setAttribute("d", directPath(start.x, start.y, end.x, end.y));
+    }
+
+    function clearConnectorDraft() {
+      connectorDraftEl?.remove();
+      connectorDraftEl = null;
+    }
+
+    function startZonePointer(event) {
+      if (event.button !== 0) return;
+      if (event.target.closest(".zone-handle")) return;
+      const zoneEl = event.currentTarget;
+      const zone = getLayoutZone(zoneEl.dataset.zoneId);
+      if (!zone) return;
+      if (zone.locked) return;
+      event.preventDefault();
+      event.stopPropagation();
+      selectedNodeId = null;
+      selectedKnotId = null;
+      selectedZoneId = zone.id;
+      setSelectedNodeClass(null);
+      setSelectedKnotClass(null);
+      setSelectedZoneClass(zone.id);
+      renderInspector();
+      const childStarts = currentLayout.nodes
+        .filter((node) => {
+          const pos = currentLayout.positions.get(node.id);
+          if (!pos) return false;
+          const centerX = pos.x + pos.width / 2;
+          const centerY = pos.y + pos.height / 2;
+          return centerX >= zone.x && centerX <= zone.x + zone.width && centerY >= zone.y && centerY <= zone.y + zone.height;
+        })
+        .map((node) => {
+          const pos = currentLayout.positions.get(node.id);
+          return { id: node.id, x: pos.x, y: pos.y };
+        });
+      const knotStarts = (currentLayout.knots || [])
+        .filter((knot) => knot.x >= zone.x && knot.x <= zone.x + zone.width && knot.y >= zone.y && knot.y <= zone.y + zone.height)
+        .map((knot) => ({ id: knot.id, x: knot.x, y: knot.y }));
+      interaction = {
+        type: "zone",
+        pointerId: event.pointerId,
+        zoneId: zone.id,
+        startX: event.clientX,
+        startY: event.clientY,
+        zoneX: zone.x,
+        zoneY: zone.y,
+        childStarts,
+        knotStarts,
+        moved: false
+      };
+      zoneEl.classList.add("dragging");
+      capturePointer(event.pointerId);
+    }
+
+    function startZoneResizePointer(event) {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const zoneEl = event.currentTarget.closest(".zone");
+      const zone = getLayoutZone(zoneEl?.dataset.zoneId);
+      if (!zone || zone.locked) return;
+      selectedNodeId = null;
+      selectedKnotId = null;
+      selectedZoneId = zone.id;
+      setSelectedNodeClass(null);
+      setSelectedKnotClass(null);
+      setSelectedZoneClass(zone.id);
+      renderInspector();
+      interaction = {
+        type: "zone-resize",
+        pointerId: event.pointerId,
+        zoneId: zone.id,
+        direction: event.currentTarget.dataset.resize,
+        startX: event.clientX,
+        startY: event.clientY,
+        zoneWidth: zone.width,
+        zoneHeight: zone.height,
+        moved: false
+      };
+      zoneEl?.classList.add("dragging");
+      capturePointer(event.pointerId);
+    }
+
+    function movePointer(event) {
+      if (!interaction) {
+        updateConnectorHandleVisibility(event);
+        return;
+      }
+      if (event.pointerId !== interaction.pointerId) return;
+      if (interaction.type === "pan") {
+        event.preventDefault();
+        boardScrollEl.scrollLeft = interaction.scrollLeft - (event.clientX - interaction.startX);
+        boardScrollEl.scrollTop = interaction.scrollTop - (event.clientY - interaction.startY);
+        return;
+      }
+      if (interaction.type === "zoom") {
+        event.preventDefault();
+        const delta = interaction.startY - event.clientY;
+        const nextScale = interaction.startScale * Math.exp(delta / 280);
+        setScale(nextScale, interaction.centerX, interaction.centerY);
+        return;
+      }
+      if (interaction.type === "node") {
+        event.preventDefault();
+        const node = getNode(interaction.nodeId);
+        const pos = currentLayout?.positions.get(interaction.nodeId);
+        const el = nodeElements.get(interaction.nodeId);
+        if (!node || !pos || !el) return;
+        const dx = (event.clientX - interaction.startX) / viewport.scale;
+        const dy = (event.clientY - interaction.startY) / viewport.scale;
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) interaction.moved = true;
+        if (interaction.moved) ensureInteractionHistory();
+        const x = Math.max(0, snap(interaction.nodeX + dx));
+        const y = Math.max(0, snap(interaction.nodeY + dy));
+        node.x = x;
+        node.y = y;
+        pos.x = x;
+        pos.y = y;
+        el.style.left = `${x}px`;
+        el.style.top = `${y}px`;
+        syncBoardSize(currentLayout);
+        updateDropTarget(event);
+        scheduleLightweightLinkDraw(currentLayout);
+      }
+      if (interaction.type === "knot") {
+        event.preventDefault();
+        const knot = getKnot(interaction.knotId);
+        const el = knotElements.get(interaction.knotId);
+        if (!knot || !el) return;
+        const dx = (event.clientX - interaction.startX) / viewport.scale;
+        const dy = (event.clientY - interaction.startY) / viewport.scale;
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) interaction.moved = true;
+        if (interaction.moved) ensureInteractionHistory();
+        knot.x = Math.max(0, snap(interaction.knotX + dx));
+        knot.y = Math.max(0, snap(interaction.knotY + dy));
+        el.style.left = `${knot.x - KNOT_SIZE / 2}px`;
+        el.style.top = `${knot.y - KNOT_SIZE / 2}px`;
+        const labelEl = boardEl.querySelector(`.knot-label[data-knot-label-id="${interaction.knotId}"]`);
+        if (labelEl) {
+          labelEl.style.left = `${knot.x + 12}px`;
+          labelEl.style.top = `${knot.y - 18}px`;
+        }
+        syncBoardSize(currentLayout);
+        scheduleLightweightLinkDraw(currentLayout);
+      }
+      if (interaction.type === "zone") {
+        event.preventDefault();
+        const zone = getLayoutZone(interaction.zoneId);
+        const zoneEl = boardEl.querySelector(`.zone[data-zone-id="${interaction.zoneId}"]`);
+        if (!zone || !zoneEl) return;
+        const dx = (event.clientX - interaction.startX) / viewport.scale;
+        const dy = (event.clientY - interaction.startY) / viewport.scale;
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) interaction.moved = true;
+        ensureInteractionHistory();
+        const x = Math.max(0, snap(interaction.zoneX + dx));
+        const y = Math.max(0, snap(interaction.zoneY + dy));
+        zone.x = x;
+        zone.y = y;
+        saveZoneToScenario(zone);
+        zoneEl.style.left = `${x}px`;
+        zoneEl.style.top = `${y}px`;
+        interaction.childStarts.forEach((start) => {
+          const node = getNode(start.id);
+          const pos = currentLayout.positions.get(start.id);
+          const el = nodeElements.get(start.id);
+          if (!node || !pos || !el) return;
+          const nodeX = Math.max(0, snap(start.x + dx));
+          const nodeY = Math.max(0, snap(start.y + dy));
+          node.x = nodeX;
+          node.y = nodeY;
+          pos.x = nodeX;
+          pos.y = nodeY;
+          el.style.left = `${nodeX}px`;
+          el.style.top = `${nodeY}px`;
+        });
+        interaction.knotStarts.forEach((start) => {
+          const knot = getKnot(start.id);
+          const el = knotElements.get(start.id);
+          if (!knot || !el) return;
+          knot.x = Math.max(0, snap(start.x + dx));
+          knot.y = Math.max(0, snap(start.y + dy));
+          el.style.left = `${knot.x - KNOT_SIZE / 2}px`;
+          el.style.top = `${knot.y - KNOT_SIZE / 2}px`;
+          const labelEl = boardEl.querySelector(`.knot-label[data-knot-label-id="${start.id}"]`);
+          if (labelEl) {
+            labelEl.style.left = `${knot.x + 12}px`;
+            labelEl.style.top = `${knot.y - 18}px`;
+          }
+        });
+        syncBoardSize(currentLayout);
+        scheduleLightweightLinkDraw(currentLayout);
+      }
+      if (interaction.type === "zone-resize") {
+        event.preventDefault();
+        const zone = getLayoutZone(interaction.zoneId);
+        const zoneEl = boardEl.querySelector(`.zone[data-zone-id="${interaction.zoneId}"]`);
+        if (!zone || !zoneEl) return;
+        const dx = (event.clientX - interaction.startX) / viewport.scale;
+        const dy = (event.clientY - interaction.startY) / viewport.scale;
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) interaction.moved = true;
+        ensureInteractionHistory();
+        if (interaction.direction.includes("e")) {
+          zone.width = snap(clamp(interaction.zoneWidth + dx, 260, 2400));
+          zoneEl.style.width = `${zone.width}px`;
+        }
+        if (interaction.direction.includes("s")) {
+          zone.height = snap(clamp(interaction.zoneHeight + dy, 180, 1800));
+            zoneEl.style.height = `${zone.height}px`;
+        }
+        saveZoneToScenario(zone);
+        syncBoardSize(currentLayout);
+      }
+      if (["connector", "new-connector", "knot-connector"].includes(interaction.type)) {
+        event.preventDefault();
+        interaction.moved = true;
+        updateConnectorDraft(interaction.draftStart, clientToBoardPoint(event.clientX, event.clientY));
+        updateConnectorDropTarget(event);
+      }
+    }
+
+    function updateConnectorHandleVisibility(event) {
+      const point = clientToBoardPoint(event.clientX, event.clientY);
+      const threshold = HANDLE_REVEAL_DISTANCE / viewport.scale;
+      boardEl.querySelectorAll(".knot-label").forEach((label) => {
+        const knot = getKnot(label.dataset.knotLabelId);
+        if (!knot) return;
+        const visible = Math.hypot(point.x - knot.x, point.y - knot.y) <= threshold;
+        label.classList.toggle("visible", visible);
+      });
+    }
+
+    function hideConnectorHandles() {
+      if (["connector", "new-connector", "knot-connector"].includes(interaction?.type)) return;
+      linksEl.querySelectorAll(".link-hover-dot").forEach((dot) => dot.classList.remove("visible"));
+      boardEl.querySelectorAll(".knot-label").forEach((label) => {
+        label.classList.remove("visible");
+      });
+    }
+
+    function endPointer(event) {
+      if (!interaction || event.pointerId !== interaction.pointerId) return;
+      const interactionType = interaction.type;
+      let changed = false;
+      if (interaction.type === "pan") {
+        boardScrollEl.classList.remove("panning");
+      }
+      if (interaction.type === "zoom") {
+        boardScrollEl.classList.remove("zooming");
+      }
+      if (interaction.type === "node") {
+        const node = getNode(interaction.nodeId);
+        nodeElements.get(interaction.nodeId)?.classList.remove("dragging");
+        clearDropTarget();
+        if (node && interaction.moved && interaction.targetId) {
+          node.parent = interaction.targetId;
+          const knot = getKnot(interaction.targetId);
+          notify(knot ? `接続先を${knotDisplayName(knot)}に変更しました` : "紐付けを更新しました");
+          changed = true;
+        }
+        if (node && interaction.moved && !interaction.targetId) {
+          notify("位置を更新しました");
+          changed = true;
+        }
+      }
+      if (interaction.type === "knot") {
+        knotElements.get(interaction.knotId)?.classList.remove("dragging");
+        if (interaction.moved) {
+          notify("線ノットを移動しました");
+          changed = true;
+        }
+      }
+      if (interaction.type === "zone") {
+        boardEl.querySelector(`.zone[data-zone-id="${interaction.zoneId}"]`)?.classList.remove("dragging");
+        if (interaction.moved) {
+          notify("枠を移動しました");
+          changed = true;
+        }
+      }
+      if (interaction.type === "zone-resize") {
+        boardEl.querySelector(`.zone[data-zone-id="${interaction.zoneId}"]`)?.classList.remove("dragging");
+        if (interaction.moved) {
+          notify("枠のサイズを変更しました");
+          changed = true;
+        }
+      }
+      if (["connector", "new-connector", "knot-connector"].includes(interaction.type)) {
+        linksEl.querySelectorAll(".link-hit.dragging,.link-hover-dot.dragging").forEach((el) => el.classList.remove("dragging"));
+        clearDropTarget();
+        if (interaction.targetId || interaction.targetKnotId) {
+          changed = interaction.type === "new-connector"
+            ? applyNewConnector(interaction)
+            : (interaction.type === "knot-connector" ? applyKnotConnectorRewire(interaction) : applyConnectorRewire(interaction));
+        }
+        linksEl.querySelectorAll(".link-hover-dot").forEach((dot) => dot.classList.remove("visible"));
+      }
+      try {
+        boardScrollEl.releasePointerCapture(event.pointerId);
+      } catch (error) {
+        // Pointer capture may already be released by the browser.
+      }
+      interaction = null;
+      cancelScheduledLinkDraw();
+      clearConnectorDraft();
+      if (!changed || interactionType === "pan" || interactionType === "zoom") return;
+      saveState();
+      render();
+    }
+
+    function updateConnectorDropTarget(event) {
+      const hoverEl = document.elementFromPoint(event.clientX, event.clientY);
+      const targetKnotEl = hoverEl?.closest(".knot");
+      const targetEl = targetKnotEl ? null : hoverEl?.closest(".node");
+      const targetId = targetEl?.dataset.nodeId;
+      const hoverKnotId = targetKnotEl?.dataset.knotId || null;
+      let validKnot = null;
+      if (hoverKnotId) {
+        if (interaction.type === "new-connector" || interaction.endpoint === "source") {
+          validKnot = hoverKnotId !== interaction.nodeId && !isDescendant(hoverKnotId, interaction.nodeId) ? hoverKnotId : null;
+        } else {
+          validKnot = hoverKnotId !== interaction.parentId && !isDescendant(interaction.parentId, hoverKnotId) ? hoverKnotId : null;
+        }
+      }
+      let validTarget = null;
+      if (targetId) {
+        if (interaction.type === "new-connector" || interaction.endpoint === "source") {
+          validTarget = targetId !== interaction.nodeId && !isDescendant(targetId, interaction.nodeId) ? targetId : null;
+        } else {
+          validTarget = targetId !== interaction.parentId && !isDescendant(interaction.parentId, targetId) ? targetId : null;
+        }
+      }
+      if (validTarget === interaction.targetId && validKnot === interaction.targetKnotId) return;
+      clearDropTarget();
+      interaction.targetId = validTarget;
+      interaction.targetKnotId = validKnot;
+      if (validTarget) nodeElements.get(validTarget)?.classList.add("drop-target");
+      if (validKnot) knotElements.get(validKnot)?.classList.add("drop-target");
+    }
+
+    function applyConnectorRewire(connector) {
+      const scenario = getActiveScenario();
+      const child = scenario.nodes.find((node) => node.id === connector.nodeId);
+      if (!child) return false;
+      if (connector.endpoint === "source") {
+        const nextParentId = connector.targetKnotId || connector.targetId;
+        if (!nextParentId || nextParentId === child.id || child.parent === nextParentId) return false;
+        pushHistory();
+        updateLockedLinkIds(connector.linkId, `${nextParentId}->${connector.nodeId}`);
+        child.parent = nextParentId;
+        notify("親側の接続先を変更しました");
+        return true;
+      }
+      const newChild = connector.targetKnotId
+        ? getKnot(connector.targetKnotId)
+        : scenario.nodes.find((node) => node.id === connector.targetId);
+      if (!newChild || newChild.id === child.id) return false;
+      pushHistory();
+      updateLockedLinkIds(connector.linkId, `${connector.parentId}->${newChild.id}`);
+      child.parent = null;
+      newChild.parent = connector.parentId;
+      selectedNodeId = connector.targetKnotId ? null : newChild.id;
+      selectedKnotId = connector.targetKnotId ? newChild.id : null;
+      notify("子側の接続先を変更しました");
+      return true;
+    }
+
+    function applyKnotConnectorRewire(connector) {
+      const knot = getKnot(connector.knotId);
+      if (!knot || knot.locked) return false;
+      if (connector.endpoint === "source") {
+        const nextParentId = connector.targetKnotId || connector.targetId;
+        if (!nextParentId || nextParentId === knot.id || nextParentId === knot.parent) return false;
+        if (isDescendant(nextParentId, knot.id)) return false;
+        pushHistory();
+        updateLockedLinkIds(connector.linkId, `${nextParentId}->${knot.id}`);
+        knot.parent = nextParentId;
+        selectedNodeId = null;
+        selectedKnotId = knot.id;
+        notify("ノットの親側接続を変更しました");
+        return true;
+      }
+      const nextChild = connector.targetKnotId ? getKnot(connector.targetKnotId) : getNode(connector.targetId);
+      if (!nextChild || nextChild.id === knot.id || nextChild.id === connector.parentId) return false;
+      if (isDescendant(connector.parentId, nextChild.id)) return false;
+      pushHistory();
+      updateLockedLinkIds(connector.linkId, `${connector.parentId}->${nextChild.id}`);
+      knot.parent = null;
+      nextChild.parent = connector.parentId;
+      selectedNodeId = connector.targetKnotId ? null : nextChild.id;
+      selectedKnotId = connector.targetKnotId ? nextChild.id : null;
+      notify("ノット線の子側接続先を変更しました");
+      return true;
+    }
+
+    function applyNewConnector(connector) {
+      const child = getNode(connector.nodeId);
+      const nextParentId = connector.targetKnotId || connector.targetId;
+      if (!child || !nextParentId || child.parent === nextParentId) return false;
+      pushHistory();
+      updateLockedLinkIds(`${child.parent}->${child.id}`, `${nextParentId}->${child.id}`);
+      child.parent = nextParentId;
+      const knot = getKnot(nextParentId);
+      notify(knot ? `接続先を${knotDisplayName(knot)}に設定しました` : "接続先を設定しました");
+      return true;
+    }
+
+    function updateLockedLinkIds(oldId, newId) {
+      getCurrentKnots().forEach((knot) => {
+        if (!knot.lockedLinks?.includes(oldId)) return;
+        knot.lockedLinks = knot.lockedLinks.map((id) => id === oldId ? newId : id);
+      });
+    }
+
+    function updateDropTarget(event) {
+      const draggedEl = nodeElements.get(interaction.nodeId);
+      if (draggedEl) draggedEl.style.pointerEvents = "none";
+      const hoverEl = document.elementFromPoint(event.clientX, event.clientY);
+      const targetKnotEl = hoverEl?.closest(".knot");
+      const targetEl = targetKnotEl ? null : hoverEl?.closest(".node");
+      if (draggedEl) draggedEl.style.pointerEvents = "";
+      const targetId = targetEl?.dataset.nodeId;
+      const knotTargetId = targetKnotEl?.dataset.knotId || null;
+      const validTarget = (knotTargetId && !isDescendant(knotTargetId, interaction.nodeId))
+        ? knotTargetId
+        : (targetId && targetId !== interaction.nodeId && !isDescendant(targetId, interaction.nodeId) ? targetId : null);
+      if (validTarget === interaction.targetId) return;
+      clearDropTarget();
+      interaction.targetId = validTarget;
+      if (knotTargetId) {
+        knotElements.get(knotTargetId)?.classList.add("drop-target");
+      } else if (validTarget) {
+        nodeElements.get(validTarget)?.classList.add("drop-target");
+      }
+    }
+
+    function clearDropTarget() {
+      nodeElements.forEach((el) => el.classList.remove("drop-target"));
+      knotElements.forEach((el) => el.classList.remove("drop-target"));
+    }
+
+    function setSelectedNodeClass(nodeId) {
+      nodeElements.forEach((el, id) => {
+        el.classList.toggle("selected", id === nodeId);
+      });
+    }
+
+    function setSelectedKnotClass(knotId) {
+      knotElements.forEach((el, id) => {
+        el.classList.toggle("selected", id === knotId);
+      });
+    }
+
+    function setSelectedZoneClass(zoneId) {
+      boardEl.querySelectorAll(".zone").forEach((el) => {
+        el.classList.toggle("selected", el.dataset.zoneId === zoneId);
+      });
+    }
+
+    function ensureInteractionHistory() {
+      if (interaction?.historyDone) return;
+      pushHistory();
+      interaction.historyDone = true;
+    }
+
+    function capturePointer(pointerId) {
+      try {
+        boardScrollEl.setPointerCapture(pointerId);
+      } catch (error) {
+        // Some browsers refuse capture for middle-button gestures; movement still works in most cases.
+      }
+    }
+
+    function zoomByWheel(event) {
+      event.preventDefault();
+      const nextScale = viewport.scale * Math.exp(-event.deltaY / 620);
+      setScale(nextScale, event.clientX, event.clientY);
+    }
+
+    function setScale(nextScale, clientX, clientY) {
+      const scale = clamp(nextScale, .45, 2.1);
+      if (Math.abs(scale - viewport.scale) < .001) return;
+      const scrollerRect = boardScrollEl.getBoundingClientRect();
+      const boardPoint = clientToBoardPoint(clientX, clientY);
+      viewport.scale = scale;
+      applyZoom();
+      boardScrollEl.scrollLeft = boardPoint.x * viewport.scale - (clientX - scrollerRect.left);
+      boardScrollEl.scrollTop = boardPoint.y * viewport.scale - (clientY - scrollerRect.top);
+      renderStats();
+    }
+
+    function applyZoom() {
+      boardEl.style.zoom = viewport.scale;
+    }
+
+    function clientToBoardPoint(clientX, clientY) {
+      const rect = boardEl.getBoundingClientRect();
+      return {
+        x: (clientX - rect.left) / viewport.scale,
+        y: (clientY - rect.top) / viewport.scale
+      };
+    }
+
+    function syncBoardSize(layout) {
+      if (!layout) return;
+      const positioned = [...layout.positions.values()];
+      const knots = layout.knots || [];
+      const zones = layout.zones || [];
+      layout.contentBounds = layoutContentBounds(positioned, knots, zones);
+      layout.boardWidth = Math.max(CANVAS.width, 1060, ...positioned.map((pos) => pos.x + pos.width + BOARD_MARGIN.right), ...knots.map((knot) => knot.x + BOARD_MARGIN.right), ...zones.map((zone) => zone.x + zone.width + BOARD_MARGIN.right));
+      layout.boardHeight = Math.max(CANVAS.height, 1040, ...positioned.map((pos) => pos.y + pos.height + BOARD_MARGIN.bottom), ...knots.map((knot) => knot.y + BOARD_MARGIN.bottom), ...zones.map((zone) => zone.y + zone.height + BOARD_MARGIN.bottom));
+      boardEl.style.width = `${layout.boardWidth}px`;
+      boardEl.style.height = `${layout.boardHeight}px`;
+      linksEl.setAttribute("width", layout.boardWidth);
+      linksEl.setAttribute("height", layout.boardHeight);
+      linksEl.setAttribute("viewBox", `0 0 ${layout.boardWidth} ${layout.boardHeight}`);
+      applyZoom();
+    }
+
+    function clamp(value, min, max) {
+      return Math.min(max, Math.max(min, value));
+    }
+
+    function snap(value) {
+      return Math.round(Number(value || 0) / GRID) * GRID;
+    }
+
+    function applyCardFloatPhase(nodeEl, node) {
+      const seed = stableFloatSeed(node.id);
+      const duration = 8.4 + (seed % 29) / 10;
+      const elapsed = (performance.now() - floatEpoch) / 1000;
+      const phase = (elapsed + (seed % 977) / 97) % duration;
+      const direction = seed % 2 === 0 ? 1 : -1;
+      const sway = 1.1 + ((seed >>> 5) % 12) / 10;
+      const lift = 3.8 + ((seed >>> 11) % 15) / 10;
+      const tilt = .32 + ((seed >>> 17) % 32) / 100;
+      const px = (value) => `${value.toFixed(2)}px`;
+      const deg = (value) => `${value.toFixed(2)}deg`;
+
+      nodeEl.style.setProperty("--float-duration", `${duration.toFixed(2)}s`);
+      nodeEl.style.setProperty("--float-delay", `-${phase.toFixed(2)}s`);
+      nodeEl.style.setProperty("--float-x-start", px(-direction * sway * .38));
+      nodeEl.style.setProperty("--float-y-start", px(1.1 + (seed % 6) / 10));
+      nodeEl.style.setProperty("--float-r-start", deg(-direction * tilt * .7));
+      nodeEl.style.setProperty("--float-x-peak", px(direction * sway));
+      nodeEl.style.setProperty("--float-y-peak", px(-lift));
+      nodeEl.style.setProperty("--float-r-peak", deg(direction * tilt));
+      nodeEl.style.setProperty("--float-x-return", px(-direction * sway * .76));
+      nodeEl.style.setProperty("--float-y-return", px(-lift * .28));
+      nodeEl.style.setProperty("--float-r-return", deg(-direction * tilt * .88));
+    }
+
+    function stableFloatSeed(value) {
+      return Array.from(`${value || "node"}`).reduce(
+        (hash, char) => Math.imul(hash ^ char.codePointAt(0), 16777619) >>> 0,
+        2166136261
+      );
+    }
+
+    function fitPersonName(nodeEl) {
+      const nameEl = nodeEl.querySelector(".person");
+      if (!nameEl || !nameEl.textContent.trim()) return;
+      const baseSize = 20;
+      const minimumSize = 10;
+      nameEl.style.fontSize = `${baseSize}px`;
+      const availableWidth = nameEl.clientWidth;
+      const textWidth = nameEl.scrollWidth;
+      if (!availableWidth || textWidth <= availableWidth) return;
+      const fittedSize = clamp(
+        Math.floor((baseSize * availableWidth / textWidth) * 10) / 10,
+        minimumSize,
+        baseSize
+      );
+      nameEl.style.fontSize = `${fittedSize}px`;
+    }
+
+    function buildNodeClass(node, nodeMap) {
+      const classes = ["node", node.lane || "core", node.status || "current"];
+      if (node.colorOverride) classes.push("manual-color", `palette-${node.colorOverride}`);
+      if (node.borderStyleOverride) classes.push("manual-border", `border-${node.borderStyleOverride}`);
+      classes.push("has-avatar");
+      if (node.id === selectedNodeId) classes.push("selected");
+      if (node.id === actionPulseNodeId) classes.push("action-pulse");
+      if (node.status === "risk" || (node.parent && nodeMap.get(node.parent)?.status === "removed")) classes.push("risk");
+      if (searchTerm && !`${node.name} ${node.role} ${node.team} ${node.decision} ${node.requirement}`.toLowerCase().includes(searchTerm)) classes.push("hidden-by-filter");
+      return classes.join(" ");
+    }
+
+    function diffLabel(node) {
+      if (activeScenarioId === "current") return "";
+      const base = baseMap().get(node.id);
+      if (!base) return "追加";
+      if (node.status === "removed") return "減";
+      const keys = ["name", "role", "team", "parent", "lane", "decision", "requirement", "hiring", "colorOverride", "borderStyleOverride"];
+      return keys.some((key) => `${node[key] || ""}` !== `${base[key] || ""}`) || node.status !== base.status ? "変更" : "";
+    }
+
+    function renderStats() {
+      const nodes = getCurrentNodes();
+      const active = nodes.filter((node) => node.status !== "removed");
+      const attention = active.filter((node) => node.status === "risk");
+      const added = nodes.filter((node) => diffLabel(node) === "追加" || node.status === "added");
+      const removed = nodes.filter((node) => node.status === "removed");
+      statsEl.innerHTML = `
+        <div class="stat"><b>${active.length}</b><span>稼働</span></div>
+        <div class="stat"><b>${attention.length}</b><span>注意</span></div>
+        <div class="stat"><b>${added.length}</b><span>追加</span></div>
+        <div class="stat"><b>${removed.length}</b><span>人員減</span></div>
+        <div class="stat"><b>${Math.round(viewport.scale * 100)}%</b><span>表示</span></div>
+      `;
+    }
+
+    function renderInspector() {
+      const node = selectedNodeId ? getNode(selectedNodeId) : null;
+      const knot = selectedKnotId ? getKnot(selectedKnotId) : null;
+      const zone = selectedZoneId ? getLayoutZone(selectedZoneId) : null;
+      if (zone) {
+        panelTitleEl.textContent = zone.label || "追加枠";
+        panelSubtitleEl.textContent = zone.locked ? "位置とサイズを固定中です。" : "枠の名称・位置・サイズを編集できます。";
+        panelBodyEl.innerHTML = `
+          <div class="section">
+            <p class="section-title">枠の設定</p>
+            <div class="field">
+              <label for="zoneLabel">枠名</label>
+              <input id="zoneLabel" value="${escapeAttr(zone.label || "追加枠")}">
+            </div>
+            <div class="row">
+              <div class="field">
+                <label for="zoneX">X</label>
+                <input id="zoneX" type="number" min="0" step="${GRID}" value="${Math.round(zone.x)}">
+              </div>
+              <div class="field">
+                <label for="zoneY">Y</label>
+                <input id="zoneY" type="number" min="0" step="${GRID}" value="${Math.round(zone.y)}">
+              </div>
+            </div>
+            <div class="row">
+              <div class="field">
+                <label for="zoneWidth">幅</label>
+                <input id="zoneWidth" type="number" min="260" step="${GRID}" value="${Math.round(zone.width)}">
+              </div>
+              <div class="field">
+                <label for="zoneHeight">高さ</label>
+                <input id="zoneHeight" type="number" min="180" step="${GRID}" value="${Math.round(zone.height)}">
+              </div>
+            </div>
+            <div class="button-row">
+              <button class="text-btn primary" id="toggleZoneLockBtn">${zone.locked ? "位置ロックを解除" : "位置をロック"}</button>
+            </div>
+          </div>
+        `;
+        bindZoneTextField("zoneLabel", (value) => ({ label: value }));
+        document.getElementById("zoneX").addEventListener("change", (event) => updateZone(zone.id, { x: Math.max(0, snap(event.target.value)) }));
+        document.getElementById("zoneY").addEventListener("change", (event) => updateZone(zone.id, { y: Math.max(0, snap(event.target.value)) }));
+        document.getElementById("zoneWidth").addEventListener("change", (event) => updateZone(zone.id, { width: snap(clamp(event.target.value, 260, 2400)) }));
+        document.getElementById("zoneHeight").addEventListener("change", (event) => updateZone(zone.id, { height: snap(clamp(event.target.value, 180, 1800)) }));
+        document.getElementById("toggleZoneLockBtn").addEventListener("click", () => toggleZoneLock(zone.id));
+        return;
+      }
+      if (knot) {
+        panelTitleEl.textContent = `線ノット ${knotDisplayName(knot)}`;
+        const lockedCount = knot.lockedLinks?.length || 0;
+        panelSubtitleEl.textContent = knot.locked ? `${lockedCount}本の線を固定中` : "近くの線をここで束ねます。";
+        const knotParentOptions = buildKnotParentOptions(knot);
+        panelBodyEl.innerHTML = `
+          <div class="section">
+            <p class="section-title">位置</p>
+            <div class="field">
+              <label for="knotCode">接続ID</label>
+              <input id="knotCode" value="${escapeAttr(knotDisplayName(knot))}" readonly>
+            </div>
+            <div class="field">
+              <label for="knotParent">接続先</label>
+              <select id="knotParent">${knotParentOptions}</select>
+            </div>
+            <div class="row">
+              <div class="field">
+                <label for="knotX">X</label>
+                <input id="knotX" type="number" step="${GRID}" value="${Math.round(knot.x)}">
+              </div>
+              <div class="field">
+                <label for="knotY">Y</label>
+                <input id="knotY" type="number" step="${GRID}" value="${Math.round(knot.y)}">
+              </div>
+            </div>
+            <div class="button-row">
+              <button class="text-btn primary" id="toggleKnotLockBtn">${knot.locked ? "ロック解除" : "ロック"}</button>
+              <button class="text-btn warn" id="deleteKnotBtn">削除</button>
+            </div>
+          </div>
+          <div class="section">
+            <p class="section-title">使い方</p>
+            <ul class="insight-list">
+              <li class="insight"><b>線を束ねる</b><span>ロックすると、今このノットを通っている線だけを固定します。</span></li>
+              <li class="insight"><b>接続先</b><span>カードの接続先で${escapeHtml(knotDisplayName(knot))}を選ぶと、このノットにつながります。</span></li>
+              <li class="insight"><b>ロック解除</b><span>解除すると、近くにある線を再判定してつなぎます。</span></li>
+            </ul>
+          </div>
+        `;
+        document.getElementById("knotX").addEventListener("change", (event) => updateKnot(knot.id, { x: snap(event.target.value) }));
+        document.getElementById("knotY").addEventListener("change", (event) => updateKnot(knot.id, { y: snap(event.target.value) }));
+        document.getElementById("knotParent").addEventListener("change", (event) => updateKnot(knot.id, { parent: event.target.value || null }));
+        document.getElementById("toggleKnotLockBtn").addEventListener("click", () => toggleKnotLock(knot.id));
+        document.getElementById("deleteKnotBtn").addEventListener("click", deleteSelectedKnot);
+        return;
+      }
+      if (!node) {
+        panelTitleEl.textContent = "カード詳細";
+        panelSubtitleEl.textContent = "カードを選ぶと編集できます。";
+        panelBodyEl.innerHTML = `<div class="empty">未選択</div>`;
+        return;
+      }
+
+      panelTitleEl.textContent = nodeDisplayName(node);
+      panelSubtitleEl.textContent = `${node.role || "役割未設定"} / ${node.team || "所属未設定"}`;
+      const nodes = getCurrentNodes();
+      const parentOptions = [`<option value="">最上位</option>`]
+        .concat(nodes
+          .filter((candidate) => candidate.id !== node.id && !isDescendant(candidate.id, node.id))
+          .map((candidate) => `<option value="${candidate.id}" ${node.parent === candidate.id ? "selected" : ""}>${escapeHtml(candidate.role)} / ${escapeHtml(nodeDisplayName(candidate))}</option>`))
+        .concat(getCurrentKnots()
+          .filter((knot) => !isDescendant(knot.id, node.id))
+          .map((knot) => `<option value="${knot.id}" ${node.parent === knot.id ? "selected" : ""}>${escapeHtml(knotDisplayName(knot))} / 線ノット</option>`))
+        .join("");
+
+      panelBodyEl.innerHTML = `
+        <div class="section">
+          <p class="section-title">配置</p>
+          <div class="field">
+            <label for="personName">担当者</label>
+            <input id="personName" value="${escapeAttr(node.name || "")}">
+          </div>
+          <div class="field">
+            <label for="roleName">役割</label>
+            <input id="roleName" value="${escapeAttr(node.role || "")}">
+          </div>
+          <div class="row">
+            <div class="field">
+              <label for="teamName">所属</label>
+              <input id="teamName" value="${escapeAttr(node.team || "")}">
+            </div>
+            <div class="field">
+              <label for="laneName">色分類</label>
+              <select id="laneName">
+                ${option("core", "中核", node.lane)}
+                ${option("external", "C&Rライン", node.lane)}
+                ${option("candidate", "候補", node.lane)}
+              </select>
+            </div>
+          </div>
+          <div class="field">
+            <label for="parentNode">接続先</label>
+            <select id="parentNode">${parentOptions}</select>
+          </div>
+        </div>
+
+        <div class="section">
+          <p class="section-title">判断</p>
+          <div class="field">
+            <label for="statusName">状態</label>
+            <select id="statusName">
+              ${option("current", "現行", node.status)}
+              ${option("added", "追加", node.status)}
+              ${option("risk", "注意", node.status)}
+              ${option("candidate", "候補", node.status)}
+              ${option("hiring", "採用枠", node.status)}
+              ${option("removed", "人員減", node.status)}
+            </select>
+          </div>
+          <div class="field">
+            <label for="decisionName">判断範囲</label>
+            <input id="decisionName" value="${escapeAttr(node.decision || "")}">
+          </div>
+          <div class="field">
+            <label for="noteName">メモ</label>
+            <textarea id="noteName">${escapeHtml(node.note || "")}</textarea>
+          </div>
+        </div>
+
+        <div class="section">
+          <p class="section-title">表示の上書き</p>
+          <div class="row">
+            <div class="field">
+              <label for="cardColorOverride">カード色</label>
+              <select id="cardColorOverride">
+                ${option("", "自動", node.colorOverride || "")}
+                ${option("core", "中核", node.colorOverride || "")}
+                ${option("external", "C&Rライン", node.colorOverride || "")}
+                ${option("added", "追加", node.colorOverride || "")}
+                ${option("candidate", "候補", node.colorOverride || "")}
+                ${option("hiring", "採用枠", node.colorOverride || "")}
+                ${option("removed", "人員減", node.colorOverride || "")}
+              </select>
+            </div>
+            <div class="field">
+              <label for="borderStyleOverride">枠線</label>
+              <select id="borderStyleOverride">
+                ${option("", "自動", node.borderStyleOverride || "")}
+                ${option("solid", "実線", node.borderStyleOverride || "")}
+                ${option("dashed", "破線", node.borderStyleOverride || "")}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <p class="section-title">採用・補充</p>
+          <div class="field">
+            <label for="requirementName">人員要件</label>
+            <textarea id="requirementName" placeholder="2Dリード経験 / 稼働開始 / 必須スキル">${escapeHtml(node.requirement || "")}</textarea>
+          </div>
+          <div class="button-row">
+            <button class="text-btn" id="vacancyPanelBtn">採用枠にする</button>
+            <button class="text-btn warn" id="removePanelBtn">人員減</button>
+          </div>
+        </div>
+
+      `;
+
+      bindInspectorField("personName", "input", (value) => ({ name: value }));
+      bindInspectorField("roleName", "input", (value) => ({ role: value }));
+      bindInspectorField("teamName", "input", (value) => ({ team: value }));
+      bindInspectorField("laneName", "change", (value) => ({ lane: value }));
+      bindInspectorField("parentNode", "change", (value) => ({ parent: value || null }));
+      bindInspectorField("statusName", "change", (value) => ({ status: value, hiring: value === "hiring" }));
+      bindInspectorField("cardColorOverride", "change", (value) => ({ colorOverride: value || null }));
+      bindInspectorField("borderStyleOverride", "change", (value) => ({ borderStyleOverride: value || null }));
+      bindInspectorField("decisionName", "input", (value) => ({ decision: value }));
+      bindInspectorField("noteName", "input", (value) => ({ note: value }));
+      bindInspectorField("requirementName", "input", (value) => ({ requirement: value }));
+      document.getElementById("vacancyPanelBtn").addEventListener("click", makeVacancy);
+      document.getElementById("removePanelBtn").addEventListener("click", markRemoved);
+    }
+
+    function bindInspectorField(id, eventName, toPatch) {
+      const el = document.getElementById(id);
+      if (eventName === "input") {
+        let beforeEdit = null;
+        let committed = false;
+        const commitEdit = () => {
+          if (!beforeEdit || committed) return;
+          const changed = beforeEdit !== snapshot();
+          if (changed) pushHistorySnapshot(beforeEdit);
+          beforeEdit = null;
+          committed = true;
+          if (changed) renderStats();
+        };
+        el.addEventListener("focus", () => {
+          beforeEdit = snapshot();
+          committed = false;
+        });
+        el.addEventListener("input", (event) => {
+          if (!beforeEdit) beforeEdit = snapshot();
+          committed = false;
+          patchNodeLive(selectedNodeId, toPatch(event.target.value));
+        });
+        el.addEventListener("change", commitEdit);
+        el.addEventListener("blur", commitEdit);
+        return;
+      }
+      el.addEventListener(eventName, (event) => {
+        updateNode(selectedNodeId, toPatch(event.target.value), { quiet: true });
+      });
+    }
+
+    function patchNodeLive(id, patch) {
+      const scenario = getActiveScenario();
+      const nodeIndex = scenario.nodes.findIndex((node) => node.id === id);
+      if (nodeIndex < 0) return;
+      scenario.nodes[nodeIndex] = { ...scenario.nodes[nodeIndex], ...patch };
+      refreshSelectedNodePreview(scenario.nodes[nodeIndex]);
+      saveState();
+    }
+
+    function refreshSelectedNodePreview(node) {
+      const nodeEl = nodeElements.get(node.id);
+      if (nodeEl) {
+        const roleEl = nodeEl.querySelector(".role");
+        const personEl = nodeEl.querySelector(".person");
+        const metaEl = nodeEl.querySelector(".meta");
+        const avatarEl = nodeEl.querySelector(".node-avatar");
+        if (roleEl) roleEl.textContent = node.role || "役割未設定";
+        if (personEl) personEl.textContent = nodeDisplayName(node);
+        if (metaEl) metaEl.innerHTML = nodeMetaHtml(node);
+        if (avatarEl) {
+          avatarEl.outerHTML = nodeAvatarHtml(node);
+        } else {
+          nodeEl.insertAdjacentHTML("afterbegin", nodeAvatarHtml(node));
+        }
+        nodeEl.classList.add("has-avatar");
+        nodeEl.title = `${node.role || ""} / ${nodeDisplayName(node)}`;
+      }
+      panelTitleEl.textContent = nodeDisplayName(node);
+      panelSubtitleEl.textContent = `${node.role || "役割未設定"} / ${node.team || "所属未設定"}`;
+    }
+
+    function focusPersonEditor() {
+      requestAnimationFrame(() => {
+        const input = document.getElementById("personName");
+        if (!input) return;
+        input.focus();
+        input.select();
+      });
+    }
+
+    function focusRequirementEditor() {
+      requestAnimationFrame(() => {
+        const input = document.getElementById("requirementName");
+        if (!input) return;
+        input.focus();
+        input.select();
+      });
+    }
+
+    function renderInsights() {
+      const nodes = getCurrentNodes();
+      const childCounts = new Map(nodes.map((node) => [node.id, 0]));
+      nodes.forEach((node) => {
+        if (node.parent && childCounts.has(node.parent) && node.status !== "removed") {
+          childCounts.set(node.parent, childCounts.get(node.parent) + 1);
+        }
+      });
+
+      const insights = [];
+      nodes.forEach((node) => {
+        if (node.status === "removed" && childCounts.get(node.id) > 0) {
+          insights.push([`${node.name}の配下`, "人員減のまま配下が残っています。接続先の再設定候補です。"]);
+        }
+        if (childCounts.get(node.id) >= 4 && node.status !== "removed") {
+          insights.push([`${node.name}の配下数`, "配下が多めです。中間リードの追加候補です。"]);
+        }
+        if ((node.name || "").includes("未定") && node.status !== "removed") {
+          insights.push([node.role || "未定枠", "担当未定です。追加候補か外注候補として比較できます。"]);
+        }
+        if (node.hiring && !node.requirement && node.status !== "removed") {
+          insights.push([node.role || "採用枠", "人員要件が未入力です。必要スキル、稼働時期、期待役割を整理できます。"]);
+        }
+      });
+
+      if (!insights.length) {
+        insights.push(["大きな注意点なし", "変更差分と空き枠を見ながら案を比較できます。"]);
+      }
+
+      return insights
+        .slice(0, 7)
+        .map(([title, body]) => `<li class="insight"><b>${escapeHtml(title)}</b><span>${escapeHtml(body)}</span></li>`)
+        .join("");
+    }
+
+    function option(value, label, selected) {
+      return `<option value="${value}" ${value === selected ? "selected" : ""}>${label}</option>`;
+    }
+
+    function buildKnotParentOptions(knot) {
+      const nodeOptions = getCurrentNodes()
+        .filter((node) => !isDescendant(node.id, knot.id))
+        .map((node) => `<option value="${node.id}" ${knot.parent === node.id ? "selected" : ""}>${escapeHtml(node.role)} / ${escapeHtml(nodeDisplayName(node))}</option>`);
+      const knotOptions = getCurrentKnots()
+        .filter((candidate) => candidate.id !== knot.id && !isDescendant(candidate.id, knot.id))
+        .map((candidate) => `<option value="${candidate.id}" ${knot.parent === candidate.id ? "selected" : ""}>${escapeHtml(knotDisplayName(candidate))} / 線ノット</option>`);
+      return [`<option value="">なし</option>`].concat(nodeOptions, knotOptions).join("");
+    }
+
+    function updateNode(id, patch, options = {}) {
+      const scenario = getActiveScenario();
+      const nodeIndex = scenario.nodes.findIndex((node) => node.id === id);
+      if (nodeIndex < 0) return;
+      if (!options.noHistory) pushHistory();
+      scenario.nodes[nodeIndex] = { ...scenario.nodes[nodeIndex], ...patch };
+      if (!options.quiet) notify("カードを更新しました");
+      render();
+    }
+
+    function updateKnot(id, patch) {
+      const scenario = getActiveScenario();
+      const knotIndex = (scenario.knots || []).findIndex((knot) => knot.id === id);
+      if (knotIndex < 0) return;
+      if (patch.parent && isDescendant(patch.parent, id)) {
+        notify("循環する接続は設定できません");
+        render();
+        return;
+      }
+      pushHistory();
+      scenario.knots[knotIndex] = { ...scenario.knots[knotIndex], ...patch };
+      notify("線ノットを更新しました");
+      render();
+    }
+
+    function toggleKnotLock(id) {
+      const scenario = getActiveScenario();
+      const knot = (scenario.knots || []).find((item) => item.id === id);
+      if (!knot) return;
+      pushHistory();
+      if (knot.locked) {
+        knot.locked = false;
+        knot.lockedLinks = [];
+        notify("線ノットのロックを解除しました");
+      } else {
+        knot.locked = true;
+        knot.lockedLinks = getLinkIdsThroughKnot(knot);
+        notify(`${knot.lockedLinks.length}本の線をロックしました`);
+      }
+      render();
+    }
+
+    function getLinkIdsThroughKnot(knot) {
+      if (!currentLayout) return [];
+      return currentLayout.nodes
+        .filter((node) => node.parent && getParentAnchor(currentLayout, node.parent) && currentLayout.positions.has(node.id))
+        .filter((node) => {
+          const parentAnchor = getParentAnchor(currentLayout, node.parent);
+          const child = currentLayout.positions.get(node.id);
+          const parentCenter = anchorCenter(parentAnchor);
+          const childCenter = { x: child.x + child.width / 2, y: child.y + child.height / 2 };
+          const start = anchorEdgePoint(parentAnchor, childCenter);
+          const end = edgePoint(child, parentCenter);
+          return distanceToSegment(knot, start, end) < KNOT_CAPTURE_DISTANCE;
+        })
+        .map(linkIdFor);
+    }
+
+    function addNode() {
+      pushHistory();
+      const scenario = getActiveScenario();
+      const id = `node-${Date.now().toString(36)}`;
+      const parent = selectedNodeId && getNode(selectedNodeId) ? selectedNodeId : null;
+      const parentNode = getNode(parent);
+      const parentPos = currentLayout?.positions.get(parent);
+      const boardCenter = {
+        x: (boardScrollEl.scrollLeft + boardScrollEl.clientWidth / 2) / viewport.scale,
+        y: (boardScrollEl.scrollTop + boardScrollEl.clientHeight / 2) / viewport.scale
+      };
+      scenario.nodes.push({
+        id,
+        name: "未定",
+        role: "追加枠",
+        team: "",
+        parent,
+        lane: parentNode?.lane || "candidate",
+        status: "added",
+        decision: "未設定",
+        requirement: "",
+        hiring: false,
+        note: "",
+        x: snap(parentPos ? parentPos.x + CARD.width + CARD.gapX : Math.max(0, boardCenter.x - CARD.width / 2)),
+        y: snap(parentPos ? parentPos.y + CARD.height + 50 : Math.max(0, boardCenter.y - CARD.height / 2))
+      });
+      selectedNodeId = id;
+      selectedKnotId = null;
+      selectedZoneId = null;
+      actionPulseNodeId = id;
+      notify("追加枠を作成しました");
+      render();
+      focusPersonEditor();
+    }
+
+    function addZone() {
+      pushHistory();
+      const scenario = getActiveScenario();
+      scenario.extraZones ||= [];
+      const selectedPos = selectedNodeId ? currentLayout?.positions.get(selectedNodeId) : null;
+      const boardPoint = selectedPos
+        ? { x: selectedPos.x + CARD.width / 2 + 120, y: selectedPos.y + CARD.height / 2 + 80 }
+        : {
+            x: (boardScrollEl.scrollLeft + boardScrollEl.clientWidth / 2) / viewport.scale,
+            y: (boardScrollEl.scrollTop + boardScrollEl.clientHeight / 2) / viewport.scale
+          };
+      const width = 420;
+      const height = 260;
+      const id = `zone-${Date.now().toString(36)}`;
+      scenario.extraZones.push({
+        id,
+        label: "追加枠",
+        x: snap(Math.max(0, boardPoint.x - width / 2)),
+        y: snap(Math.max(0, boardPoint.y - height / 2)),
+        width,
+        height,
+        locked: false
+      });
+      selectedNodeId = null;
+      selectedKnotId = null;
+      selectedZoneId = id;
+      notify("枠を追加しました");
+      render();
+    }
+
+    function toggleZoneLock(id) {
+      const zone = getLayoutZone(id);
+      if (!zone) return;
+      pushHistory();
+      zone.locked = !zone.locked;
+      saveZoneToScenario(zone);
+      notify(zone.locked ? "枠の位置をロックしました" : "枠の位置ロックを解除しました");
+      render();
+    }
+
+    function updateZone(id, patch, options = {}) {
+      const zone = getLayoutZone(id);
+      if (!zone) return;
+      if (!options.noHistory) pushHistory();
+      const next = { ...zone, ...patch };
+      next.label = `${next.label || ""}`.trim() || (id === "external" ? "C&R ライン" : "追加枠");
+      next.x = Math.max(0, snap(next.x));
+      next.y = Math.max(0, snap(next.y));
+      next.width = snap(clamp(next.width, 260, 2400));
+      next.height = snap(clamp(next.height, 180, 1800));
+      next.locked = Boolean(next.locked);
+      Object.assign(zone, next);
+      saveZoneToScenario(zone);
+      if (!options.quiet) notify("枠を更新しました");
+      render();
+    }
+
+    function patchZoneLive(id, patch) {
+      const zone = getLayoutZone(id);
+      if (!zone) return;
+      const label = `${patch.label ?? zone.label ?? ""}`.trim() || (id === "external" ? "C&R ライン" : "追加枠");
+      Object.assign(zone, { ...patch, label });
+      saveZoneToScenario(zone);
+      const labelEl = boardEl.querySelector(`.zone[data-zone-id="${id}"] .zone-label`);
+      if (labelEl) labelEl.textContent = label;
+      panelTitleEl.textContent = label;
+      saveState();
+    }
+
+    function bindZoneTextField(id, toPatch) {
+      const el = document.getElementById(id);
+      let beforeEdit = null;
+      let committed = false;
+      const commitEdit = () => {
+        if (!beforeEdit || committed) return;
+        const changed = beforeEdit !== snapshot();
+        if (changed) pushHistorySnapshot(beforeEdit);
+        beforeEdit = null;
+        committed = true;
+      };
+      el.addEventListener("focus", () => {
+        beforeEdit = snapshot();
+        committed = false;
+      });
+      el.addEventListener("input", (event) => {
+        if (!beforeEdit) beforeEdit = snapshot();
+        committed = false;
+        patchZoneLive(selectedZoneId, toPatch(event.target.value));
+      });
+      el.addEventListener("change", commitEdit);
+      el.addEventListener("blur", commitEdit);
+    }
+
+    function addKnot() {
+      pushHistory();
+      const scenario = getActiveScenario();
+      scenario.knots ||= [];
+      const selectedPos = selectedNodeId ? currentLayout?.positions.get(selectedNodeId) : null;
+      const boardPoint = selectedPos
+        ? { x: selectedPos.x + CARD.width + 90, y: selectedPos.y + CARD.height / 2 }
+        : {
+            x: (boardScrollEl.scrollLeft + boardScrollEl.clientWidth / 2) / viewport.scale,
+            y: (boardScrollEl.scrollTop + boardScrollEl.clientHeight / 2) / viewport.scale
+          };
+      const id = `knot-${Date.now().toString(36)}`;
+      const code = nextKnotCode(scenario);
+      scenario.knots.push({ id, code, x: snap(boardPoint.x), y: snap(boardPoint.y), locked: false, lockedLinks: [] });
+      selectedNodeId = null;
+      selectedKnotId = id;
+      selectedZoneId = null;
+      notify(`線ノット ${code} を追加しました`);
+      render();
+    }
+
+    function makeVacancy() {
+      const node = selectedNodeId ? getNode(selectedNodeId) : null;
+      if (!node) return;
+      actionPulseNodeId = selectedNodeId;
+      updateNode(selectedNodeId, {
+        name: "採用枠",
+        status: "hiring",
+        hiring: true,
+        requirement: node.requirement || "",
+        note: node.note || "採用・外注の検討が必要"
+      });
+      notify("採用枠にしました");
+      focusRequirementEditor();
+    }
+
+    function markRemoved() {
+      if (!selectedNodeId || !getNode(selectedNodeId)) return;
+      actionPulseNodeId = selectedNodeId;
+      updateNode(selectedNodeId, { status: "removed", hiring: false });
+      notify("人員減として表示しました");
+    }
+
+    function handleKeyDown(event) {
+      const target = event.target;
+      const tagName = target?.tagName;
+      const isEditingField = target?.isContentEditable || tagName === "INPUT" || tagName === "TEXTAREA" || tagName === "SELECT";
+      const isModifier = event.ctrlKey || event.metaKey;
+      if (isModifier && event.key.toLowerCase() === "z") {
+        event.preventDefault();
+        if (isEditingField) target.blur();
+        event.shiftKey ? redo() : undo();
+        return;
+      }
+      if (isModifier && event.key.toLowerCase() === "y") {
+        event.preventDefault();
+        if (isEditingField) target.blur();
+        redo();
+        return;
+      }
+      if (isEditingField) return;
+      if (isModifier && event.key.toLowerCase() === "c") {
+        if (copySelectedCard()) event.preventDefault();
+        return;
+      }
+      if (isModifier && event.key.toLowerCase() === "v") {
+        if (pasteCopiedCard()) event.preventDefault();
+        return;
+      }
+      if (event.key !== "Delete") return;
+      if (!selectedNodeId && !selectedKnotId) return;
+      event.preventDefault();
+      selectedKnotId ? deleteSelectedKnot() : deleteSelectedNode();
+    }
+
+    function copySelectedCard() {
+      const node = selectedNodeId ? getNode(selectedNodeId) : null;
+      if (!node) return false;
+      cardClipboard = {
+        node: { ...node },
+        sourceScenarioId: activeScenarioId,
+        pasteCount: 0
+      };
+      notify(`${nodeDisplayName(node)}をコピーしました`);
+      return true;
+    }
+
+    function pasteCopiedCard() {
+      if (!cardClipboard?.node) return false;
+      const scenario = getActiveScenario();
+      const source = cardClipboard.node;
+      const point = pastedCardPoint(cardClipboard.pasteCount || 0);
+      const id = uniquePastedNodeId(scenario);
+      const pasted = {
+        ...source,
+        id,
+        parent: validPastedParent(source.parent, scenario),
+        x: snap(point.x),
+        y: snap(point.y)
+      };
+      pushHistory();
+      scenario.nodes.push(pasted);
+      cardClipboard.pasteCount = (cardClipboard.pasteCount || 0) + 1;
+      selectedNodeId = id;
+      selectedKnotId = null;
+      selectedZoneId = null;
+      actionPulseNodeId = id;
+      notify(`${nodeDisplayName(pasted)}を貼り付けました`);
+      render();
+      return true;
+    }
+
+    function pastedCardPoint(index) {
+      const centerX = (boardScrollEl.scrollLeft + boardScrollEl.clientWidth / 2) / viewport.scale;
+      const centerY = (boardScrollEl.scrollTop + boardScrollEl.clientHeight / 2) / viewport.scale;
+      const offset = GRID * Math.min(index, 8);
+      return {
+        x: Math.max(0, centerX - CARD.width / 2 + offset),
+        y: Math.max(0, centerY - CARD.height / 2 + offset)
+      };
+    }
+
+    function uniquePastedNodeId(scenario) {
+      let id = "";
+      do {
+        id = `node-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+      } while (scenario.nodes.some((node) => node.id === id));
+      return id;
+    }
+
+    function validPastedParent(parentId, scenario) {
+      if (!parentId) return null;
+      if (scenario.nodes.some((node) => node.id === parentId)) return parentId;
+      if ((scenario.knots || []).some((knot) => knot.id === parentId)) return parentId;
+      return null;
+    }
+
+    function deleteSelectedNode() {
+      const scenario = getActiveScenario();
+      const deleted = scenario.nodes.find((node) => node.id === selectedNodeId);
+      if (!deleted) return;
+      pushHistory();
+      scenario.nodes = scenario.nodes.filter((node) => node.id !== deleted.id);
+      scenario.nodes.forEach((node) => {
+        if (node.parent === deleted.id) node.parent = deleted.parent || null;
+      });
+      (scenario.knots || []).forEach((knot) => {
+        if (knot.parent === deleted.id) knot.parent = deleted.parent || null;
+      });
+      selectedNodeId = scenario.nodes.some((node) => node.id === deleted.parent)
+        ? deleted.parent
+        : scenario.nodes[0]?.id || null;
+      notify("カードを削除しました");
+      render();
+    }
+
+    function deleteSelectedKnot() {
+      const scenario = getActiveScenario();
+      if (!scenario.knots?.some((knot) => knot.id === selectedKnotId)) return;
+      pushHistory();
+      scenario.knots = scenario.knots.filter((knot) => knot.id !== selectedKnotId);
+      scenario.nodes.forEach((node) => {
+        if (node.parent === selectedKnotId) node.parent = null;
+      });
+      (scenario.knots || []).forEach((knot) => {
+        if (knot.parent === selectedKnotId) knot.parent = null;
+      });
+      selectedKnotId = null;
+      selectedZoneId = null;
+      notify("線ノットを削除しました");
+      render();
+    }
+
+    function duplicateScenario(sourceId = activeScenarioId) {
+      const source = state.scenarios.find((scenario) => scenario.id === sourceId) || getActiveScenario();
+      if (!source) return;
+      pushHistory();
+      const id = `scenario-${Date.now().toString(36)}`;
+      const payload = cloneScenarioPayload(source);
+      const copy = {
+        id,
+        name: `${source.name} コピー`,
+        nodes: payload.nodes,
+        knots: payload.knots,
+        extZone: payload.extZone,
+        extraZones: payload.extraZones.map((zone) => ({ ...zone })),
+        canvasVersion: payload.canvasVersion
+      };
+      const sourceIndex = state.scenarios.findIndex((scenario) => scenario.id === source.id);
+      state.scenarios.splice(sourceIndex + 1, 0, copy);
+      activeScenarioId = id;
+      selectedNodeId = copy.nodes[0]?.id || null;
+      selectedKnotId = null;
+      selectedZoneId = null;
+      notify("案を複製しました");
+      render();
+    }
+
+    function copyCurrentToPlans() {
+      const current = state.scenarios.find((scenario) => scenario.id === "current") || state.scenarios[0];
+      let plans = state.scenarios.filter((scenario) =>
+        scenario.id === "plan-load" ||
+        scenario.id === "plan-reduce" ||
+        /^案[AB]/.test(scenario.name)
+      );
+      if (!plans.length) plans = state.scenarios.filter((scenario) => scenario.id !== current.id).slice(0, 2);
+      if (!current || !plans.length) return;
+      if (!confirm("現行体制を案A/Bへコピーしますか。案側の編集内容は上書きされます。")) return;
+      pushHistory();
+      const payload = cloneScenarioPayload(current);
+      plans.forEach((scenario) => {
+        scenario.nodes = cloneNodes(payload.nodes);
+        scenario.knots = payload.knots.map((knot) => ({ ...knot }));
+        scenario.extZone = payload.extZone ? { ...payload.extZone } : null;
+        scenario.extraZones = payload.extraZones.map((zone) => ({ ...zone }));
+        scenario.canvasVersion = payload.canvasVersion;
+      });
+      notify("現行を案A/Bへコピーしました");
+      render();
+    }
+
+    function renameScenario(id = activeScenarioId) {
+      const target = state.scenarios.find((scenario) => scenario.id === id) || getActiveScenario();
+      if (!target) return;
+      const name = prompt("案名", target.name);
+      if (!name || !name.trim()) return;
+      pushHistory();
+      target.name = name.trim();
+      notify("案名を変更しました");
+      render();
+    }
+
+    function deleteScenario(id) {
+      const index = state.scenarios.findIndex((scenario) => scenario.id === id);
+      if (index < 0) return;
+      if (state.scenarios.length <= 1) {
+        notify("最後の案は削除できません");
+        return;
+      }
+      const scenario = state.scenarios[index];
+      if (!confirm(`「${scenario.name}」を削除しますか？`)) return;
+      pushHistory();
+      state.scenarios.splice(index, 1);
+      if (activeScenarioId === id) {
+        const next = state.scenarios[Math.min(index, state.scenarios.length - 1)];
+        activeScenarioId = next.id;
+        selectedNodeId = next.nodes[0]?.id || null;
+        selectedKnotId = null;
+        selectedZoneId = null;
+      }
+      notify("案を削除しました");
+      render();
+    }
+
+    function resetSamples() {
+      if (!confirm("空の初期状態に戻しますか。保存済みの案は上書きされます。")) return;
+      pushHistory();
+      state = createDefaultState();
+      activeScenarioId = "current";
+      selectedNodeId = null;
+      selectedKnotId = null;
+      selectedZoneId = null;
+      autoCenteredScenarioIds.clear();
+      localStorage.removeItem(STORAGE_KEY);
+      notify("初期状態に戻しました");
+      render();
+    }
+
+    function downloadJson(data, filename = "org-simulator-data.json") {
+      const blob = new Blob([data], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function exportJson() {
+      downloadJson(JSON.stringify(state, null, 2));
+      notify("JSONを書き出しました");
+    }
+
+    async function exportPng() {
+      const layout = currentLayout || buildLayout(getCurrentNodes());
+      if (!layout) return;
+      const bounds = exportImageBounds(layout);
+      const width = Math.max(1, Math.ceil(bounds.maxX - bounds.minX));
+      const height = Math.max(1, Math.ceil(bounds.maxY - bounds.minY));
+      if (width > 32767 || height > 32767 || width * height > 120000000) {
+        notify("PNG範囲が大きすぎます。図を少し近づけてから保存してください");
+        return;
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        notify("PNG作成に失敗しました");
+        return;
+      }
+      ctx.save();
+      ctx.translate(-bounds.minX, -bounds.minY);
+      const avatarImages = await preloadPngAvatars(layout.nodes);
+      drawPngBackground(ctx, bounds);
+      drawPngZones(ctx, layout);
+      drawPngLinks(ctx, layout);
+      drawPngKnots(ctx, layout);
+      drawPngNodes(ctx, layout, avatarImages);
+      ctx.restore();
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          notify("PNG作成に失敗しました");
+          return;
+        }
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `${safeFileName(getActiveScenario().name || "体制図")}-100pct.png`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+        notify(`PNGを書き出しました（${width}×${height}px）`);
+      }, "image/png");
+    }
+
+    function exportImageBounds(layout) {
+      const padding = 120;
+      const contentBounds = layout.contentBounds || layoutContentBounds([...layout.positions.values()], layout.knots || [], layout.zones || []);
+      return {
+        minX: Math.max(0, Math.floor(contentBounds.minX - padding)),
+        minY: Math.max(0, Math.floor(contentBounds.minY - padding)),
+        maxX: Math.min(layout.boardWidth, Math.ceil(contentBounds.maxX + padding)),
+        maxY: Math.min(layout.boardHeight, Math.ceil(contentBounds.maxY + padding))
+      };
+    }
+
+    function drawPngBackground(ctx, bounds) {
+      ctx.fillStyle = "#08131d";
+      ctx.fillRect(bounds.minX, bounds.minY, bounds.maxX - bounds.minX, bounds.maxY - bounds.minY);
+      ctx.strokeStyle = "rgba(83, 150, 170, .16)";
+      ctx.lineWidth = 1;
+      const grid = 40;
+      const startX = Math.floor(bounds.minX / grid) * grid;
+      const startY = Math.floor(bounds.minY / grid) * grid;
+      for (let x = startX; x <= bounds.maxX; x += grid) {
+        ctx.beginPath();
+        ctx.moveTo(x, bounds.minY);
+        ctx.lineTo(x, bounds.maxY);
+        ctx.stroke();
+      }
+      for (let y = startY; y <= bounds.maxY; y += grid) {
+        ctx.beginPath();
+        ctx.moveTo(bounds.minX, y);
+        ctx.lineTo(bounds.maxX, y);
+        ctx.stroke();
+      }
+    }
+
+    function drawPngZones(ctx, layout) {
+      (layout.zones || []).forEach((zone) => {
+        ctx.save();
+        ctx.fillStyle = zone.locked ? "rgba(37, 47, 59, .78)" : "rgba(27, 66, 76, .56)";
+        ctx.strokeStyle = zone.locked ? "rgba(135, 158, 178, .6)" : "rgba(41, 206, 218, .72)";
+        ctx.lineWidth = 1;
+        drawRoundRect(ctx, zone.x, zone.y, zone.width, zone.height, 18);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = zone.locked ? "#c3d3de" : "#d4f8fb";
+        ctx.font = '800 13px "Segoe UI", "Yu Gothic UI", Meiryo, sans-serif';
+        ctx.textAlign = "left";
+        ctx.textBaseline = "top";
+        ctx.fillText(zone.label || "追加枠", zone.x + 18, zone.y + 14);
+        ctx.restore();
+      });
+    }
+
+    function drawPngLinks(ctx, layout) {
+      buildKnotParentRoutes(layout).forEach((route) => {
+        strokeCanvasDirectPath(ctx, route.source.x, route.source.y, route.target.x, route.target.y, false);
+      });
+      const routes = buildLinkRoutes(layout);
+      const grouped = new Map();
+      routes.forEach((route) => {
+        if (!route.knot) return;
+        const key = `${route.knot.id}|${route.parentId}`;
+        if (!grouped.has(key)) grouped.set(key, []);
+        grouped.get(key).push(route);
+      });
+      const groupedRouteIds = new Set();
+      grouped.forEach((group) => {
+        if (group.length < 2) return;
+        const first = group[0];
+        const parentSource = anchorEdgePoint(first.parentAnchor, { x: first.knot.x, y: first.knot.y });
+        strokeCanvasDirectPath(ctx, parentSource.x, parentSource.y, first.knot.x, first.knot.y, group.every((route) => route.removed));
+        group.forEach((route) => {
+          groupedRouteIds.add(route.linkId);
+          strokeCanvasDirectPath(ctx, route.knot.x, route.knot.y, route.target.x, route.target.y, route.removed);
+        });
+      });
+      routes.forEach((route) => {
+        if (groupedRouteIds.has(route.linkId)) return;
+        if (route.knot) {
+          strokeCanvasKnotPath(ctx, route.source.x, route.source.y, route.knot.x, route.knot.y, route.target.x, route.target.y, route.removed);
+        } else {
+          strokeCanvasDirectPath(ctx, route.source.x, route.source.y, route.target.x, route.target.y, route.removed);
+        }
+      });
+    }
+
+    function buildLinkRoutes(layout) {
+      const routes = [];
+      layout.nodes.forEach((node) => {
+        if (!node.parent || !layout.positions.has(node.id)) return;
+        const parentAnchor = getParentAnchor(layout, node.parent);
+        if (!parentAnchor) return;
+        const child = layout.positions.get(node.id);
+        const parentCenter = anchorCenter(parentAnchor);
+        const childCenter = { x: child.x + child.width / 2, y: child.y + child.height / 2 };
+        const source = anchorEdgePoint(parentAnchor, childCenter);
+        const target = edgePoint(child, parentCenter);
+        const linkId = linkIdFor(node);
+        const knot = findRouteKnot(source, target, layout.knots, linkId, parentAnchor.type === "knot" ? [parentAnchor.id] : []);
+        routes.push({ node, parentId: node.parent, parentAnchor, child, source, target, knot, linkId, removed: node.status === "removed" });
+      });
+      return routes;
+    }
+
+    function buildKnotParentRoutes(layout) {
+      const routes = [];
+      (layout.knots || []).forEach((knot) => {
+        if (!knot.parent || knot.parent === knot.id) return;
+        const parentAnchor = getParentAnchor(layout, knot.parent);
+        if (!parentAnchor) return;
+        const target = { x: knot.x, y: knot.y };
+        const source = anchorEdgePoint(parentAnchor, target);
+        routes.push({ knot, parentId: knot.parent, parentAnchor, source, target, linkId: `${knot.parent}->${knot.id}` });
+      });
+      return routes;
+    }
+
+    function strokeCanvasDirectPath(ctx, x1, y1, x2, y2, removed = false) {
+      const bend = Math.max(56, Math.abs(x2 - x1) * .45);
+      const direction = x2 >= x1 ? 1 : -1;
+      ctx.save();
+      prepareCanvasLinkStroke(ctx, removed);
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.bezierCurveTo(x1 + bend * direction, y1, x2 - bend * direction, y2, x2, y2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function strokeCanvasKnotPath(ctx, x1, y1, kx, ky, x2, y2, removed = false) {
+      const bendA = Math.max(36, Math.abs(kx - x1) * .34);
+      const bendB = Math.max(36, Math.abs(x2 - kx) * .34);
+      const dirA = kx >= x1 ? 1 : -1;
+      const dirB = x2 >= kx ? 1 : -1;
+      ctx.save();
+      prepareCanvasLinkStroke(ctx, removed);
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.bezierCurveTo(x1 + bendA * dirA, y1, kx - bendA * dirA, ky, kx, ky);
+      ctx.bezierCurveTo(kx + bendB * dirB, ky, x2 - bendB * dirB, y2, x2, y2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function prepareCanvasLinkStroke(ctx, removed) {
+      ctx.strokeStyle = "#24cbe1";
+      ctx.lineWidth = 2;
+      ctx.lineCap = "round";
+      ctx.globalAlpha = removed ? .55 : 1;
+      ctx.setLineDash(removed ? [7, 6] : []);
+    }
+
+    function drawPngKnots(ctx, layout) {
+      (layout.knots || []).forEach((knot) => {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(knot.x, knot.y, KNOT_SIZE / 2, 0, Math.PI * 2);
+        ctx.fillStyle = knot.locked ? "#282044" : "#0d2731";
+        ctx.strokeStyle = knot.locked ? "#a78bfa" : "#3ce2ef";
+        ctx.lineWidth = 3;
+        ctx.fill();
+        ctx.stroke();
+        if (knot.locked) {
+          ctx.fillStyle = "#ded6ff";
+          ctx.font = '800 10px "Segoe UI", sans-serif';
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText("L", knot.x, knot.y + .5);
+        }
+        ctx.restore();
+      });
+    }
+
+    async function preloadPngAvatars(nodes) {
+      const sources = [...new Set(nodes.map((node) => safeSlackAvatar(node.slackAvatar)).filter(Boolean))];
+      const entries = await Promise.all(sources.map((source) => new Promise((resolve) => {
+        const image = new Image();
+        image.onload = () => resolve([source, image]);
+        image.onerror = () => resolve([source, null]);
+        image.src = source;
+      })));
+      return new Map(entries.filter(([, image]) => image));
+    }
+
+    function drawPngNodes(ctx, layout, avatarImages) {
+      layout.nodes.forEach((node) => {
+        const pos = layout.positions.get(node.id);
+        if (!pos) return;
+        drawPngNode(ctx, node, pos, layout.nodeMap, avatarImages.get(node.slackAvatar));
+      });
+    }
+
+    function drawPngNode(ctx, node, pos, nodeMap, avatarImage) {
+      const style = nodeCanvasStyle(node, nodeMap);
+      ctx.save();
+      drawRoundRect(ctx, pos.x, pos.y, pos.width, pos.height, 34);
+      ctx.fillStyle = style.fill;
+      ctx.fill();
+      ctx.save();
+      drawRoundRect(ctx, pos.x, pos.y, pos.width, pos.height, 34);
+      ctx.clip();
+      ctx.fillStyle = style.accent;
+      ctx.fillRect(pos.x, pos.y, pos.width, 7);
+      ctx.restore();
+      ctx.strokeStyle = style.stroke;
+      ctx.lineWidth = style.risk ? 3 : 1.5;
+      ctx.setLineDash(style.dashed ? [7, 5] : []);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      const textX = pos.x + 78;
+      const textWidth = pos.width - 92;
+      if (avatarImage) {
+        drawCanvasAvatar(ctx, avatarImage, pos.x + 14, pos.y + 26, 52);
+      } else {
+        drawCanvasDefaultAvatar(ctx, pos.x + 14, pos.y + 26, 52);
+      }
+      drawLeftCanvasText(ctx, node.role || "役割未設定", textX, pos.y + 21, textWidth, 13, 2, '800 12px "Segoe UI", "Yu Gothic UI", Meiryo, sans-serif', "#f4fbff");
+      drawLeftCanvasText(ctx, nodeDisplayName(node), textX, pos.y + 39, textWidth, 20, 1, '900 20px "Segoe UI", "Yu Gothic UI", Meiryo, sans-serif', "#f4fbff");
+      ctx.strokeStyle = "rgba(247,253,255,.88)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(textX, pos.y + 67);
+      ctx.lineTo(pos.x + pos.width - 14, pos.y + 67);
+      ctx.stroke();
+      const metaLabel = canvasPillItems(node).map((item) => item.label).join(" / ");
+      drawLeftCanvasText(ctx, metaLabel, textX, pos.y + 75, textWidth, 12, 1, '800 11px "Segoe UI", "Yu Gothic UI", Meiryo, sans-serif', "#f5fbff");
+      ctx.restore();
+    }
+
+    function nodeCanvasStyle(node, nodeMap) {
+      const paletteKey = node.colorOverride || automaticPaletteKey(node);
+      const palette = canvasPalette(paletteKey);
+      const risk = !node.colorOverride && (node.status === "risk" || (node.parent && nodeMap.get(node.parent)?.status === "removed"));
+      const dashed = node.borderStyleOverride === "dashed"
+        ? true
+        : (node.borderStyleOverride === "solid" ? false : palette.dashed);
+      return { ...palette, stroke: risk ? "#ef4444" : palette.stroke, dashed, risk };
+    }
+
+    function automaticPaletteKey(node) {
+      if (node.status === "removed") return "removed";
+      if (node.status === "hiring") return "hiring";
+      if (node.status === "candidate") return "candidate";
+      if (node.status === "added") return "added";
+      if (node.lane === "external") return "external";
+      return "core";
+    }
+
+    function canvasPalette(key) {
+      const palettes = {
+        core: { fill: "#287ead", accent: "#168fd1", stroke: "#91e5f5", dashed: false },
+        external: { fill: "#a77a24", accent: "#f59e0b", stroke: "#ffe08c", dashed: false },
+        added: { fill: "#258b69", accent: "#31d2a4", stroke: "#a8f2cf", dashed: false },
+        candidate: { fill: "#7354bb", accent: "#a78bfa", stroke: "#cdbdff", dashed: true },
+        hiring: { fill: "#c58522", accent: "#f6b53d", stroke: "#ffe7a0", dashed: true },
+        removed: { fill: "#60758a", accent: "#94a3b8", stroke: "#c0cfdb", dashed: true }
+      };
+      return palettes[key] || palettes.core;
+    }
+
+    function drawCanvasPills(ctx, node, x, y, maxWidth) {
+      const items = canvasPillItems(node);
+      if (!items.length) return;
+      ctx.font = '800 10px "Segoe UI", "Yu Gothic UI", Meiryo, sans-serif';
+      const visible = [];
+      let total = 0;
+      items.forEach((item) => {
+        let width = Math.ceil(ctx.measureText(item.label).width) + 13;
+        if (visible.length && total + width + 5 > maxWidth) return;
+        if (!visible.length && width > maxWidth) {
+          item.label = fitCanvasText(ctx, item.label, maxWidth - 13);
+          width = maxWidth;
+        }
+        visible.push({ ...item, width });
+        total += width + (visible.length > 1 ? 5 : 0);
+      });
+      let cursor = x + (maxWidth - Math.min(total, maxWidth)) / 2;
+      visible.forEach((item) => {
+        drawRoundRect(ctx, cursor, y, item.width, 18, 9);
+        ctx.fillStyle = item.fill;
+        ctx.fill();
+        ctx.strokeStyle = item.stroke;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.fillStyle = item.color;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(item.label, cursor + item.width / 2, y + 9.5);
+        cursor += item.width + 5;
+      });
+    }
+
+    function canvasPillItems(node) {
+      const items = [];
+      if (node.team) items.push({ label: node.team, fill: "rgba(5,14,21,.52)", stroke: "rgba(174,218,231,.26)", color: "#d5e7ef" });
+      const requirementLabel = node.requirement ? "要件あり" : (node.hiring ? "採用" : "");
+      if (requirementLabel) items.push({ label: requirementLabel, fill: "#17372d", stroke: "#2f8369", color: "#a8f1d4" });
+      const diff = diffLabel(node);
+      if (diff) items.push({ label: diff, fill: "#20394b", stroke: "#3c7490", color: "#e8fbff" });
+      return items;
+    }
+
+    function drawCenteredCanvasText(ctx, text, x, y, width, lineHeight, maxLines, font, color) {
+      ctx.font = font;
+      ctx.fillStyle = color;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      wrapCanvasText(ctx, text, width, maxLines).forEach((line, index) => {
+        ctx.fillText(line, x + width / 2, y + index * lineHeight);
+      });
+    }
+
+    function drawLeftCanvasText(ctx, text, x, y, width, lineHeight, maxLines, font, color) {
+      ctx.font = font;
+      ctx.fillStyle = color;
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
+      wrapCanvasText(ctx, text, width, maxLines).forEach((line, index) => {
+        ctx.fillText(line, x, y + index * lineHeight);
+      });
+    }
+
+    function drawCanvasAvatar(ctx, image, x, y, size) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(image, x, y, size, size);
+      ctx.restore();
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(x + size / 2, y + size / 2, size / 2 - .5, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(218, 253, 255, .76)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawCanvasDefaultAvatar(ctx, x, y, size) {
+      const centerX = x + size / 2;
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(centerX, y + size / 2, size / 2, 0, Math.PI * 2);
+      ctx.fillStyle = "#e7f5fa";
+      ctx.fill();
+      ctx.clip();
+      ctx.fillStyle = "#4c8093";
+      ctx.beginPath();
+      ctx.arc(centerX, y + 18, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(centerX, y + size + 6, 18, 18, 0, Math.PI, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      ctx.beginPath();
+      ctx.arc(centerX, y + size / 2, size / 2 - 1, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(245,253,255,.94)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    function wrapCanvasText(ctx, text, maxWidth, maxLines) {
+      const chars = Array.from(`${text || ""}`);
+      const lines = [];
+      let current = "";
+      chars.forEach((char) => {
+        const next = current + char;
+        if (current && ctx.measureText(next).width > maxWidth) {
+          lines.push(current);
+          current = char;
+        } else {
+          current = next;
+        }
+      });
+      if (current) lines.push(current);
+      if (!lines.length) lines.push("");
+      if (lines.length > maxLines) {
+        const clipped = lines.slice(0, maxLines);
+        clipped[maxLines - 1] = fitCanvasText(ctx, clipped[maxLines - 1] + lines.slice(maxLines).join(""), maxWidth);
+        return clipped;
+      }
+      return lines;
+    }
+
+    function fitCanvasText(ctx, text, maxWidth) {
+      const chars = Array.from(`${text || ""}`);
+      let value = "";
+      for (const char of chars) {
+        if (ctx.measureText(value + char + "…").width > maxWidth) return value ? `${value}…` : "…";
+        value += char;
+      }
+      return value;
+    }
+
+    function drawRoundRect(ctx, x, y, width, height, radius) {
+      const r = Math.min(radius, width / 2, height / 2);
+      ctx.beginPath();
+      if (ctx.roundRect) {
+        ctx.roundRect(x, y, width, height, r);
+        return;
+      }
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + width - r, y);
+      ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+      ctx.lineTo(x + width, y + height - r);
+      ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+      ctx.lineTo(x + r, y + height);
+      ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    }
+
+    function safeFileName(value) {
+      return `${value}`.trim().replace(/[\\/:*?"<>|]/g, "_").replace(/\s+/g, "_") || "体制図";
+    }
+
+    async function writeJsonToHandle(handle, data) {
+      const allowed = await ensureHandlePermission(handle, "readwrite");
+      if (!allowed) throw new Error("permission");
+      const writable = await handle.createWritable();
+      await writable.write(data);
+      await writable.close();
+    }
+
+    async function saveExternalFile() {
+      const data = JSON.stringify(state, null, 2);
+      try {
+        if (fileHandle && fileAccessAvailable()) {
+          await writeJsonToHandle(fileHandle, data);
+          await rememberFileHandle(fileHandle);
+          notify(`${fileHandle.name || "ファイル"}に上書き保存しました`);
+          return;
+        }
+        await saveAsExternalFile();
+      } catch (error) {
+        if (error?.name !== "AbortError") notify("保存に失敗しました");
+      }
+    }
+
+    async function saveAsExternalFile() {
+      const data = JSON.stringify(state, null, 2);
+      try {
+        if ("showSaveFilePicker" in window) {
+          const handle = await window.showSaveFilePicker({
+            suggestedName: fileHandle?.name || "org-simulator-data.json",
+            types: filePickerTypes()
+          });
+          await writeJsonToHandle(handle, data);
+          await rememberFileHandle(handle);
+          notify(`${handle.name || "ファイル"}として保存しました`);
+          return;
+        }
+        downloadJson(data);
+        notify("ダウンロードとして保存しました");
+      } catch (error) {
+        if (error?.name !== "AbortError") notify("保存に失敗しました");
+      }
+    }
+
+    async function importJson(event) {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        applyImportedState(JSON.parse(text));
+        fileHandle = null;
+        currentFileId = null;
+        renderRecentFiles();
+        notify("JSONを読み込みました");
+      } catch (error) {
+        notify("読み込みに失敗しました");
+      } finally {
+        fileInputEl.value = "";
+      }
+    }
+
+    function isDescendant(candidateId, ancestorId) {
+      const nodeMap = new Map(getCurrentNodes().map((node) => [node.id, node]));
+      const knotMap = new Map(getCurrentKnots().map((knot) => [knot.id, knot]));
+      let currentId = candidateId;
+      const seen = new Set();
+      while (currentId && !seen.has(currentId)) {
+        if (currentId === ancestorId) return true;
+        seen.add(currentId);
+        const current = nodeMap.get(currentId) || knotMap.get(currentId);
+        currentId = current?.parent || null;
+      }
+      return false;
+    }
+
+    function escapeHtml(value) {
+      return `${value}`
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function escapeAttr(value) {
+      return escapeHtml(value).replaceAll("\n", " ");
+    }
+
+    let toastTimer = null;
+    function notify(message) {
+      toastEl.textContent = message;
+      toastEl.classList.add("show");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toastEl.classList.remove("show"), 1500);
+    }
+  </script>
+</body>
+</html>
