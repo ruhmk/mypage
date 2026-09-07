@@ -1,4 +1,4 @@
-window.FAMILY_CALENDAR_UPDATED_AT = "2026-09-06T00:40:26.534Z";
+window.FAMILY_CALENDAR_UPDATED_AT = "2026-09-07T00:40:26.127Z";
 window.FAMILY_CALENDAR_EVENTS = [
   {
     "id": "work-QiuN5ev4OOzmdVq7oE",
@@ -4064,6 +4064,17 @@ window.FAMILY_CALENDAR_EVENTS = [
     "title": "朝会",
     "start": "2026-09-07T01:20:00.000Z",
     "end": "2026-09-07T01:30:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": false,
+    "manualAllDay": false,
+    "workDayOff": false
+  },
+  {
+    "id": "work-u8R9Q3e0PY_ZhH73Ax",
+    "title": "仕事",
+    "start": "2026-09-07T02:00:00.000Z",
+    "end": "2026-09-07T02:30:00.000Z",
     "source": "work",
     "note": "",
     "allDay": false,
