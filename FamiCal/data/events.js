@@ -1,4 +1,4 @@
-window.FAMILY_CALENDAR_UPDATED_AT = "2026-09-09T00:40:26.275Z";
+window.FAMILY_CALENDAR_UPDATED_AT = "2026-09-10T00:40:26.095Z";
 window.FAMILY_CALENDAR_EVENTS = [
   {
     "id": "work-QiuN5ev4OOzmdVq7oE",
@@ -4366,6 +4366,17 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
+    "id": "work-cvplPknPIiHnA_ej3p",
+    "title": "仕事",
+    "start": "2026-09-11T08:30:00.000Z",
+    "end": "2026-09-11T09:00:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": false,
+    "manualAllDay": false,
+    "workDayOff": false
+  },
+  {
     "id": "work-4cOPwAQefJmSSQ1GIO",
     "title": "仕事",
     "start": "2026-09-11T09:00:00.000Z",
@@ -4375,6 +4386,15 @@ window.FAMILY_CALENDAR_EVENTS = [
     "allDay": false,
     "manualAllDay": false,
     "workDayOff": false
+  },
+  {
+    "id": "personal-gd41rziz1888nV3TzN",
+    "title": "耳鼻科",
+    "start": "2026-09-12T01:00:00.000Z",
+    "end": "2026-09-12T02:00:00.000Z",
+    "source": "personal",
+    "note": "",
+    "allDay": false
   },
   {
     "id": "personal-9Ho4vgyhUydUqrcXe7",
@@ -4401,6 +4421,17 @@ window.FAMILY_CALENDAR_EVENTS = [
     "title": "朝会",
     "start": "2026-09-14T01:20:00.000Z",
     "end": "2026-09-14T01:30:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": false,
+    "manualAllDay": false,
+    "workDayOff": false
+  },
+  {
+    "id": "work-CUtEcsGrxiGPDNHWkS",
+    "title": "仕事",
+    "start": "2026-09-14T03:00:00.000Z",
+    "end": "2026-09-14T06:00:00.000Z",
     "source": "work",
     "note": "",
     "allDay": false,
@@ -4542,6 +4573,17 @@ window.FAMILY_CALENDAR_EVENTS = [
     "title": "仕事",
     "start": "2026-09-16T07:00:00.000Z",
     "end": "2026-09-16T07:30:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": false,
+    "manualAllDay": false,
+    "workDayOff": false
+  },
+  {
+    "id": "work-Id8lCDve5Cfh1x-3Wu",
+    "title": "仕事",
+    "start": "2026-09-16T09:00:00.000Z",
+    "end": "2026-09-16T09:30:00.000Z",
     "source": "work",
     "note": "",
     "allDay": false,
@@ -5032,10 +5074,10 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
-    "id": "work-S5K8M_s0GEjWZrKsX-",
+    "id": "work-zBdpSMILDhRypCQ_SJ",
     "title": "仕事",
-    "start": "2026-09-30T03:00:00.000Z",
-    "end": "2026-09-30T04:00:00.000Z",
+    "start": "2026-09-30T03:30:00.000Z",
+    "end": "2026-09-30T05:00:00.000Z",
     "source": "work",
     "note": "",
     "allDay": false,
@@ -5109,7 +5151,7 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
-    "id": "work-QH6fbRePm2-k30JIdd",
+    "id": "work-VSN-rinzyCcgbTD2pQ",
     "title": "仕事",
     "start": "2026-10-02T03:00:00.000Z",
     "end": "2026-10-02T04:00:00.000Z",
@@ -5534,6 +5576,17 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
+    "id": "work-uPezTkKzbFV0peEL7t",
+    "title": "仕事",
+    "start": "2026-10-21T03:00:00.000Z",
+    "end": "2026-10-21T04:00:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": false,
+    "manualAllDay": false,
+    "workDayOff": false
+  },
+  {
     "id": "work-M7a0UU7aCWBGPNtd3Z",
     "title": "仕事",
     "start": "2026-10-21T09:00:00.000Z",
@@ -5897,6 +5950,39 @@ window.FAMILY_CALENDAR_EVENTS = [
     "title": "朝会",
     "start": "2026-11-09T01:20:00.000Z",
     "end": "2026-11-09T01:30:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": false,
+    "manualAllDay": false,
+    "workDayOff": false
+  },
+  {
+    "id": "work-QbXtDkzwUqaQ1PqEFE",
+    "title": "朝会",
+    "start": "2026-11-10T01:15:00.000Z",
+    "end": "2026-11-10T01:45:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": false,
+    "manualAllDay": false,
+    "workDayOff": false
+  },
+  {
+    "id": "work-mS-o0U9vk9pzmwkrmT",
+    "title": "仕事",
+    "start": "2026-11-10T06:00:00.000Z",
+    "end": "2026-11-10T06:30:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": false,
+    "manualAllDay": false,
+    "workDayOff": false
+  },
+  {
+    "id": "work-l6uOiuccnTQG0QOWE1",
+    "title": "仕事",
+    "start": "2026-11-10T08:30:00.000Z",
+    "end": "2026-11-10T09:00:00.000Z",
     "source": "work",
     "note": "",
     "allDay": false,
