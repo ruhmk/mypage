@@ -1,4 +1,4 @@
-window.FAMILY_CALENDAR_UPDATED_AT = "2026-09-12T00:40:26.257Z";
+window.FAMILY_CALENDAR_UPDATED_AT = "2026-09-13T00:40:25.939Z";
 window.FAMILY_CALENDAR_EVENTS = [
   {
     "id": "work-QiuN5ev4OOzmdVq7oE",
@@ -4494,17 +4494,6 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
-    "id": "work-gJBg7yKHAfBAaUyVBu",
-    "title": "仕事",
-    "start": "2026-09-15T03:30:00.000Z",
-    "end": "2026-09-15T04:00:00.000Z",
-    "source": "work",
-    "note": "",
-    "allDay": false,
-    "manualAllDay": false,
-    "workDayOff": false
-  },
-  {
     "id": "work-u5YsSeKCK8Tv7jofX1",
     "title": "仕事",
     "start": "2026-09-15T05:00:00.000Z",
@@ -6111,6 +6100,17 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
+    "id": "work-g20BwNXrmVb5oA1zDb",
+    "title": "【北河】全休",
+    "start": "2026-11-12T15:00:00.000Z",
+    "end": "2026-11-13T15:00:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": true,
+    "manualAllDay": true,
+    "workDayOff": true
+  },
+  {
     "id": "holiday-ZMiNzmEX0UXXYITyLd",
     "title": "七五三",
     "start": "2026-11-14T15:00:00.000Z",
@@ -6169,6 +6169,15 @@ window.FAMILY_CALENDAR_EVENTS = [
     "title": "銀行休業日",
     "start": "2027-01-02T15:00:00.000Z",
     "end": "2027-01-03T15:00:00.000Z",
+    "source": "holiday",
+    "note": "",
+    "allDay": true
+  },
+  {
+    "id": "holiday-hBCFIeRPt2nEApy38o",
+    "title": "成人の日",
+    "start": "2027-01-10T15:00:00.000Z",
+    "end": "2027-01-11T15:00:00.000Z",
     "source": "holiday",
     "note": "",
     "allDay": true
