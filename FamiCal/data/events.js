@@ -1,4 +1,4 @@
-window.FAMILY_CALENDAR_UPDATED_AT = "2026-09-13T00:40:25.939Z";
+window.FAMILY_CALENDAR_UPDATED_AT = "2026-09-14T00:40:27.613Z";
 window.FAMILY_CALENDAR_EVENTS = [
   {
     "id": "work-QiuN5ev4OOzmdVq7oE",
@@ -4920,6 +4920,15 @@ window.FAMILY_CALENDAR_EVENTS = [
     "allDay": true,
     "manualAllDay": true,
     "workDayOff": true
+  },
+  {
+    "id": "personal-t-azRSRBjOAqt_UMEq",
+    "title": "あざみ野",
+    "start": "2026-09-25T03:00:00.000Z",
+    "end": "2026-09-25T04:00:00.000Z",
+    "source": "personal",
+    "note": "",
+    "allDay": false
   },
   {
     "id": "work-XWb9q5hoK3jclLY4y3",
