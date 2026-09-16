@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#07090f">
   <title>Flow Fragments</title>
-  <link rel="stylesheet" href="styles.css?v=20260730-2">
+  <link rel="stylesheet" href="styles.css?v=20260916-1">
 </head>
 <body>
   <main id="app">
@@ -26,7 +26,7 @@
           <button class="primary" type="submit">追加</button>
         </form>
       </section>
-      <div class="sidebar-footer"><span id="save-status">ローカル保存済み</span><small>自動保存</small></div>
+      <div class="sidebar-footer"><span id="save-status">ブラウザ内に自動保存</span><small>JSONファイルへの保存は「保存」から</small></div>
     </aside>
 
     <section id="workspace" class="workspace">
@@ -54,7 +54,7 @@
           </div>
           <select id="recent-file-select" title="最近開いたファイル"><option value="">最近のファイル</option></select>
           <button id="forget-file" title="プルダウンから削除">−</button>
-          <button id="import-json">開く</button><button id="export-json">保存</button><button id="save-as-json">別名保存</button>
+          <button id="new-file" title="現在の全フローを閉じて、空の新規ファイルを作成">新規ファイル</button><button id="import-json">開く</button><button id="export-json">保存</button><button id="save-as-json">別名保存</button>
           <input id="file-input" type="file" accept="application/json,.json" hidden>
         </nav>
       </header>
@@ -71,6 +71,6 @@
     </section>
   </main>
   <div id="modal-root"></div><div id="toast-root"></div>
-  <script src="app.js?v=20260813-1"></script>
+  <script src="app.js?v=20260916-1"></script>
 </body>
 </html>

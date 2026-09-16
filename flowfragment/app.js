@@ -1,7 +1,7 @@
 (()=>{"use strict";
 const KEY="flow-fragments-state-v1",FILE_DB="flow-fragments-recent-files",FILE_STORE="files",COLORS=["#66e7f5","#ff7da8","#ffd36b","#88efbd","#b196ff"];
 const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)],uid=p=>`${p}_${crypto.randomUUID?.()||Date.now().toString(36)+Math.random().toString(36).slice(2)}`;
-const app={state:null,activeFlowId:"",selected:null,multiSelected:new Set(),multiGroups:new Set(),filterTag:"",view:{x:90,y:110,zoom:1},history:{undo:[],redo:[]},drag:null,edgeDraft:null,edgeFrame:0,edgeNodes:new Map(),panCleanup:null,panFrame:0,saveTimer:0,clipboard:null,recentFiles:[],currentFileId:"",currentFileHandle:null};
+const app={state:null,activeFlowId:"",selected:null,multiSelected:new Set(),multiGroups:new Set(),filterTag:"",view:{x:90,y:110,zoom:1},history:{undo:[],redo:[]},drag:null,edgeDraft:null,edgeFrame:0,edgeNodes:new Map(),panCleanup:null,panFrame:0,saveTimer:0,clipboard:null,recentFiles:[],currentFileId:"",currentFileHandle:null,fileTransitionBusy:false};
 function emptyFlow(name="新しいフロー"){const now=new Date();return{id:uid("flow"),name,cards:[],edges:[],groups:[],timeline:{enabled:false,x:0,y:0,startMonth:`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`,monthCount:4,colLabels:["","","",""],rows:["項目1","項目2","項目3"],rowColors:[COLORS[0],COLORS[1],COLORS[2]],colWidths:[300,300,300,300],rowHeights:[150,150,150]},createdAt:new Date().toISOString()}}
 function defaultState(){const f=emptyFlow("サンプルフロー"),a="sample_start",b="sample_plan",c="sample_done";f.timeline.enabled=true;f.timeline.monthCount=3;f.timeline.rows=["企画","制作","確認"];f.timeline.colWidths=[300,300,300];f.timeline.rowHeights=[150,150,150];f.cards=[{id:a,title:"目的を決める",body:"このカードを動かして使い始めます。",tags:["サンプル"],collapsed:false,w:250,h:100,x:200,y:100,groupId:""},{id:b,title:"計画を作る",body:"右クリックドラッグで次のカードへ接続できます。",tags:["サンプル"],collapsed:false,w:300,h:100,x:500,y:250,groupId:""},{id:c,title:"確認して完了",body:"カード右端と下端でサイズを変更できます。",tags:["サンプル"],collapsed:false,w:250,h:100,x:850,y:400,groupId:""}];f.edges=[{id:"sample_edge_1",from:a,to:b,label:"方針が決まったら",color:COLORS[0]},{id:"sample_edge_2",from:b,to:c,label:"準備できたら",color:COLORS[0]}];return{version:1,app:"Flow Fragments",activeFlowId:f.id,flows:[f]}}
 function load(){try{app.state=JSON.parse(localStorage.getItem(KEY))||defaultState()}catch{app.state=defaultState()} app.activeFlowId=app.state.activeFlowId||app.state.flows[0]?.id;normalize();}
@@ -10,7 +10,7 @@ const flow=()=>app.state.flows.find(f=>f.id===app.activeFlowId),card=id=>flow().
 function snapshot(){return JSON.stringify(app.state)} function history(){app.history.undo.push(snapshot());if(app.history.undo.length>60)app.history.undo.shift();app.history.redo=[];updateHistory()}
 function restore(raw){app.state=JSON.parse(raw);app.activeFlowId=app.state.activeFlowId;app.selected=null;render();persist()}
 function undo(){const s=app.history.undo.pop();if(!s)return;app.history.redo.push(snapshot());restore(s);updateHistory()}function redo(){const s=app.history.redo.pop();if(!s)return;app.history.undo.push(snapshot());restore(s);updateHistory()}function updateHistory(){$("#undo").disabled=!app.history.undo.length;$("#redo").disabled=!app.history.redo.length}
-function persist(){clearTimeout(app.saveTimer);$("#save-status").textContent="保存中…";app.saveTimer=setTimeout(()=>{localStorage.setItem(KEY,JSON.stringify(app.state));$("#save-status").textContent="ローカル保存済み"},180)}
+function persist(immediate=false){clearTimeout(app.saveTimer);$("#save-status").textContent="ブラウザ内に保存中…";const save=()=>{app.saveTimer=0;try{localStorage.setItem(KEY,JSON.stringify(app.state));$("#save-status").textContent="ブラウザ内に保存済み"}catch{$("#save-status").textContent="ブラウザ内保存に失敗（JSON保存してください）"}};if(immediate)save();else app.saveTimer=setTimeout(save,180)}
 function mutate(fn){history();fn();persist();render()}
 function render(){renderSidebar();renderWorld();renderInspector();$("#flow-title").value=flow().name;$("#view-caption").textContent=flow().timeline.enabled?"時系列キャンバス":"自由配置キャンバス";$("#timeline-toggle").classList.toggle("active",flow().timeline.enabled);$("#timeline-settings").disabled=!flow().timeline.enabled;updateTransform();updateHistory()}
 function renderSidebar(){const fs=app.state.flows;$("#flow-count").textContent=fs.length;$("#flow-list").innerHTML=fs.map(f=>`<button class="nav-item ${f.id===app.activeFlowId?"active":""}" data-flow="${f.id}"><span>${esc(f.name)}</span><small>${f.cards.length}</small></button>`).join("");
@@ -123,10 +123,46 @@ async function requestHandlePermission(handle,mode="read"){if(!handle)return fal
 async function openExternalFile(){if(window.showOpenFilePicker){try{const[handle]=await showOpenFilePicker({types:[{description:"Flow Fragments JSON",accept:{"application/json":[".json"]}}],multiple:false});await loadExternalState(await handle.getFile(),handle)}catch(e){if(e.name!=="AbortError")toast("ファイルを開けませんでした")}return}$("#file-input").click()}
 async function openRecentFile(id){const entry=app.recentFiles.find(x=>x.id===id);if(!entry?.handle)return;if(!await requestHandlePermission(entry.handle,"read"))return toast("ファイルを開く権限がありません");await loadExternalState(await entry.handle.getFile(),entry.handle)}
 async function writeCurrentHandle(handle){if(!await requestHandlePermission(handle,"readwrite"))throw Error("permission");const writable=await handle.createWritable();await writable.write(JSON.stringify(app.state,null,2));await writable.close();await rememberFile(handle);$("#save-status").textContent=`${handle.name} に保存済み`;toast(`${handle.name}に上書き保存しました`)}
-async function saveAsExternalFile(){if(window.showSaveFilePicker){try{const handle=await showSaveFilePicker({suggestedName:`${safeFileName(flow().name)}.json`,types:[{description:"Flow Fragments JSON",accept:{"application/json":[".json"]}}]});await writeCurrentHandle(handle)}catch(e){if(e.name!=="AbortError")toast("保存できませんでした")}return}exportJson()}
-async function saveExternalFile(){if(app.currentFileHandle){try{return await writeCurrentHandle(app.currentFileHandle)}catch{toast("上書きできません。別名保存を試してください")}}else await saveAsExternalFile()}
+async function saveAsExternalFile(){if(window.showSaveFilePicker){try{const handle=await showSaveFilePicker({suggestedName:`${safeFileName(flow().name)}.json`,types:[{description:"Flow Fragments JSON",accept:{"application/json":[".json"]}}]});await writeCurrentHandle(handle);return true}catch(e){if(e.name!=="AbortError")toast("保存できませんでした");return false}}try{exportJson();return "downloaded"}catch{toast("保存できませんでした");return false}}
+async function saveExternalFile(){if(app.currentFileHandle){try{await writeCurrentHandle(app.currentFileHandle);return true}catch(e){if(e.name!=="AbortError")toast("上書きできません。別名保存を試してください");return false}}return await saveAsExternalFile()}
 async function forgetCurrentFile(){const id=$("#recent-file-select").value;if(!id)return;await deleteRecentFile(id);app.recentFiles=app.recentFiles.filter(x=>x.id!==id);if(app.currentFileId===id){app.currentFileId="";app.currentFileHandle=null}renderRecentFiles();toast("プルダウンから削除しました")}
-async function initFileControls(){app.recentFiles=(await readRecentFiles()).sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0)).slice(0,12);renderRecentFiles();$("#import-json").onclick=openExternalFile;$("#export-json").onclick=saveExternalFile;$("#save-as-json").onclick=saveAsExternalFile;$("#recent-file-select").onchange=e=>e.target.value&&openRecentFile(e.target.value);$("#forget-file").onclick=forgetCurrentFile;$("#file-input").onchange=e=>{if(e.target.files[0])loadExternalState(e.target.files[0]);e.target.value=""}}
+async function initFileControls(){$("#new-file").onclick=newFile;$("#import-json").onclick=openExternalFile;$("#export-json").onclick=saveExternalFile;$("#save-as-json").onclick=saveAsExternalFile;$("#recent-file-select").onchange=e=>e.target.value&&openRecentFile(e.target.value);$("#forget-file").onclick=forgetCurrentFile;$("#file-input").onchange=e=>{if(e.target.files[0])loadExternalState(e.target.files[0]);e.target.value=""};app.recentFiles=(await readRecentFiles()).sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0)).slice(0,12);renderRecentFiles()}
+function createBlankFile(){
+  app.panCleanup?.();
+  cancelAnimationFrame(app.edgeFrame);cancelAnimationFrame(app.panFrame);
+  const f=emptyFlow();
+  app.state={version:1,app:"Flow Fragments",activeFlowId:f.id,flows:[f]};
+  app.activeFlowId=f.id;app.currentFileId="";app.currentFileHandle=null;
+  app.selected=null;app.multiSelected.clear();app.multiGroups.clear();app.filterTag="";
+  app.history={undo:[],redo:[]};app.clipboard=null;app.drag=null;app.edgeDraft=null;
+  app.edgeFrame=0;app.panFrame=0;app.edgeNodes.clear();app.view={x:90,y:110,zoom:1};
+  $("#quick-text").value="";$("#file-input").value="";
+  document.body.classList.remove("is-interacting");$("#viewport").classList.remove("panning");
+  closeModal();closeContextMenu();renderRecentFiles();render();persist(true);
+  $("#quick-text").focus();toast("新規ファイルを作成しました。JSONファイルへの保存は「保存」から行えます");
+}
+function newFile(){
+  if(app.fileTransitionBusy)return;
+  app.panCleanup?.();closeContextMenu();
+  modal(`<div id="new-file-dialog" class="new-file-dialog" role="dialog" aria-modal="true" aria-labelledby="new-file-heading" tabindex="-1"><h2 id="new-file-heading">新規ファイルを作成</h2><p>現在開いている全フローを保存しますか？</p><p class="hint">新規作成すると、カード・線・グループのない空のフローに切り替わります。保存済みのJSONファイルは削除しません。</p><p class="hint">新しい内容はブラウザ内に自動保存され、次回も続きから開けます。JSONファイルには「保存」を押すまで保存されません。</p><p id="new-file-status" class="hint" role="status" aria-live="polite"></p><div class="modal-actions"><button id="cancel-new-file" data-close>キャンセル</button><button id="discard-new-file">保存せず新規作成</button><button id="save-new-file" class="primary">保存して新規作成</button></div></div>`);
+  const dialog=$("#new-file-dialog"),save=$("#save-new-file"),status=$("#new-file-status");
+  dialog.onkeydown=e=>{e.stopPropagation();if(e.key==="Escape")closeModal();if(e.key==="Tab"){const buttons=$$("button:not(:disabled)",dialog),first=buttons[0],last=buttons[buttons.length-1];if(!first){e.preventDefault();return}if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}}};
+  $("#cancel-new-file").focus();
+  $("#discard-new-file").onclick=createBlankFile;
+  save.onclick=async()=>{
+    if(app.fileTransitionBusy)return;
+    app.fileTransitionBusy=true;$$("button",dialog).forEach(b=>b.disabled=true);dialog.focus();status.textContent="現在のデータを保存しています…";
+    let result=false;
+    try{result=await saveExternalFile()}finally{app.fileTransitionBusy=false}
+    if($("#new-file-dialog")!==dialog)return;
+    if(result===true){createBlankFile();return}
+    $$("button",dialog).forEach(b=>b.disabled=false);save.focus();
+    if(result==="downloaded"){
+      status.textContent="JSONのダウンロードを開始しました。保存できたことを確認してから新規作成してください。";
+      save.textContent="保存を確認して新規作成";save.onclick=createBlankFile;
+    }else status.textContent="保存は完了していません。現在のデータはそのまま残っています。";
+  };
+}
 function exportJson(){const blob=new Blob([JSON.stringify(app.state,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`${safeFileName(flow().name)}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);toast("JSONを書き出しました")}
 async function importJson(file){try{const data=JSON.parse(await file.text());if(data.app!=="Flow Fragments"||!Array.isArray(data.flows))throw Error();history();app.state=data;app.activeFlowId=data.activeFlowId||data.flows[0].id;normalize();persist();render();fitView();toast("JSONを読み込みました")}catch{toast("対応していないJSONです")}}
 function newFlow(){modal(`<h2>新しいフローチャート</h2><label class="field"><span>名前</span><input id="new-flow-name" value="新しいフロー" autofocus></label><div class="modal-actions"><button data-close>キャンセル</button><button id="create-flow" class="primary">作成</button></div>`);$("#create-flow").onclick=()=>{const f=emptyFlow($("#new-flow-name").value.trim()||"新しいフロー");history();app.state.flows.push(f);app.activeFlowId=f.id;app.state.activeFlowId=f.id;app.selected=null;persist();closeModal();render()}}
@@ -142,6 +178,6 @@ function bindMultiSelectionClear(){document.addEventListener("pointerdown",e=>{i
 function updateTransform(){$("#world").style.transform=`translate(${app.view.x}px,${app.view.y}px) scale(${app.view.zoom})`}
 function screenWorld(x,y){const r=$("#viewport").getBoundingClientRect();return{x:(x-r.left-app.view.x)/app.view.zoom,y:(y-r.top-app.view.y)/app.view.zoom}}
 function filtered(c){return!app.filterTag||c.tags.includes(app.filterTag)}function sel(t,id){return(t==="card"?app.multiSelected:app.multiGroups).has(id)?"selected":app.selected?.type===t&&app.selected.id===id?"selected":""}function esc(v=""){return String(v).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}function attr(v=""){return esc(v)}
-function modal(html){$("#modal-root").innerHTML=`<div class="modal-backdrop"><div class="modal">${html}</div></div>`;setTimeout(()=>$("#modal-root input")?.focus())}function closeModal(){$("#modal-root").innerHTML=""}function toast(s){const n=document.createElement("div");n.className="toast";n.textContent=s;$("#toast-root").appendChild(n);setTimeout(()=>n.remove(),2500)}
-load();bind();installStablePan();bindMultiSelectionClear();$("#export-png").onclick=exportPng;$("#duplicate-flow").onclick=duplicateFlow;$("#delete-flow").onclick=deleteFlow;initContextExport();render();initFileControls();if(!flow().cards.length){flow().cards.push({id:uid("card"),title:"ここから始める",body:"カード上で右クリックしたまま、次のカードへドラッグすると接続できます。\n右端をドラッグすると期間・横幅を変更できます。",tags:["スタート"],collapsed:false,w:250,h:100,x:50,y:25});persist();render();fitView()}
+function modal(html){$("#modal-root").innerHTML=`<div class="modal-backdrop"><div class="modal">${html}</div></div>`;setTimeout(()=>$("#modal-root input")?.focus())}function closeModal(){if(app.fileTransitionBusy)return;$("#modal-root").innerHTML=""}function toast(s){const n=document.createElement("div");n.className="toast";n.textContent=s;$("#toast-root").appendChild(n);setTimeout(()=>n.remove(),2500)}
+load();bind();installStablePan();bindMultiSelectionClear();$("#export-png").onclick=exportPng;$("#duplicate-flow").onclick=duplicateFlow;$("#delete-flow").onclick=deleteFlow;initContextExport();render();initFileControls();
 })();
