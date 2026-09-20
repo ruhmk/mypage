@@ -1,4 +1,4 @@
-window.FAMILY_CALENDAR_UPDATED_AT = "2026-09-19T00:40:27.192Z";
+window.FAMILY_CALENDAR_UPDATED_AT = "2026-09-20T00:40:26.525Z";
 window.FAMILY_CALENDAR_EVENTS = [
   {
     "id": "work-QiuN5ev4OOzmdVq7oE",
@@ -6506,6 +6506,17 @@ window.FAMILY_CALENDAR_EVENTS = [
     "allDay": false,
     "manualAllDay": false,
     "workDayOff": false
+  },
+  {
+    "id": "work-LmbAtqKJk2hzrBUbQ4",
+    "title": "【北河】全休",
+    "start": "2026-11-19T15:00:00.000Z",
+    "end": "2026-11-20T15:00:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": true,
+    "manualAllDay": true,
+    "workDayOff": true
   },
   {
     "id": "holiday-MK2otcq3W4_wJRzOLg",
