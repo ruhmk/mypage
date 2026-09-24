@@ -1,4 +1,4 @@
-window.FAMILY_CALENDAR_UPDATED_AT = "2026-09-23T00:40:26.288Z";
+window.FAMILY_CALENDAR_UPDATED_AT = "2026-09-24T00:40:26.057Z";
 window.FAMILY_CALENDAR_EVENTS = [
   {
     "id": "work-QiuN5ev4OOzmdVq7oE",
@@ -4920,6 +4920,15 @@ window.FAMILY_CALENDAR_EVENTS = [
     "allDay": false
   },
   {
+    "id": "personal-Mw9jK_AbgxsK--ZWSi",
+    "title": "15時イメージア",
+    "start": "2026-09-27T05:00:00.000Z",
+    "end": "2026-09-27T08:00:00.000Z",
+    "source": "personal",
+    "note": "",
+    "allDay": false
+  },
+  {
     "id": "work-xvFSmL1mdhkMKM3Nkn",
     "title": "朝会",
     "start": "2026-09-28T01:15:00.000Z",
@@ -6526,6 +6535,28 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "holiday",
     "note": "",
     "allDay": true
+  },
+  {
+    "id": "work-WavTjJ4wO-s844uNaq",
+    "title": "同期懇親会",
+    "start": "2026-11-23T03:00:00.000Z",
+    "end": "2026-11-23T04:30:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": false,
+    "manualAllDay": false,
+    "workDayOff": false
+  },
+  {
+    "id": "work-ERbCPPUlUWsytKCOuG",
+    "title": "仕事",
+    "start": "2026-11-23T07:00:00.000Z",
+    "end": "2026-11-23T07:30:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": false,
+    "manualAllDay": false,
+    "workDayOff": false
   },
   {
     "id": "holiday-tuW5imN3TkhM2P6RJa",
