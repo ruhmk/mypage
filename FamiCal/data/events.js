@@ -1,4 +1,4 @@
-window.FAMILY_CALENDAR_UPDATED_AT = "2026-10-04T00:40:26.049Z";
+window.FAMILY_CALENDAR_UPDATED_AT = "2026-10-05T00:40:25.934Z";
 window.FAMILY_CALENDAR_EVENTS = [
   {
     "id": "work-QiuN5ev4OOzmdVq7oE",
@@ -5663,6 +5663,15 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
+    "id": "personal-MZqNj2lHGlcmZr1s74",
+    "title": "デュピクセント",
+    "start": "2026-10-13T04:30:00.000Z",
+    "end": "2026-10-13T05:30:00.000Z",
+    "source": "personal",
+    "note": "",
+    "allDay": false
+  },
+  {
     "id": "work-XWuxgWbFzCkO2iVtXc",
     "title": "仕事",
     "start": "2026-10-13T06:00:00.000Z",
@@ -6101,6 +6110,15 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
+    "id": "personal-t2ydbt4_HPXLckMqtH",
+    "title": "デュピクセント",
+    "start": "2026-10-27T04:30:00.000Z",
+    "end": "2026-10-27T05:30:00.000Z",
+    "source": "personal",
+    "note": "",
+    "allDay": false
+  },
+  {
     "id": "work-w0qzLdmFIKauKyWfrJ",
     "title": "仕事",
     "start": "2026-10-27T06:00:00.000Z",
@@ -6524,6 +6542,15 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
+    "id": "personal-FZaCQ-ZTcabq71ghrn",
+    "title": "デュピクセント",
+    "start": "2026-11-10T04:30:00.000Z",
+    "end": "2026-11-10T05:30:00.000Z",
+    "source": "personal",
+    "note": "",
+    "allDay": false
+  },
+  {
     "id": "work-M86lfyIEeMY5WZQBE5",
     "title": "仕事",
     "start": "2026-11-10T06:00:00.000Z",
@@ -6901,6 +6928,15 @@ window.FAMILY_CALENDAR_EVENTS = [
     "allDay": false,
     "manualAllDay": false,
     "workDayOff": false
+  },
+  {
+    "id": "personal-USXpNOz2JL0uHz1F60",
+    "title": "デュピクセント",
+    "start": "2026-11-24T04:30:00.000Z",
+    "end": "2026-11-24T05:30:00.000Z",
+    "source": "personal",
+    "note": "",
+    "allDay": false
   },
   {
     "id": "work-Fy6elqlwnjlrsrD6yQ",
