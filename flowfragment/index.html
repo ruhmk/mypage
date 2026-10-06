@@ -5,12 +5,12 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#07090f">
   <title>Flow Fragments</title>
-  <link rel="stylesheet" href="styles.css?v=20260928-1">
+  <link rel="stylesheet" href="styles.css?v=20261006-1">
 </head>
 <body>
   <main id="app">
     <canvas id="ambient" aria-hidden="true"></canvas>
-    <aside class="sidebar">
+    <aside id="sidebar" class="sidebar" aria-label="フローとタグ">
       <div class="brand"><span class="brand-mark"></span><div><strong>Flow Fragments</strong><small>LOCAL FLOW WORKSPACE</small></div></div>
       <button id="new-flow" class="primary wide">＋ 新しいフロー</button>
       <section><div class="section-title"><span>フローチャート</span><span id="flow-count"></span></div><div id="flow-list" class="nav-list"></div></section>
@@ -31,19 +31,29 @@
 
     <section id="workspace" class="workspace">
       <header class="topbar">
-        <div><input id="flow-title" class="flow-title" aria-label="フロー名"><div id="view-caption" class="crumb">自由配置キャンバス</div></div>
-        <nav class="toolbar">
+        <button id="toggle-sidebar" class="panel-toggle" title="左カラムを閉じる" aria-label="左カラムを閉じる" aria-controls="sidebar" aria-expanded="true">‹</button>
+        <div class="flow-heading">
+          <div class="flow-title-row">
+            <input id="flow-title" class="flow-title" aria-label="フロー名">
+            <div id="flow-menu-control" class="toolbar-popover flow-menu-control">
+              <button id="flow-menu-toggle" class="flow-menu-toggle" title="フロー操作" aria-label="フロー操作メニュー" aria-expanded="false" aria-controls="flow-menu">☰</button>
+              <div id="flow-menu" class="toolbar-menu flow-menu hidden">
+                <button id="duplicate-flow">フローを複製</button>
+                <button id="delete-flow" class="danger">フローを削除</button>
+              </div>
+            </div>
+          </div>
+          <div id="view-caption" class="crumb">自由配置キャンバス</div>
+        </div>
+        <nav class="toolbar" aria-label="キャンバスと保存">
           <button id="undo" title="元に戻す">↶</button><button id="redo" title="やり直す">↷</button>
           <span class="divider"></span>
-          <button id="auto-layout" title="全体を自動整列">整列</button><button id="fit-view" title="全体を表示">全体</button>
           <button id="add-group" title="グループを追加">領域＋</button>
-          <button id="duplicate-flow" title="現在のフローを複製">フロー複製</button>
-          <button id="delete-flow" class="danger" title="現在のフローを削除">フロー削除</button>
-          <button id="timeline-toggle" title="時系列表示を切替">時系列</button><button id="timeline-settings" title="時系列の軸を設定">軸設定</button>
+          <button id="timeline-toggle" title="時系列表示を切替">時系列</button>
           <span class="divider"></span>
           <button id="export-png" title="図全体を100%サイズでPNG保存">PNG</button>
           <div id="context-export-control" class="context-export">
-            <button id="export-context" class="context-main" title="AIに渡せるMarkdown・PNG・JSONをZIPで保存">文脈を書き出す</button>
+            <button id="export-context" class="context-main" title="AIに渡せるMarkdown・PNG・JSONをZIPで保存"><span class="context-label-long">文脈を書き出す</span><span class="context-label-short">文脈</span></button>
             <button id="context-menu-toggle" class="context-toggle" title="書き出し方法を選択" aria-label="文脈の書き出しメニュー" aria-expanded="false">⌄</button>
             <div id="context-export-menu" class="context-menu hidden">
               <button data-context-action="package"><span><b>AI用一式をダウンロード</b><small>Markdown・PNG・JSON</small></span><em>ZIP</em></button>
@@ -52,11 +62,22 @@
               <button data-context-action="png">PNGを保存</button>
             </div>
           </div>
-          <select id="recent-file-select" title="最近開いたファイル"><option value="">最近のファイル</option></select>
-          <button id="forget-file" title="プルダウンから削除">−</button>
-          <button id="new-file" title="現在の全フローを閉じて、空の新規ファイルを作成">新規ファイル</button><button id="import-json">開く</button><button id="export-json">保存</button><button id="save-as-json">別名保存</button>
+          <div id="file-menu-control" class="toolbar-popover">
+            <button id="file-menu-toggle" aria-label="ファイルメニュー" aria-expanded="false" aria-controls="file-menu">ファイル ⌄</button>
+            <div id="file-menu" class="toolbar-menu file-menu hidden">
+              <button id="new-file" title="現在の全フローを閉じて、空の新規ファイルを作成">新規ファイル</button>
+              <button id="import-json">開く</button>
+              <button id="save-as-json">別名保存</button>
+              <div class="recent-file-section">
+                <label for="recent-file-select">最近のファイル</label>
+                <div class="recent-file-row"><select id="recent-file-select" title="最近開いたファイル"><option value="">最近のファイル</option></select><button id="forget-file" title="プルダウンから削除" aria-label="最近のファイル一覧から削除">−</button></div>
+              </div>
+            </div>
+          </div>
+          <button id="export-json" class="save-button">保存</button>
           <input id="file-input" type="file" accept="application/json,.json" hidden>
         </nav>
+        <button id="toggle-inspector" class="panel-toggle" title="右カラムを閉じる" aria-label="右カラムを閉じる" aria-controls="inspector" aria-expanded="true">›</button>
       </header>
       <div id="viewport" class="viewport">
         <div id="world" class="world"><div id="timeline-layer"></div><div id="group-layer"></div><svg id="edge-layer"></svg><div id="card-layer"></div></div>
@@ -71,6 +92,6 @@
     </section>
   </main>
   <div id="modal-root"></div><div id="toast-root"></div>
-  <script src="app.js?v=20260928-1"></script>
+  <script src="app.js?v=20261006-1"></script>
 </body>
 </html>
