@@ -1,4 +1,4 @@
-window.FAMILY_CALENDAR_UPDATED_AT = "2026-10-18T00:40:25.818Z";
+window.FAMILY_CALENDAR_UPDATED_AT = "2026-10-19T00:40:25.982Z";
 window.FAMILY_CALENDAR_EVENTS = [
   {
     "id": "work-QiuN5ev4OOzmdVq7oE",
@@ -6260,6 +6260,17 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
+    "id": "work-Z4Uw4bnr11gWpC4D3K",
+    "title": "【vision】10月公式配信 19:00~",
+    "start": "2026-10-26T15:00:00.000Z",
+    "end": "2026-10-27T15:00:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": true,
+    "manualAllDay": true,
+    "workDayOff": false
+  },
+  {
     "id": "work-eR_PDCbyMSvk16ar-M",
     "title": "朝会",
     "start": "2026-10-27T01:15:00.000Z",
@@ -7101,6 +7112,17 @@ window.FAMILY_CALENDAR_EVENTS = [
     "note": "",
     "allDay": false,
     "manualAllDay": false,
+    "workDayOff": false
+  },
+  {
+    "id": "work-P9mWxxSDOfV4AN-Uum",
+    "title": "【vision】11月公式配信 21:00~",
+    "start": "2026-11-23T15:00:00.000Z",
+    "end": "2026-11-24T15:00:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": true,
+    "manualAllDay": true,
     "workDayOff": false
   },
   {
