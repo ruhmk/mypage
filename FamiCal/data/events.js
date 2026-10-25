@@ -1,4 +1,4 @@
-window.FAMILY_CALENDAR_UPDATED_AT = "2026-10-24T00:40:26.095Z";
+window.FAMILY_CALENDAR_UPDATED_AT = "2026-10-25T00:40:25.963Z";
 window.FAMILY_CALENDAR_EVENTS = [
   {
     "id": "work-QiuN5ev4OOzmdVq7oE",
@@ -6853,6 +6853,17 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
+    "id": "work-AmYqkoWgfiJgsBtB8k",
+    "title": "仕事",
+    "start": "2026-11-11T03:00:00.000Z",
+    "end": "2026-11-11T04:30:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": false,
+    "manualAllDay": false,
+    "workDayOff": false
+  },
+  {
     "id": "work-MXxgPYWLqQCaHdO_34",
     "title": "仕事",
     "start": "2026-11-11T07:00:00.000Z",
@@ -6919,17 +6930,6 @@ window.FAMILY_CALENDAR_EVENTS = [
     "title": "仕事",
     "start": "2026-11-12T04:00:00.000Z",
     "end": "2026-11-12T04:45:00.000Z",
-    "source": "work",
-    "note": "",
-    "allDay": false,
-    "manualAllDay": false,
-    "workDayOff": false
-  },
-  {
-    "id": "work-5cm4kn_dX7nHhC0xyX",
-    "title": "仕事",
-    "start": "2026-11-12T04:00:00.000Z",
-    "end": "2026-11-12T05:30:00.000Z",
     "source": "work",
     "note": "",
     "allDay": false,
