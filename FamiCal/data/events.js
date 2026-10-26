@@ -1,4 +1,4 @@
-window.FAMILY_CALENDAR_UPDATED_AT = "2026-10-25T00:40:25.963Z";
+window.FAMILY_CALENDAR_UPDATED_AT = "2026-10-26T00:40:25.847Z";
 window.FAMILY_CALENDAR_EVENTS = [
   {
     "id": "work-QiuN5ev4OOzmdVq7oE",
@@ -7698,6 +7698,15 @@ window.FAMILY_CALENDAR_EVENTS = [
     "title": "建国記念の日",
     "start": "2027-02-10T15:00:00.000Z",
     "end": "2027-02-11T15:00:00.000Z",
+    "source": "holiday",
+    "note": "",
+    "allDay": true
+  },
+  {
+    "id": "holiday-YurTMWZnmmr1HhQ1IJ",
+    "title": "天皇誕生日",
+    "start": "2027-02-22T15:00:00.000Z",
+    "end": "2027-02-23T15:00:00.000Z",
     "source": "holiday",
     "note": "",
     "allDay": true
