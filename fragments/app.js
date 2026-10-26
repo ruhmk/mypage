@@ -5,11 +5,8 @@
   const DB_VERSION = 1;
   const STATE_KEY = "today-fragments-state-v1";
   const GITHUB_DEFAULT_PATH = "daily-fragments-sync/data.enc.json";
-  const DRIVE_FOLDER = "Today Fragments";
-  const DRIVE_FILE = "today-fragments.json";
-  const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
   const GROUP_COLORS = ["#67e8f9", "#ff7aa8", "#ffd166", "#8ff0c4", "#a78bfa"];
-  const APP_VERSION = "39";
+  const APP_VERSION = "41";
   const DEFAULT_PROJECT_ID = "project_main";
   const DEFAULT_PROJECT_NAME = "メイン";
   const NOTE_CARD_WIDTH = 210;
@@ -48,6 +45,7 @@
   const BACKUP_HANDLE_KEY = "today-fragments-backup-handle-v1";
   const BACKUP_SAVE_DELAY = 20000;
   const QR_FRAME_INTERVAL = 800;
+  const DENSE_THRESHOLD = 120;
 
   const els = {};
   const loadedScripts = new Map();
@@ -61,10 +59,7 @@
     dirty: { notes: {}, groups: {}, connections: {} },
     selected: null,
     view: { x: 0, y: 0, zoom: 1 },
-    gl: null,
-    drive: { accessToken: "", saving: false, pending: false, connected: false },
     saveTimer: 0,
-    driveTimer: 0,
     inspectorTimer: 0,
     pointers: new Map(),
     panStart: null,
@@ -117,7 +112,6 @@
   function collectEls() {
     els.setup = $("#setup");
     els.workspace = $("#workspace");
-    els.canvas = $("#gl-canvas");
     els.world = $("#world");
     els.groupLayer = $("#group-layer");
     els.lineLayer = $("#line-layer");
@@ -133,14 +127,10 @@
     els.modalRoot = $("#modal-root");
     els.addGroup = $("#add-group");
     els.exportAi = $("#export-ai");
-    els.githubSync = $("#github-sync");
     els.pcQr = $("#pc-qr");
-    els.phoneImport = $("#phone-import");
     els.trashOpen = $("#trash-open");
     els.settingsOpen = $("#settings-open");
-    els.listModeToggle = $("#list-mode-toggle");
     els.panelToggle = $("#panel-toggle");
-    els.mobileList = $("#mobile-list");
     els.undoAction = $("#undo-action");
     els.redoAction = $("#redo-action");
     els.resetView = $("#reset-view");
@@ -239,7 +229,7 @@
     return merged;
   }
 
-  // Data can arrive from Drive, GitHub, QR or a pasted string, so every value that reaches innerHTML or a style attribute is checked here.
+  // Data can arrive from GitHub, a QR code, a backup file or a pasted string, so every value that reaches innerHTML or a style attribute is checked here.
   // Each function fixes the entity in place and returns false when it cannot be used at all.
   function normalizeNote(note) {
     if (!isPlainObject(note) || !isSafeId(note.id)) return false;
@@ -486,17 +476,7 @@
       syncPassword: "",
       movementLocked: false,
       panelsCollapsed: false,
-      mobileListMode: false,
-      phoneView: "capture",
       ...settings,
-      drive: {
-        clientId: "",
-        folderName: DRIVE_FOLDER,
-        fileName: DRIVE_FILE,
-        folderId: "",
-        fileId: "",
-        ...(settings.drive || {})
-      },
       github: {
         owner: "",
         repo: "",
@@ -684,7 +664,6 @@
       $("#setup-phone-start").addEventListener("click", async () => {
         readInboxFields("setup");
         app.settings.role = "phone";
-        app.settings.phoneView = "capture";
         await persistState();
         startApp();
       });
@@ -739,12 +718,13 @@
   }
 
   function startApp() {
-    if (app.settings.role === "phone" && app.settings.phoneView !== "canvas") {
+    // The phone only posts; the canvas is the PC's screen.
+    if (app.settings.role === "phone") {
       showCapture();
       return;
     }
     startWorkspace();
-    if (app.settings.role === "pc") initPcServices();
+    initPcServices();
   }
 
   async function initPcServices() {
@@ -759,20 +739,17 @@
     els.setup.classList.add("hidden");
     els.capture.classList.add("hidden");
     els.workspace.classList.remove("hidden");
-    document.body.classList.toggle("role-phone", app.settings.role === "phone");
-    document.body.classList.toggle("role-pc", app.settings.role === "pc");
-    els.roleLabel.textContent = app.settings.role === "phone" ? "スマホ本体" : "PCローカル";
+    document.body.classList.add("role-pc");
+    els.roleLabel.textContent = "PC";
     updateProjectTitle();
     if (!app.view.x && !app.view.y) {
       app.view.x = Math.round(window.innerWidth / 2);
       app.view.y = Math.round(window.innerHeight / 2);
     }
     applyPerformanceMode();
-    initWebGl();
     initParticles();
     updateWorldTransform();
     applyPanelState();
-    applyMobileListMode();
     applyMovementLockState();
     updateUndoRedoButtons();
     renderAll();
@@ -825,7 +802,6 @@
           <h2>送ったカード</h2>
           <div id="capture-posts" class="capture-post-list"></div>
         </section>
-        <button id="capture-open-canvas" class="soft-button" type="button">これまでの画面を開く（引っ越しが終わるまで）</button>
       </div>
     `;
     const body = $("#capture-body");
@@ -854,7 +830,6 @@
     });
     $("#capture-settings").addEventListener("click", openCaptureSettings);
     $("#capture-read-catalog").addEventListener("click", openImportModal);
-    $("#capture-open-canvas").addEventListener("click", openCanvasFromCapture);
     renderCaptureGroups();
     renderCaptureStatus();
     renderCapturePosts();
@@ -1083,23 +1058,6 @@
     $("#capture-settings-test").addEventListener("click", () => runInboxTest("capture-settings", $("#capture-settings-status")));
   }
 
-  async function openCanvasFromCapture() {
-    app.settings.phoneView = "canvas";
-    await persistState();
-    startWorkspace();
-  }
-
-  async function returnToCapture() {
-    app.settings.phoneView = "capture";
-    finishActiveEntityDrag();
-    resetViewportInteraction();
-    await persistState();
-    closeModal();
-    showCapture();
-  }
-
-  // Shows a one-line summary when the target can be taken from the existing GitHub settings; the fields stay behind a toggle.
-  // The PC only reads the public files, so with token:false no token field is rendered.
   function inboxFieldsHtml(prefix, options = {}) {
     const config = inboxConfig();
     const withToken = options.token !== false;
@@ -1216,13 +1174,10 @@
     els.quickNote.addEventListener("input", autosizeComposer);
     els.addGroup.addEventListener("click", createGroup);
     els.exportAi.addEventListener("click", openExportModal);
-    els.githubSync.addEventListener("click", syncGithubFromPhone);
     els.pcQr.addEventListener("click", openQrModal);
-    els.phoneImport.addEventListener("click", openImportModal);
     els.trashOpen.addEventListener("click", openTrashModal);
-    els.settingsOpen.addEventListener("click", openSettingsModal);
+    els.settingsOpen.addEventListener("click", openPcSettingsModal);
     els.projectSwitcher?.addEventListener("click", () => openProjectsModal(false));
-    els.listModeToggle?.addEventListener("click", toggleMobileListMode);
     els.panelToggle.addEventListener("click", togglePanels);
     els.syncStatus.addEventListener("click", onSyncStatusClick);
     els.undoAction.addEventListener("click", undo);
@@ -1248,9 +1203,6 @@
     window.addEventListener("resize", () => {
       if (isCaptureVisible()) return;
       applyPerformanceMode();
-      applyMobileListMode();
-      if (!useLightweightEffects()) initWebGl();
-      resizeGlCanvas();
       initParticles();
       updateParticleTarget(true);
       renderAll();
@@ -1261,7 +1213,6 @@
         finishActiveEntityDrag();
         resetViewportInteraction();
         persistState();
-        if (app.settings.role === "phone") saveDriveNow();
         if (app.settings.role === "pc" && hasUnsavedBackup()) saveBackupNow();
       }
       // Try again when the app comes back or before it goes to sleep; failures fall back to the retry timer.
@@ -1335,10 +1286,10 @@
 
   function renderAll() {
     updateProjectTitle();
+    applyDensityMode();
     renderGroups();
     renderConnections();
     renderCards();
-    renderMobileList();
     renderInspector();
     updateStatus();
   }
@@ -1407,49 +1358,6 @@
     });
   }
 
-  function renderMobileList() {
-    if (!els.mobileList) return;
-    const groups = app.data.groups.filter((group) => isVisibleEntity(group));
-    const groupById = Object.fromEntries(groups.map((group) => [group.id, group]));
-    const notes = app.data.notes
-      .filter((note) => isVisibleEntity(note))
-      .sort((a, b) => (b.updatedAt || b.createdAt || "").localeCompare(a.updatedAt || a.createdAt || ""));
-    els.mobileList.innerHTML = `
-      <div class="mobile-list-head">
-        <strong>${escapeHtml(currentProject()?.name || DEFAULT_PROJECT_NAME)}</strong>
-        <span>${notes.length}件</span>
-      </div>
-      <div class="mobile-list-items">
-        ${
-          notes.length
-            ? notes
-                .map((note) => {
-                  const selected = app.selected?.type === "note" && app.selected.id === note.id;
-                  const title = note.title || deriveTitle(note.body) || "無題";
-                  const groupNames = (note.groupIds || []).map((id) => groupById[id]?.title).filter(Boolean);
-                  return `
-                    <button class="mobile-list-item ${selected ? "selected" : ""}" type="button" data-id="${escapeAttr(note.id)}">
-                      <strong>${escapeHtml(title)}</strong>
-                      <span>${escapeHtml(compactBody(note.body || "", 96))}</span>
-                      <small>${formatDateTime(note.createdAt)}${groupNames.length ? ` / ${escapeHtml(groupNames.join("・"))}` : ""}</small>
-                    </button>
-                  `;
-                })
-                .join("")
-            : '<p class="status-line">カードはまだありません。</p>'
-        }
-      </div>
-    `;
-    $$(".mobile-list-item", els.mobileList).forEach((button) => {
-      button.addEventListener("click", () => {
-        app.panelsCollapsed = false;
-        app.settings.panelsCollapsed = false;
-        applyPanelState();
-        selectEntity("note", button.dataset.id);
-      });
-    });
-  }
-
   function renderConnections() {
     const connections = app.data.connections.filter((connection) => isVisibleEntity(connection) && resolveEndpoint(connection.from) && resolveEndpoint(connection.to));
     els.lineLayer.innerHTML = `
@@ -1472,8 +1380,14 @@
         })
         .join("")}
     `;
+    app.connectionNodes = new Map();
     $$(".connection-node", els.lineLayer).forEach((node) => {
       const id = node.dataset.id;
+      app.connectionNodes.set(id, {
+        paths: Array.from(node.querySelectorAll("path")),
+        start: node.querySelector(".connection-point.start"),
+        end: node.querySelector(".connection-point.end")
+      });
       node.addEventListener("pointerdown", (event) => {
         if (event.button !== 0) return;
         event.preventDefault();
@@ -1486,6 +1400,46 @@
         cycleConnectionStyle(id);
       });
     });
+  }
+
+  // During a drag only the lines attached to the moving cards/groups change, so update those in place
+  // instead of rebuilding the whole SVG on every pointer move.
+  function updateConnectionsFor(keys) {
+    const nodes = app.connectionNodes;
+    if (!nodes) {
+      renderConnections();
+      return;
+    }
+    app.data.connections.forEach((connection) => {
+      if (!isVisibleEntity(connection)) return;
+      if (!keys.has(`${connection.from.type}:${connection.from.id}`) && !keys.has(`${connection.to.type}:${connection.to.id}`)) return;
+      const node = nodes.get(connection.id);
+      const points = node ? connectionPoints(connection) : null;
+      if (!points) return;
+      const d = connectionPath(connection);
+      node.paths.forEach((path) => path.setAttribute("d", d));
+      node.start?.setAttribute("cx", points.from.x);
+      node.start?.setAttribute("cy", points.from.y);
+      node.end?.setAttribute("cx", points.to.x);
+      node.end?.setAttribute("cy", points.to.y);
+    });
+  }
+
+  // Edits in the inspector touch one card or group; repainting just that element keeps typing smooth.
+  function refreshNoteCard(note) {
+    const title = getEntityNode("note", note.id)?.querySelector(".note-title");
+    if (title) title.textContent = note.title || deriveTitle(note.body) || "無題";
+  }
+
+  function refreshGroupLabel(group) {
+    const label = getEntityNode("group", group.id)?.querySelector(".group-label");
+    if (label) label.textContent = group.title || "グループ";
+  }
+
+  // With many cards the per-card float animations and line glows cost more than they add; switch them off.
+  function applyDensityMode() {
+    const count = app.data.notes.filter(isVisibleEntity).length + app.data.groups.filter(isVisibleEntity).length;
+    els.workspace.classList.toggle("dense", count > DENSE_THRESHOLD);
   }
 
   function handleEntityPointerDown(event, type, id) {
@@ -1606,16 +1560,14 @@
       captureNoteEdit();
       note.title = event.target.value;
       touchEntity("note", note.id);
-      renderCards();
-      renderMobileList();
+      refreshNoteCard(note);
     });
     $("#inspect-note-body").addEventListener("input", (event) => {
       captureNoteEdit();
       note.body = event.target.value;
       note.localDate = localDate(note.createdAt);
       touchEntity("note", note.id);
-      renderCards();
-      renderMobileList();
+      refreshNoteCard(note);
     });
     bindConnectionControls("note", note.id);
     $("#inspect-note-lock").addEventListener("click", () => toggleEntityLock("note", note.id));
@@ -1659,8 +1611,7 @@
       captureGroupEdit();
       group.title = event.target.value;
       touchEntity("group", group.id);
-      renderGroups();
-      renderMobileList();
+      refreshGroupLabel(group);
     });
     $("#inspect-group-color").addEventListener("change", (event) => {
       captureHistory();
@@ -1668,7 +1619,6 @@
       touchEntity("group", group.id);
       renderGroups();
       renderCards();
-      renderMobileList();
     });
     bindConnectionControls("group", group.id);
     $("#inspect-group-lock").addEventListener("click", () => toggleEntityLock("group", group.id));
@@ -1949,7 +1899,8 @@
   function wavyPath(from, to) {
     const controls = curvedControls(from, to);
     const length = Math.hypot(to.x - from.x, to.y - from.y) || 1;
-    const steps = Math.max(18, Math.ceil(length / 10));
+    // Long wavy lines used to get hundreds of points; 72 is enough for the wave to read as a wave.
+    const steps = Math.min(72, Math.max(18, Math.ceil(length / 10)));
     const cycles = Math.max(2, Math.round(length / 86));
     const points = [];
     for (let i = 0; i <= steps; i += 1) {
@@ -2162,6 +2113,7 @@
         : [];
     const node = getEntityNode(type, id) || event.currentTarget;
     if (!node?.classList) return;
+    const movingKeys = new Set([`${type === "note" ? "note" : "group"}:${id}`, ...childStarts.map((child) => `note:${child.note.id}`)]);
     const historySnapshot = makeHistorySnapshot();
     try {
       node.setPointerCapture(event.pointerId);
@@ -2198,7 +2150,7 @@
         group.h = Math.round(clamp(start.h + dy, 140, 900));
         node.style.width = `${group.w}px`;
         node.style.height = `${group.h}px`;
-        renderConnections();
+        updateConnectionsFor(movingKeys);
         return;
       }
       target.x = Math.round(start.x + dx);
@@ -2216,7 +2168,7 @@
         });
       }
       if (type === "note") updateDropHighlight(note);
-      renderConnections();
+      updateConnectionsFor(movingKeys);
     };
     const autoPan = () => {
       autoPanFrame = 0;
@@ -2293,7 +2245,7 @@
 
   function getEntityNode(type, id) {
     const layer = type === "note" ? els.cardLayer : els.groupLayer;
-    return Array.from(layer.querySelectorAll(type === "note" ? ".note-card" : ".group-node")).find((node) => node.dataset.id === id) || null;
+    return layer.querySelector(`${type === "note" ? ".note-card" : ".group-node"}[data-id="${CSS.escape(String(id))}"]`);
   }
 
   function updateAllNoteGroups(markTouched = false) {
@@ -2503,20 +2455,6 @@
     persistState();
   }
 
-  function toggleMobileListMode() {
-    app.settings.mobileListMode = !app.settings.mobileListMode;
-    applyMobileListMode();
-    renderMobileList();
-    persistState();
-  }
-
-  function applyMobileListMode() {
-    const active = Boolean(app.settings.mobileListMode && isSmallViewport());
-    els.workspace.classList.toggle("mobile-list-mode", active);
-    els.listModeToggle?.classList.toggle("active", active);
-    els.listModeToggle?.setAttribute("aria-pressed", active ? "true" : "false");
-  }
-
   function applyPanelState() {
     els.workspace.classList.toggle("panels-collapsed", app.panelsCollapsed);
     els.panelToggle.textContent = app.panelsCollapsed ? "▥" : "▤";
@@ -2549,11 +2487,9 @@
     app.selected = validateSelection(snapshot.selected);
     app.settings.movementLocked = Boolean(snapshot.movementLocked);
     app.history.restoring = false;
-    markRestoredDataDirty();
     applyMovementLockState();
     renderAll();
     persistState();
-    if (app.settings.role === "phone") scheduleDriveSave();
     updateUndoRedoButtons();
   }
 
@@ -2581,13 +2517,6 @@
     const entity = selection ? findEntity(selection.type, selection.id) : null;
     if (!entity || !isVisibleEntity(entity)) return null;
     return { type: selection.type, id: selection.id };
-  }
-
-  function markRestoredDataDirty() {
-    if (app.settings.role !== "pc") return;
-    app.dirty.notes = Object.fromEntries(app.data.notes.map((note) => [note.id, note.updatedAt || nowIso()]));
-    app.dirty.groups = Object.fromEntries(app.data.groups.map((group) => [group.id, group.updatedAt || nowIso()]));
-    app.dirty.connections = Object.fromEntries(app.data.connections.map((connection) => [connection.id, connection.updatedAt || nowIso()]));
   }
 
   function onKeyDown(event) {
@@ -2659,7 +2588,7 @@
   }
 
   function isBackgroundTarget(target) {
-    return target === els.workspace || target === els.canvas || target === els.world || Boolean(target?.classList?.contains("layer"));
+    return target === els.workspace || target === els.world || Boolean(target?.classList?.contains("layer"));
   }
 
   function isViewportPanTarget(target) {
@@ -2694,7 +2623,6 @@
 
   function applyPerformanceMode() {
     els.workspace?.classList.toggle("mobile-lite", useLightweightEffects());
-    els.canvas?.classList.toggle("disabled", useLightweightEffects());
   }
 
   function updateWorldTransform() {
@@ -2790,13 +2718,8 @@
     if (!entity) return;
     if (!options.alreadyUpdated) entity.updatedAt = nowIso();
     app.data.updatedAt = nowIso();
-    if (app.settings.role === "pc") {
-      const bucket = type === "connection" ? "connections" : type === "note" ? "notes" : "groups";
-      app.dirty[bucket][id] = entity.updatedAt;
-    }
     updateProjectMeta();
     schedulePersist();
-    if (app.settings.role === "phone") scheduleDriveSave();
     updateStatus();
   }
 
@@ -3069,7 +2992,6 @@
     };
     activateProject(project.id, { render: true, persist: false });
     await persistState();
-    scheduleDriveSave();
     closeModal();
     toast("案件を作成しました");
   }
@@ -3080,13 +3002,8 @@
       return;
     }
     saveActiveProjectToStore();
-    await loadProjectFromGithubIfNeeded(projectId).catch((error) => {
-      console.warn(error);
-      toast("ローカルにある内容で開きます");
-    });
     activateProject(projectId, { render: true, persist: false });
     await persistState();
-    scheduleDriveSave();
     closeModal();
   }
 
@@ -3104,7 +3021,6 @@
       renderAll();
     }
     await persistState();
-    scheduleDriveSave();
     openProjectsModal(showArchived);
   }
 
@@ -3114,7 +3030,6 @@
     project.archivedAt = nowIso();
     project.updatedAt = nowIso();
     await persistState();
-    scheduleDriveSave();
     openProjectsModal(showArchived);
   }
 
@@ -3124,7 +3039,6 @@
     project.archivedAt = "";
     project.updatedAt = nowIso();
     await persistState();
-    scheduleDriveSave();
     openProjectsModal(true);
   }
 
@@ -3142,92 +3056,7 @@
       activateProject(app.projects.items[0].id, { render: true, persist: false });
     }
     await persistState();
-    scheduleDriveSave();
     openProjectsModal(showArchived);
-  }
-
-  function openSettingsModal() {
-    if (app.settings.role === "pc") {
-      openPcSettingsModal();
-      return;
-    }
-    const g = app.settings.github;
-    const d = app.settings.drive;
-    const phoneFields =
-      app.settings.role === "phone"
-        ? `
-          <div class="form-row">
-            <label>Google OAuthクライアントID</label>
-            <input id="settings-drive-client" value="${escapeAttr(d.clientId)}" />
-          </div>
-          <div class="form-row">
-            <label>GitHubトークン</label>
-            <input id="settings-gh-token" type="password" value="${escapeAttr(g.token)}" />
-          </div>
-        `
-        : "";
-    openModal(`
-      <div class="modal-head">
-        <h2>設定</h2>
-        <button class="close-button" data-close type="button">×</button>
-      </div>
-      <div class="form-grid">
-        <div class="form-row">
-          <label>同期パスワード</label>
-          <input id="settings-password" type="password" value="${escapeAttr(app.settings.syncPassword)}" />
-        </div>
-        <div class="field-split">
-          <div class="form-row">
-            <label>GitHubユーザー/組織</label>
-            <input id="settings-gh-owner" value="${escapeAttr(g.owner)}" />
-          </div>
-          <div class="form-row">
-            <label>リポジトリ</label>
-            <input id="settings-gh-repo" value="${escapeAttr(g.repo)}" />
-          </div>
-        </div>
-        <div class="field-split">
-          <div class="form-row">
-            <label>ブランチ</label>
-            <input id="settings-gh-branch" value="${escapeAttr(g.branch)}" />
-          </div>
-          <div class="form-row">
-            <label>同期ファイル</label>
-            <input id="settings-gh-path" value="${escapeAttr(g.path)}" />
-          </div>
-        </div>
-        ${phoneFields}
-        <div class="button-row">
-          <button id="settings-save" class="primary-button" type="button">保存</button>
-          <button id="settings-open-capture" class="soft-button" type="button">投稿画面に戻る</button>
-          <button id="settings-drive-connect" class="soft-button" type="button">Drive接続</button>
-          <button id="settings-github-test" class="soft-button" type="button">GitHub確認</button>
-        </div>
-        <p id="settings-status" class="status-line"></p>
-      </div>
-    `);
-    $("#settings-open-capture")?.addEventListener("click", returnToCapture);
-    $("#settings-save").addEventListener("click", async () => {
-      readSettingsModal();
-      await persistState();
-      toast("保存しました");
-    });
-    $("#settings-drive-connect")?.addEventListener("click", async () => {
-      readSettingsModal();
-      await persistState();
-      await connectGoogleDrive($("#settings-status"));
-    });
-    $("#settings-github-test")?.addEventListener("click", async () => {
-      readSettingsModal();
-      const status = $("#settings-status");
-      try {
-        status.textContent = "GitHub確認中";
-        status.textContent = await testGithubConnection();
-        await persistState();
-      } catch (error) {
-        status.textContent = error.message || "GitHub確認に失敗しました";
-      }
-    });
   }
 
   function openPcSettingsModal() {
@@ -3447,7 +3276,7 @@
   function onSyncStatusClick() {
     if (app.settings.role !== "pc") return;
     if (inboxSourceProblem()) {
-      openSettingsModal();
+      openPcSettingsModal();
       return;
     }
     if (app.backup.handle && app.backup.permission !== "granted") {
@@ -3455,18 +3284,6 @@
       return;
     }
     receiveInbox({ manual: true });
-  }
-
-  function readSettingsModal() {
-    app.settings.syncPassword = $("#settings-password")?.value || "";
-    app.settings.github.owner = $("#settings-gh-owner")?.value.trim() || "";
-    app.settings.github.repo = $("#settings-gh-repo")?.value.trim() || "";
-    app.settings.github.branch = $("#settings-gh-branch")?.value.trim() || "main";
-    app.settings.github.path = $("#settings-gh-path")?.value.trim() || GITHUB_DEFAULT_PATH;
-    if (app.settings.role === "phone") {
-      app.settings.drive.clientId = $("#settings-drive-client")?.value.trim() || "";
-      app.settings.github.token = $("#settings-gh-token")?.value.trim() || "";
-    }
   }
 
   function openTrashModal() {
@@ -3516,226 +3333,6 @@
     });
   }
 
-  async function connectGoogleDrive(statusEl) {
-    if (!app.settings.drive.clientId) {
-      statusEl.textContent = "Google OAuthクライアントIDを入れてください";
-      return;
-    }
-    if (!window.google?.accounts?.oauth2) {
-      statusEl.textContent = "Googleの認可画面を読み込めませんでした";
-      return;
-    }
-    statusEl.textContent = "Drive接続中";
-    await new Promise((resolve, reject) => {
-      const tokenClient = google.accounts.oauth2.initTokenClient({
-        client_id: app.settings.drive.clientId,
-        scope: DRIVE_SCOPE,
-        callback: async (response) => {
-          if (response.error) {
-            reject(new Error(response.error));
-            return;
-          }
-          app.drive.accessToken = response.access_token;
-          app.drive.connected = true;
-          try {
-            await ensureDriveFile();
-            await persistState();
-            statusEl.textContent = "Driveに接続しました";
-            renderAll();
-            resolve();
-          } catch (error) {
-            reject(error);
-          }
-        }
-      });
-      tokenClient.requestAccessToken({ prompt: "consent" });
-    }).catch((error) => {
-      statusEl.textContent = error.message || "Drive接続に失敗しました";
-    });
-  }
-
-  async function ensureDriveFile() {
-    const drive = app.settings.drive;
-    const folder = await findOrCreateDriveFolder(drive.folderName || DRIVE_FOLDER);
-    drive.folderId = folder.id;
-    const file = await findDriveFile(drive.fileName || DRIVE_FILE, folder.id);
-    if (file) {
-      drive.fileId = file.id;
-      const remote = await driveFetchJson(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`);
-      // The Drive file holds whichever project was open last, so merge it into that project rather than the one on screen.
-      const remoteProjectId = isSafeId(remote?.project?.id) ? remote.project.id : DEFAULT_PROJECT_ID;
-      if (remoteProjectId !== app.activeProjectId) {
-        saveActiveProjectToStore();
-        const project = ensureProjectExists(remoteProjectId, textValue(remote?.project?.name) || DEFAULT_PROJECT_NAME);
-        activateProject(remoteProjectId, { render: false, persist: false });
-        toast(`Driveの「${project.name}」を開きました`);
-      }
-      const result = mergeData(remote, { markDirty: false });
-      if (result.changed) {
-        toast(`Driveから${result.changed}件取り込みました`);
-      }
-      await saveDriveNow();
-      return;
-    }
-    drive.fileId = await createDriveJsonFile(drive.fileName || DRIVE_FILE, folder.id, sanitizeData(app.data));
-  }
-
-  async function findOrCreateDriveFolder(name) {
-    const query = encodeURIComponent(`name = '${escapeDriveQuery(name)}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`);
-    const result = await driveFetchJson(`https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name)`);
-    if (result.files?.[0]) return result.files[0];
-    const created = await driveFetchJson("https://www.googleapis.com/drive/v3/files", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, mimeType: "application/vnd.google-apps.folder" })
-    });
-    return created;
-  }
-
-  async function findDriveFile(name, folderId) {
-    const query = encodeURIComponent(`name = '${escapeDriveQuery(name)}' and '${folderId}' in parents and trashed = false`);
-    const result = await driveFetchJson(`https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name,modifiedTime)`);
-    return result.files?.[0] || null;
-  }
-
-  async function createDriveJsonFile(name, folderId, data) {
-    const boundary = `tf_${Date.now()}`;
-    const metadata = { name, parents: [folderId], mimeType: "application/json" };
-    const body = [
-      `--${boundary}`,
-      "Content-Type: application/json; charset=UTF-8",
-      "",
-      JSON.stringify(metadata),
-      `--${boundary}`,
-      "Content-Type: application/json; charset=UTF-8",
-      "",
-      JSON.stringify(data, null, 2),
-      `--${boundary}--`
-    ].join("\r\n");
-    const created = await driveFetchJson("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart", {
-      method: "POST",
-      headers: { "Content-Type": `multipart/related; boundary=${boundary}` },
-      body
-    });
-    return created.id;
-  }
-
-  function scheduleDriveSave() {
-    if (app.settings.role !== "phone") return;
-    app.drive.pending = true;
-    updateStatus();
-    clearTimeout(app.driveTimer);
-    app.driveTimer = window.setTimeout(saveDriveNow, 900);
-  }
-
-  async function saveDriveNow() {
-    if (app.settings.role !== "phone") return;
-    if (!app.drive.accessToken || !app.settings.drive.fileId) {
-      app.drive.pending = true;
-      updateStatus();
-      return;
-    }
-    app.drive.saving = true;
-    updateStatus();
-    try {
-      await driveFetchJson(`https://www.googleapis.com/upload/drive/v3/files/${app.settings.drive.fileId}?uploadType=media`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json; charset=UTF-8" },
-        body: JSON.stringify(sanitizeData(app.data), null, 2)
-      });
-      app.drive.pending = false;
-    } catch (error) {
-      app.drive.pending = true;
-      console.warn(error);
-    } finally {
-      app.drive.saving = false;
-      updateStatus();
-    }
-  }
-
-  async function driveFetchJson(url, options = {}) {
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        Authorization: `Bearer ${app.drive.accessToken}`,
-        ...(options.headers || {})
-      }
-    });
-    if (!response.ok) throw new Error(`Drive ${response.status}`);
-    return response.json();
-  }
-
-  async function syncGithubFromPhone() {
-    if (app.settings.role !== "phone") return;
-    try {
-      requireGithubSettings(true);
-      requirePassword();
-      els.syncStatus.textContent = "GitHub同期中";
-      saveActiveProjectToStore();
-      await putGithubEncryptedObject(githubProjectIndexPath(), sanitizeProjectsIndex(), "Update Today Fragments project index");
-      for (const project of app.projects.items) {
-        const entry = app.projectStore[project.id];
-        if (!entry?.data) continue;
-        // The commit history of a public repository is readable by anyone, so project names stay out of the message.
-        await putGithubEncryptedObject(githubProjectDataPath(project.id), sanitizeData(entry.data), "Update Today Fragments project data");
-      }
-      app.dirty = createEmptyDirty();
-      Object.values(app.projectStore).forEach((entry) => {
-        entry.dirty = createEmptyDirty();
-      });
-      await persistState();
-      toast("GitHub同期しました");
-    } catch (error) {
-      toast(error.message || "GitHub同期に失敗しました");
-    } finally {
-      updateStatus();
-    }
-  }
-
-  async function loadProjectFromGithubIfNeeded(projectId, options = {}) {
-    if (!projectId) return;
-    if (!options.force && app.projectStore[projectId]?.data) return;
-    requireGithubSettings(false);
-    requirePassword();
-    const project = ensureProjectExists(projectId);
-    const remoteData = await loadGithubEncryptedObject(githubProjectDataPath(projectId));
-    app.projectStore[projectId] = {
-      data: normalizeData({
-        ...remoteData,
-        project: {
-          id: project.id,
-          name: remoteData.project?.name || project.name,
-          createdAt: remoteData.project?.createdAt || project.createdAt
-        }
-      }),
-      dirty: createEmptyDirty(),
-      view: app.projectStore[projectId]?.view || { x: 0, y: 0, zoom: 1 },
-      selected: null
-    };
-  }
-
-  function sanitizeProjectsIndex(projects = app.projects) {
-    return normalizeProjectsIndex(JSON.parse(JSON.stringify(projects)));
-  }
-
-  async function putGithubEncryptedObject(path, object, message) {
-    const envelope = await encryptObject(object, app.settings.syncPassword);
-    const content = bytesToBase64(utf8(JSON.stringify(envelope, null, 2)));
-    const sha = await getGithubPathSha(path).catch(() => "");
-    const body = {
-      message: `${message} ${new Date().toISOString()}`,
-      content,
-      branch: app.settings.github.branch || "main"
-    };
-    if (sha) body.sha = sha;
-    const response = await fetch(githubContentApiUrl(path), {
-      method: "PUT",
-      headers: githubHeaders(true),
-      body: JSON.stringify(body)
-    });
-    if (!response.ok) throw await makeGithubError(response);
-  }
-
   async function loadGithubEncryptedObject(path) {
     const response = await fetch(`${githubRawUrl(path)}?t=${Date.now()}`, { cache: "no-store" });
     if (!response.ok) {
@@ -3747,57 +3344,6 @@
     return decryptObject(envelope, app.settings.syncPassword);
   }
 
-  async function getGithubPathSha(path) {
-    const response = await fetch(`${githubContentApiUrl(path)}?ref=${encodeURIComponent(app.settings.github.branch || "main")}`, {
-      headers: githubHeaders(true)
-    });
-    if (!response.ok) return "";
-    const json = await response.json();
-    return json.sha || "";
-  }
-
-  async function getGithubFileSha() {
-    const response = await fetch(`${githubApiUrl()}?ref=${encodeURIComponent(app.settings.github.branch || "main")}`, {
-      headers: githubHeaders(true)
-    });
-    if (!response.ok) return "";
-    const json = await response.json();
-    return json.sha || "";
-  }
-
-  async function testGithubConnection() {
-    requireGithubSettings(true);
-    const g = app.settings.github;
-    const branch = g.branch || "main";
-    const checked = `${g.owner}/${g.repo} / ${branch} / ${githubProjectIndexPath()}`;
-
-    const repoResponse = await fetch(githubRepoApiUrl(), {
-      headers: githubHeaders(true)
-    });
-    if (!repoResponse.ok) throw await makeGithubError(repoResponse);
-
-    const branchResponse = await fetch(`${githubRepoApiUrl()}/branches/${encodeURIComponent(branch)}`, {
-      headers: githubHeaders(true)
-    });
-    if (!branchResponse.ok) {
-      if (branchResponse.status === 404) {
-        throw new Error(`GitHubリポジトリは見えますが、ブランチ「${branch}」が見つかりません。\n確認した設定: ${checked}`);
-      }
-      throw await makeGithubError(branchResponse);
-    }
-
-    const fileResponse = await fetch(`${githubContentApiUrl(githubProjectIndexPath())}?ref=${encodeURIComponent(branch)}`, {
-      headers: githubHeaders(true)
-    });
-    if (fileResponse.ok) return `GitHub確認OK\n確認した設定: ${checked}\n同期ファイルも見つかりました`;
-    if (fileResponse.status === 404) {
-      return `GitHub確認OK\n確認した設定: ${checked}\n同期ファイルはまだありません。次のGitHub同期で作成できます`;
-    }
-    throw await makeGithubError(fileResponse);
-  }
-
-  // Inbox: the phone appends its posts to one encrypted file per month in the data repository (inbox/YYYY-MM.enc.json).
-  // Each write re-reads the remote file and merges by id, so a resend or a second device never drops posts already there.
   function hasUnsentCapture() {
     return Boolean(app.capture?.posts.some((post) => !post.sentAt) || app.capture?.groups.some((group) => !group.sentAt));
   }
@@ -4237,7 +3783,6 @@
         renderGroups();
         renderConnections();
         renderCards();
-        renderMobileList();
       }
     });
     return { posts: importedPosts, groups: createdGroups };
@@ -4619,11 +4164,6 @@
     return new Error(`GitHub ${response.status}${detail ? `: ${detail}` : ""}`);
   }
 
-  function githubApiUrl() {
-    const g = app.settings.github;
-    return `https://api.github.com/repos/${encodeURIComponent(g.owner)}/${encodeURIComponent(g.repo)}/contents/${g.path.split("/").map(encodeURIComponent).join("/")}`;
-  }
-
   function githubSyncBasePath() {
     const path = (app.settings.github.path || GITHUB_DEFAULT_PATH).replace(/^\/+|\/+$/g, "");
     const parts = path.split("/").filter(Boolean);
@@ -4640,31 +4180,12 @@
     return `${githubSyncBasePath()}/projects/${safeId}.enc.json`;
   }
 
-  function githubContentApiUrl(path) {
-    const g = app.settings.github;
-    return `https://api.github.com/repos/${encodeURIComponent(g.owner)}/${encodeURIComponent(g.repo)}/contents/${path.split("/").map(encodeURIComponent).join("/")}`;
-  }
-
   function githubRawUrl(path) {
     const g = app.settings.github;
     return `https://raw.githubusercontent.com/${encodeURIComponent(g.owner)}/${encodeURIComponent(g.repo)}/${encodeURIComponent(g.branch || "main")}/${path
       .split("/")
       .map(encodeURIComponent)
       .join("/")}`;
-  }
-
-  function githubRepoApiUrl() {
-    const g = app.settings.github;
-    return `https://api.github.com/repos/${encodeURIComponent(g.owner)}/${encodeURIComponent(g.repo)}`;
-  }
-
-  function githubHeaders(needsToken) {
-    const headers = {
-      Accept: "application/vnd.github+json",
-      "Content-Type": "application/json"
-    };
-    if (needsToken) headers.Authorization = `Bearer ${app.settings.github.token}`;
-    return headers;
   }
 
   function requireGithubSettings(needsToken) {
@@ -4691,6 +4212,8 @@
       const groupCount = catalog.projects.reduce((total, project) => total + project.groups.length, 0);
       let index = 0;
       let playing = chunks.length > 1;
+      // The QR library is only needed here, so it is fetched on first use instead of on every page load.
+      await loadScriptOnce(`vendor/qrcode-generator.js?v=${APP_VERSION}`).catch((error) => console.warn(error));
       openModal(`
         <div class="modal-head">
           <h2>グループ一覧をスマホへ</h2>
@@ -5018,29 +4541,13 @@
         }
         throw error;
       }
-      if (delta?.type === CATALOG_TYPE) {
-        app.qrParts.delete(sessionId);
-        const result = applyCatalog(delta);
-        await persistState();
-        closeModal();
-        if (isCaptureVisible()) renderCapture();
-        toast(`PCの一覧を読み込みました（案件${result.projects}件・グループ${result.groups}件）`);
-        return;
-      }
-      if (delta?.type !== "today-fragments-delta") throw new Error("取り込みデータが違います");
-      if (delta.projectId && !isSafeId(delta.projectId)) throw new Error("取り込みデータの案件IDが正しくありません");
-      if (delta.projectId && delta.projectId !== app.activeProjectId) {
-        saveActiveProjectToStore();
-        ensureProjectExists(delta.projectId, textValue(delta.projectName) || DEFAULT_PROJECT_NAME);
-        activateProject(delta.projectId, { render: false, persist: false });
-      }
-      const result = mergeData(delta, { markDirty: false });
-      await persistState();
-      scheduleDriveSave();
+      if (delta?.type !== CATALOG_TYPE) throw new Error("このQRはPCのグループ一覧ではありません");
       app.qrParts.delete(sessionId);
-      status.textContent = `取り込みました: ${result.created}件追加 / ${result.updated}件更新`;
-      toast("PC差分を取り込みました");
-      renderAll();
+      const result = applyCatalog(delta);
+      await persistState();
+      closeModal();
+      if (isCaptureVisible()) renderCapture();
+      toast(`PCの一覧を読み込みました（案件${result.projects}件・グループ${result.groups}件）`);
     } catch (error) {
       status.textContent = error.message || "取り込みに失敗しました";
     }
@@ -5053,11 +4560,6 @@
     return match ? match[0] : "";
   }
 
-  function mergeData(incoming) {
-    return mergeDataInto(app.data, incoming);
-  }
-
-  // Merges by id with "newer updatedAt wins"; works on any project's data, not only the one on screen.
   function mergeDataInto(target, incoming) {
     const result = { changed: 0, created: 0, updated: 0, skipped: 0 };
     if (!isPlainObject(incoming)) return result;
@@ -5177,155 +4679,6 @@
     return new Uint8Array(buffer);
   }
 
-  function initWebGl() {
-    if (useLightweightEffects()) {
-      els.canvas.classList.add("disabled");
-      return;
-    }
-    els.canvas.classList.remove("disabled");
-    if (app.gl?.running) return;
-    if (app.gl) {
-      app.gl.running = true;
-      resizeGlCanvas();
-      requestAnimationFrame(drawWebGl);
-      return;
-    }
-    const gl = els.canvas.getContext("webgl", {
-      antialias: false,
-      alpha: false,
-      desynchronized: true,
-      powerPreference: "low-power"
-    });
-    if (!gl) return;
-    const vertex = `
-      attribute vec2 a_position;
-      void main() {
-        gl_Position = vec4(a_position, 0.0, 1.0);
-      }
-    `;
-    const fragment = `
-      precision mediump float;
-      uniform vec2 u_resolution;
-      uniform vec2 u_view;
-      uniform float u_zoom;
-      uniform float u_time;
-
-      float gridLine(vec2 p, float size, float width) {
-        vec2 g = abs(fract(p / size - 0.5) - 0.5) / fwidth(p / size);
-        float line = min(g.x, g.y);
-        return 1.0 - smoothstep(width, width + 1.0, line);
-      }
-
-      void main() {
-        vec2 uv = gl_FragCoord.xy / u_resolution.xy;
-        vec2 world = (gl_FragCoord.xy - u_view) / max(u_zoom, 0.001);
-        float gridA = gridLine(world + vec2(sin(u_time * 0.25) * 10.0, 0.0), 72.0, 0.46);
-        float gridB = gridLine(world, 288.0, 0.62);
-        float vignette = distance(uv, vec2(0.5));
-        vec3 base = mix(vec3(0.025, 0.035, 0.06), vec3(0.055, 0.065, 0.09), uv.y);
-        vec3 cyan = vec3(0.14, 0.52, 0.58) * (0.22 + 0.14 * sin(u_time * 0.33 + uv.x * 6.0));
-        vec3 rose = vec3(0.52, 0.12, 0.25) * (0.16 + 0.1 * cos(u_time * 0.22 + uv.y * 5.0));
-        vec3 color = base + cyan * smoothstep(0.85, 0.05, distance(uv, vec2(0.12, 0.18)));
-        color += rose * smoothstep(0.9, 0.08, distance(uv, vec2(0.86, 0.18)));
-        color += vec3(0.24, 0.44, 0.36) * smoothstep(0.82, 0.08, distance(uv, vec2(0.52, 0.95))) * 0.24;
-        color += vec3(0.12, 0.19, 0.28) * gridA;
-        color += vec3(0.24, 0.37, 0.44) * gridB;
-        color *= smoothstep(0.86, 0.22, vignette);
-        gl_FragColor = vec4(color, 1.0);
-      }
-    `;
-    const program = makeProgram(gl, vertex, fragment);
-    if (!program) return;
-    const buffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
-    app.gl = {
-      gl,
-      program,
-      pos: gl.getAttribLocation(program, "a_position"),
-      resolution: gl.getUniformLocation(program, "u_resolution"),
-      view: gl.getUniformLocation(program, "u_view"),
-      zoom: gl.getUniformLocation(program, "u_zoom"),
-      time: gl.getUniformLocation(program, "u_time"),
-      running: true,
-      lastDrawAt: 0
-    };
-    resizeGlCanvas();
-    requestAnimationFrame(drawWebGl);
-  }
-
-  function drawWebGl(time) {
-    if (!app.gl) return;
-    if (useLightweightEffects()) {
-      app.gl.running = false;
-      els.canvas.classList.add("disabled");
-      return;
-    }
-    app.gl.running = true;
-    els.canvas.classList.remove("disabled");
-    // The background remains animated, but 30 fps is visually sufficient and halves GPU work.
-    if (time - app.gl.lastDrawAt < 1000 / 30) {
-      requestAnimationFrame(drawWebGl);
-      return;
-    }
-    app.gl.lastDrawAt = time;
-    const { gl, program, pos, resolution, view, zoom } = app.gl;
-    const pixelRatio = renderPixelRatio();
-    resizeGlCanvas();
-    gl.useProgram(program);
-    gl.enableVertexAttribArray(pos);
-    gl.vertexAttribPointer(pos, 2, gl.FLOAT, false, 0, 0);
-    gl.uniform2f(resolution, els.canvas.width, els.canvas.height);
-    gl.uniform2f(view, app.view.x * pixelRatio, (window.innerHeight - app.view.y) * pixelRatio);
-    gl.uniform1f(zoom, app.view.zoom * pixelRatio);
-    gl.uniform1f(app.gl.time, time * 0.001);
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
-    requestAnimationFrame(drawWebGl);
-  }
-
-  function resizeGlCanvas() {
-    if (useLightweightEffects()) return;
-    const pixelRatio = renderPixelRatio();
-    const width = Math.max(1, Math.floor(window.innerWidth * pixelRatio));
-    const height = Math.max(1, Math.floor(window.innerHeight * pixelRatio));
-    if (els.canvas.width !== width || els.canvas.height !== height) {
-      els.canvas.width = width;
-      els.canvas.height = height;
-      app.gl?.gl.viewport(0, 0, width, height);
-    }
-  }
-
-  function renderPixelRatio() {
-    const ratio = window.devicePixelRatio || 1;
-    return Math.min(ratio, useLightweightEffects() ? 1.15 : 1.25);
-  }
-
-  function makeProgram(gl, vertexSource, fragmentSource) {
-    const vertex = compileShader(gl, gl.VERTEX_SHADER, vertexSource);
-    const fragment = compileShader(gl, gl.FRAGMENT_SHADER, fragmentSource);
-    if (!vertex || !fragment) return null;
-    const program = gl.createProgram();
-    gl.attachShader(program, vertex);
-    gl.attachShader(program, fragment);
-    gl.linkProgram(program);
-    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-      console.warn(gl.getProgramInfoLog(program));
-      return null;
-    }
-    return program;
-  }
-
-  function compileShader(gl, type, source) {
-    const shader = gl.createShader(type);
-    gl.shaderSource(shader, source);
-    gl.compileShader(shader);
-    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-      console.warn(gl.getShaderInfoLog(shader));
-      return null;
-    }
-    return shader;
-  }
-
   function openModal(html) {
     stopScanStream();
     stopQrTimer();
@@ -5375,15 +4728,7 @@
       els.syncStatus.classList.toggle("warning", status.warning);
       return;
     }
-    if (app.drive.saving) {
-      els.syncStatus.textContent = "Drive保存中";
-    } else if (app.drive.pending) {
-      els.syncStatus.textContent = "Drive未保存";
-    } else if (app.drive.connected) {
-      els.syncStatus.textContent = "Drive保存済み";
-    } else {
-      els.syncStatus.textContent = "ローカル保存";
-    }
+    els.syncStatus.textContent = "ローカル保存";
   }
 
   function schedulePersist(delay = 120) {
@@ -5512,10 +4857,6 @@
 
   function escapeAttr(value = "") {
     return escapeHtml(value);
-  }
-
-  function escapeDriveQuery(value) {
-    return String(value).replaceAll("'", "\\'");
   }
 
   function utf8(value) {

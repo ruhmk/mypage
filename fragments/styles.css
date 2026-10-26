@@ -59,11 +59,6 @@ button {
   display: none !important;
 }
 
-body.role-phone .hidden-phone,
-body.role-pc .hidden-pc {
-  display: none !important;
-}
-
 .app-shell {
   position: relative;
 }
@@ -308,17 +303,6 @@ body.dragging-entity .workspace * {
     0 30px 90px rgba(0, 0, 0, 0.34);
 }
 
-.gl-canvas {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-}
-
-.gl-canvas.disabled {
-  display: none;
-}
-
 .particle-layer {
   position: absolute;
   inset: 0;
@@ -358,9 +342,32 @@ body.dragging-entity .workspace * {
     #07090f;
 }
 
-.workspace.mobile-lite .gl-canvas,
 .workspace.mobile-lite .particle-layer {
   display: none;
+}
+
+/* Many cards: the per-card float and line glows are the first things to go. */
+.workspace.dense .note-card,
+.workspace.dense .group-node,
+.workspace.dense .connection-flow {
+  animation: none !important;
+}
+
+.workspace.dense .connection-main,
+.workspace.dense .connection-node:hover .connection-main,
+.workspace.dense .connection-node.selected .connection-main,
+.workspace.dense .connection-point {
+  filter: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .note-card,
+  .group-node,
+  .connection-flow,
+  .connection-draft,
+  .particle-layer::before {
+    animation: none !important;
+  }
 }
 
 .workspace.mobile-lite .note-card,
@@ -452,8 +459,7 @@ body.dragging-entity .workspace * {
 .connection-main {
   stroke: color-mix(in srgb, var(--connection-color), white 16%);
   stroke-width: 3.2;
-  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--connection-color), transparent 56%));
-  opacity: 0.72;
+  opacity: 0.78;
 }
 
 .connection-flow {
@@ -514,9 +520,7 @@ body.dragging-entity .workspace * {
   fill: #f8fdff;
   stroke: var(--connection-color);
   stroke-width: 2;
-  filter:
-    drop-shadow(0 0 7px var(--connection-color))
-    drop-shadow(0 0 16px var(--connection-color));
+  filter: drop-shadow(0 0 7px var(--connection-color));
   opacity: 0.92;
   pointer-events: none;
 }
@@ -1045,96 +1049,6 @@ body.dragging-entity .workspace * {
   opacity: 0;
   pointer-events: none;
   transform: translateX(14px);
-}
-
-.mobile-list {
-  display: none;
-}
-
-.workspace.mobile-list-mode .world,
-.workspace.mobile-list-mode .line-layer,
-.workspace.mobile-list-mode .group-layer,
-.workspace.mobile-list-mode .card-layer {
-  display: none;
-}
-
-.workspace.mobile-list-mode .mobile-list {
-  position: absolute;
-  z-index: 18;
-  top: calc(104px + env(safe-area-inset-top));
-  left: max(10px, env(safe-area-inset-left));
-  right: max(10px, env(safe-area-inset-right));
-  bottom: calc(104px + env(safe-area-inset-bottom));
-  display: grid;
-  grid-template-rows: auto 1fr;
-  gap: 10px;
-  overflow: hidden;
-  pointer-events: auto;
-}
-
-.mobile-list-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: rgba(10, 14, 23, 0.86);
-}
-
-.mobile-list-head span {
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.mobile-list-items {
-  display: grid;
-  align-content: start;
-  gap: 8px;
-  overflow: auto;
-  padding-bottom: 8px;
-  -webkit-overflow-scrolling: touch;
-}
-
-.mobile-list-item {
-  display: grid;
-  gap: 5px;
-  width: 100%;
-  min-height: 76px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: rgba(18, 24, 36, 0.92);
-  color: var(--text);
-  padding: 11px 12px;
-  text-align: left;
-}
-
-.mobile-list-item.selected {
-  border-color: rgba(103, 232, 249, 0.52);
-  background: rgba(103, 232, 249, 0.12);
-}
-
-.mobile-list-item strong,
-.mobile-list-item span,
-.mobile-list-item small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.mobile-list-item span {
-  color: rgba(238, 244, 255, 0.72);
-  font-size: 13px;
-  line-height: 1.45;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-
-.mobile-list-item small {
-  color: var(--muted);
-  font-size: 11px;
-  white-space: nowrap;
 }
 
 .inspector-head {

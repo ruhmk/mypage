@@ -1,189 +1,62 @@
 # Today Fragments
 
-今日あったことを雑に置いて、あとからAIに渡せる形で保つブラウザアプリです。
+今日あったことをスマホで書いて、PCで並べたり線でつないだりして整理するブラウザアプリです。
 
-## 使い方の流れ
+## 役割
 
-1. スマホでGitHub PagesのURLを開く
-2. 「スマホで始める」を選ぶ
-3. Google Drive接続用のOAuthクライアントID、同期パスワード、GitHub設定を入れる
-4. メモを追加する
-5. スマホ側で必要な時だけ「GitHub同期」を押す
-6. 会社PCでは「PCで使う」を選び、GitHub上の暗号化データと同期パスワードで開く
-7. PCで編集した差分はQRでスマホへ渡す
+| 端末 | できること |
+| --- | --- |
+| スマホ | 案件とグループを選んでカードを書き、送るだけ。送ったカードは自動でGitHubへ届きます |
+| PC | 本体。スマホから届いたカードを受け取り、並べる・線でつなぐ・AI用に書き出す。変更は自動でバックアップファイルに保存します |
+| GitHub | スマホとPCの間の郵便受け。`mypage` のデータ専用ブランチ `fragments-data` に、暗号化した月ごとのファイルが置かれます |
 
-## 保存場所
+カードは同期パスワードで暗号化してから送ります。パスワードはPCとスマホで同じものにします。設定画面の「確認コード」が両方で同じなら一致しています。
 
-- スマホの本体データ: Google Driveの `Today Fragments/today-fragments.json`
-- PC用データ: GitHubリポジトリ内の暗号化ファイル
-- PCの編集中データ: 会社PCのブラウザ内
+## 日々の流れ
 
-GitHubに置くデータは暗号化済みです。同期パスワードはコードにもGitHubにも保存しません。
+1. スマホで書いて「送る」を押す。圏外のときは電波が戻ったときに自動で送られます
+2. PCを開くと、開いている間は5分ごとに自動で受け取ります。上部の「受信 ◯◯:◯◯」を押すとその場で受け取ります
+3. PCでカードを並べ、線をつなぐ
+4. PCでグループを増やしたら、PCの ▦ を押してQRを出し、スマホの「PCの一覧を読み取る」で読み取る
 
-## Google Drive設定
+## 初期設定
 
-Google CloudでWebアプリ用OAuthクライアントを作り、GitHub PagesのURLを承認済みJavaScript生成元に追加します。
+### スマホ
 
-Driveの権限は `drive.file` を使います。アプリが作成/選択したファイルを扱うための権限です。
+1. GitHub Pagesのアプリを開き、「スマホで始める」を選ぶ
+2. 同期パスワードと、GitHubの設定（ユーザー名・リポジトリ・データ用ブランチ・トークン）を入れる
+3. 「接続を確認」を押す。データ用のブランチがなければ、このとき自動で作られます
+4. 「開始」を押す
 
-画面の「Google OAuthクライアントID」には、Google Cloudで作ったWebアプリ用OAuthクライアントのClient IDを入れます。
-形は `xxxxxxxxxxxx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com` のような文字列です。Client Secretは使いません。
+トークンはFine-grained personal access tokenで、対象リポジトリだけに `Contents: Read and write` を付けたものを使います。トークンはスマホの中にだけ保存されます。
 
-最低限の設定:
+### PC
 
-- Google Drive APIを有効化する
-- OAuth同意画面を設定する
-- スコープに `https://www.googleapis.com/auth/drive.file` を追加する
-- 外部アプリとして使う場合は、自分のGoogleアカウントをテストユーザーに追加する
-- OAuthクライアントの種類は「ウェブアプリケーション」にする
-- 承認済みJavaScript生成元にGitHub Pagesの origin を入れる
+1. 「PCで使う」を選び、同期パスワードとGitHubの設定（ユーザー名・リポジトリ・データ用ブランチ）を入れて「開始」
+2. 設定（⚙）の「スマホからの受け取り」で「接続を確認」
+3. 設定の「バックアップ」で「保存先を選ぶ」。以後は変更のたびに暗号化してそのファイルへ自動保存します
+4. PCのデータが消えたときは、初期設定の「バックアップから復元して開始」で戻せます
 
-例:
+PCにはトークンを置きません。公開リポジトリのファイルを読むだけです。
 
-- GitHub Pagesが `https://example.github.io/today-fragments/` の場合: `https://example.github.io`
-- ローカル確認用: `http://127.0.0.1:5177`
+## 配置
 
-## GitHub設定
+`app` フォルダの中身をそのままGitHub Pagesのフォルダへ置きます。ビルドは不要です。
 
-スマホ側だけにGitHubトークンを保存します。公開リポジトリ内の同期ファイルを更新できる権限が必要です。
-
-画面で入力する項目:
-
-- GitHubユーザー/組織
-- リポジトリ
-- ブランチ
-- 同期ファイルパス
-- GitHubトークン
-
-初期値の同期ファイルパスは `daily-fragments-sync/data.enc.json` です。
-
-GitHubトークンはFine-grained personal access tokenを推奨します。
-
-最低限の設定:
-
-- Resource owner: GitHub Pagesを置くユーザー/組織
-- Repository access: 対象リポジトリだけ
-- Repository permissions: `Contents` を `Read and write`
-- Expiration: 任意
-
-画面の「GitHubユーザー/組織」はメールアドレスではなく、GitHub URL上の owner です。
-
-例:
-
-- リポジトリURLが `https://github.com/example/today-fragments` の場合
-- GitHubユーザー/組織: `example`
-- リポジトリ: `today-fragments`
-- ブランチ: `main`
-- 同期ファイル: `daily-fragments-sync/data.enc.json`
-
-### GitHub 404が出たとき
-
-ほとんどの場合、次のどれかです。
-
-- 「GitHubユーザー/組織」にメールアドレスを入れている
-- リポジトリ名が違う
-- ブランチ名が違う
-- Fine-grained tokenで対象リポジトリを選んでいない
-- Fine-grained tokenの `Contents` が `Read and write` になっていない
-- 会社/組織リポジトリで、トークン利用が承認待ちになっている
-
-`kitagawa_manabu@qualiarts.jp` のようなメールアドレスではなく、GitHubのリポジトリURLに出てくる名前を入れます。
-
-例:
-
-- `https://github.com/qualiarts/today-fragments`
-- GitHubユーザー/組織: `qualiarts`
-- リポジトリ: `today-fragments`
-
-### GitHub認証に失敗したとき
-
-日を跨いだ直後に急に出た場合でも、トークン設定画面で有効期限なしになっているなら、アプリ側に入っているGitHub設定かトークン文字列がずれている可能性が高いです。
-
-必要ならGitHubで新しいFine-grained personal access tokenを作り直し、スマホ側の設定に入れ直してください。
-
-- Resource owner: GitHub Pagesを置いているユーザー/組織
-- Repository access: `fragments`
-- Repository permissions: `Contents` を `Read and write`
-- Expiration: 期限切れしにくい日付。組織ポリシーで上限がある場合はそれに従う
-- 会社/組織リポジトリの場合: tokenが `pending` になっていないか、組織承認が必要ではないか確認
-
-`ruhmk/mypage` の `open_page` ブランチ内に `fragments` フォルダを置いている場合、アプリのGitHub設定は次の形です。
-
-- GitHubユーザー/組織: `ruhmk`
-- リポジトリ: `mypage`
-- ブランチ: `open_page`
-- 同期ファイル: `fragments/daily-fragments-sync/data.enc.json`
-
-`fragments` はリポジトリ名ではなくフォルダ名なので、「同期ファイル」の先頭に入れます。
-
-設定画面の「GitHub確認」を押すと、リポジトリ、ブランチ、同期ファイルの順に確認します。
-
-## GitHub Pagesへの配置
-
-このフォルダのファイルをGitHub Pagesで公開するリポジトリへ置きます。
-
-- `index.html`
-- `styles.css`
-- `app.js`
-- `manifest.webmanifest`
-- `service-worker.js`
-- `vendor/`
+- `index.html` / `styles.css` / `app.js` / `service-worker.js` / `manifest.webmanifest`
+- `vendor/`（QRの生成・読み取りライブラリ。必要なときだけ読み込まれます）
 - `icons/`
 
-ビルドは不要です。
+更新が反映されないときは、一度再読み込みするか、URLの最後に `?v=41` を付けて開いてください。
 
-## 現在のMVPでできること
+## 操作メモ（PC）
 
-- 本文だけでカード追加
-- タイトルの後編集
-- 2.5D WebGL背景
-- カードのドラッグ移動
-- 丸みのあるグループ領域の作成/移動/リサイズ
-- グループ領域に入ったカードの自動所属
-- ゴミ箱、復元、完全削除
-- AI向けMarkdown + JSON + 指示文の書き出し
-- スマホのDrive自動保存
-- スマホからGitHubへ手動同期
-- PCでGitHub暗号化データを読み込み
-- PC編集差分のQR出力
-- スマホでQR取り込み
-- カード/グループ/線の接続関係
-- PCの右クリックドラッグによる線作成
-- スマホの2回タップ編集モード
-- スマホの入力/詳細パネル開閉
-- 個別位置ロックと全体位置ロック
-- Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y とGUIボタンによるUndo/Redo
+- カードやグループはドラッグで移動。グループを動かすと中のカードもついてきます
+- カードやグループから右クリックドラッグで線を作ります。線を右クリックすると実線・点線・破線・波線が切り替わります
+- 詳細の「位置をロック」で個別に固定、上部の「止」で全体を固定
+- `Ctrl+Z` で戻る、`Ctrl+Shift+Z` / `Ctrl+Y` で進む、`Ctrl+0` で視点リセット
+- カードとグループが合計120個を超えると、浮遊アニメーションと線の光を自動で止めます
 
-QR画像の生成は `vendor/qrcode-generator.js`、スマホ側のQR読み取りは `vendor/jsQR.js` を同梱しています。外部CDNがブロックされてもQRの表示/読み取りができるようにするためです。
+## 引っ越し（旧形式からの一度だけの作業）
 
-iOSでPC差分を取り込む時は、「PCから取り込み」を開いた後に必ず「カメラ開始」ボタンを押してください。iOSでは画面を開いた流れで自動的にカメラを起動しようとすると拒否されることがあります。
-
-## 操作メモ
-
-- スマホではカード/グループを2回タップすると編集対象になります
-- スマホで未選択のカード/グループに触れてドラッグすると、視点移動として扱います
-- 右下の `▤` ボタンで、入力欄と詳細パネルを開閉できます
-- PCではカード/グループから右クリックドラッグすると線を作れます
-- 線を右クリックすると、実線、点線、破線、波線が順に切り替わります
-- スマホでは詳細パネルの「接続開始」を押してから、接続先をタップします
-- 線の意味はまず「関連」と「原因」を選べます
-- カード/グループの詳細にある「位置をロック」で個別に移動を止められます
-- 上部ツールバーの「止」で、全カード/グループを一時的に掴めなくできます
-- `Ctrl+Z` で戻る、`Ctrl+Shift+Z` または `Ctrl+Y` で進む
-- 上部ツールバーの `↶` / `↷` でも戻る/進むができます
-
-## 更新が反映されない時
-
-今回の版から、ページは新しいファイルを優先して取りに行くようにしています。通常は再読み込みで更新されます。
-
-ただし、古い版をすでに開いていたスマホでは、この修正自体を読み込む最初の1回だけ古いキャッシュが残ることがあります。その場合はURLの最後に `?v=39` を付けて開いてください。
-
-QR読み取りで「QR読取ライブラリを読み込めませんでした」と出る場合は、GitHub Pagesに `vendor/jsQR.js` も一緒に上がっているか確認してください。アプリ側では、同梱ファイルを読み直し、それでもだめな場合はCDNからの読み込みも試します。
-
-## 使いながら調整したい候補
-
-- グループ形状の自由度
-- カードの密度やサイズ
-- スマホのカメラQR読取の対応ブラウザ
-- GitHub認可をトークン入力からDevice Flowへ変更するか
-- PCからスマホへの大量差分QRの見せ方
+以前のスマホ版が同期していたデータ（`daily-fragments-sync` フォルダ）は、PCの設定にある「引っ越しを実行」で取り込めます。PCにあるデータは消えず、何度実行しても大丈夫です。
