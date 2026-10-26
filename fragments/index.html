@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#07090f" />
     <title>Today Fragments</title>
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=41" />
+    <link rel="stylesheet" href="styles.css?v=44" />
   </head>
   <body>
     <noscript>Today Fragmentsを使うにはJavaScriptを有効にしてください。</noscript>
@@ -29,40 +29,25 @@
               <span id="role-label">未設定</span>
             </span>
           </button>
-          <div id="sync-status" class="sync-status">ローカル保存</div>
+          <div class="status-group">
+            <button id="receive-button" class="status-button" type="button">受信</button>
+            <button id="backup-button" class="status-button" type="button">保存</button>
+          </div>
           <nav class="toolbar" aria-label="ツール">
-            <button id="undo-action" class="icon-button" title="戻る" aria-label="戻る" disabled>
-              <span>↶</span>
-            </button>
-            <button id="redo-action" class="icon-button" title="進む" aria-label="進む" disabled>
-              <span>↷</span>
-            </button>
-            <button id="reset-view" class="icon-button" title="視点リセット" aria-label="視点リセット">
-              <span>⌖</span>
-            </button>
-            <button id="movement-lock" class="icon-button" title="全体の位置ロック" aria-label="全体の位置ロック">
-              <span>止</span>
-            </button>
-            <button id="add-group" class="icon-button" title="グループ追加" aria-label="グループ追加">
-              <span>□</span>
-            </button>
-            <button id="export-ai" class="icon-button" title="AI用に書き出し" aria-label="AI用に書き出し">
-              <span>⇩</span>
-            </button>
-            <button id="pc-qr" class="icon-button" title="グループ一覧をスマホへ" aria-label="グループ一覧をスマホへ">
-              <span>▦</span>
-            </button>
-            <button id="trash-open" class="icon-button" title="ゴミ箱" aria-label="ゴミ箱">
-              <span>⌫</span>
-            </button>
-            <button id="settings-open" class="icon-button" title="設定" aria-label="設定">
-              <span>⚙</span>
-            </button>
+            <button id="undo-action" class="tool-button" title="直前の操作を取り消す（Ctrl+Z）" disabled>戻す</button>
+            <button id="redo-action" class="tool-button" title="取り消した操作をやり直す（Ctrl+Y）" disabled>やり直す</button>
+            <button id="reset-view" class="tool-button" title="カード全体が画面の中央に来るように視点を戻す（Ctrl+0）">中央へ</button>
+            <button id="movement-lock" class="tool-button" title="すべてのカードとグループを動かせなくする">全体ロック</button>
+            <button id="add-group" class="tool-button" title="新しいグループを画面の中央に作る">グループ追加</button>
+            <button id="export-ai" class="tool-button" title="メモをAIに渡せる文章にしてコピーする">AI書き出し</button>
+            <button id="pc-qr" class="tool-button" title="案件とグループの一覧をQRにしてスマホへ渡す">QRをスマホへ</button>
+            <button id="trash-open" class="tool-button" title="ゴミ箱に入れたカードを見る・戻す">ゴミ箱</button>
+            <button id="settings-open" class="tool-button" title="受け取り先・バックアップ・引っ越しの設定">設定</button>
           </nav>
         </header>
 
         <form id="composer" class="composer" autocomplete="off">
-          <textarea id="quick-note" rows="2" placeholder="今日あったこと"></textarea>
+          <textarea id="quick-note" rows="2" placeholder="今日あったこと（Ctrl+Enterで追加）"></textarea>
           <button class="send-button" title="追加" aria-label="追加" type="submit">＋</button>
         </form>
 
@@ -72,6 +57,6 @@
     </main>
 
     <div id="modal-root" class="modal-root" aria-live="polite"></div>
-    <script src="app.js?v=41" defer></script>
+    <script src="app.js?v=44" defer></script>
   </body>
 </html>

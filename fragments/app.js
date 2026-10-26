@@ -6,7 +6,7 @@
   const STATE_KEY = "today-fragments-state-v1";
   const GITHUB_DEFAULT_PATH = "daily-fragments-sync/data.enc.json";
   const GROUP_COLORS = ["#67e8f9", "#ff7aa8", "#ffd166", "#8ff0c4", "#a78bfa"];
-  const APP_VERSION = "41";
+  const APP_VERSION = "44";
   const DEFAULT_PROJECT_ID = "project_main";
   const DEFAULT_PROJECT_NAME = "メイン";
   const NOTE_CARD_WIDTH = 210;
@@ -119,7 +119,8 @@
     els.roleLabel = $("#role-label");
     els.projectTitle = $("#project-title");
     els.projectSwitcher = $("#project-switcher");
-    els.syncStatus = $("#sync-status");
+    els.receiveButton = $("#receive-button");
+    els.backupButton = $("#backup-button");
     els.toolbar = $(".toolbar");
     els.composer = $("#composer");
     els.quickNote = $("#quick-note");
@@ -1172,6 +1173,13 @@
       autosizeComposer();
     });
     els.quickNote.addEventListener("input", autosizeComposer);
+    els.quickNote.addEventListener("keydown", (event) => {
+      // Enter alone keeps inserting a line break; Ctrl/Cmd+Enter adds the card, same as the phone's posting screen.
+      if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+        event.preventDefault();
+        els.composer.requestSubmit();
+      }
+    });
     els.addGroup.addEventListener("click", createGroup);
     els.exportAi.addEventListener("click", openExportModal);
     els.pcQr.addEventListener("click", openQrModal);
@@ -1179,7 +1187,8 @@
     els.settingsOpen.addEventListener("click", openPcSettingsModal);
     els.projectSwitcher?.addEventListener("click", () => openProjectsModal(false));
     els.panelToggle.addEventListener("click", togglePanels);
-    els.syncStatus.addEventListener("click", onSyncStatusClick);
+    els.receiveButton.addEventListener("click", onReceiveClick);
+    els.backupButton.addEventListener("click", onBackupClick);
     els.undoAction.addEventListener("click", undo);
     els.redoAction.addEventListener("click", redo);
     els.resetView?.addEventListener("click", resetViewToContent);
@@ -2563,6 +2572,7 @@
     els.workspace.classList.toggle("movement-locked", Boolean(app.settings.movementLocked));
     els.movementLock.classList.toggle("active", Boolean(app.settings.movementLocked));
     els.movementLock.setAttribute("aria-pressed", app.settings.movementLocked ? "true" : "false");
+    els.movementLock.textContent = app.settings.movementLocked ? "ロック中" : "全体ロック";
   }
 
   function toggleEntityLock(type, id) {
@@ -3233,57 +3243,56 @@
     return lines.join("\n");
   }
 
-  function pcStatus() {
+  // The two top-left buttons: each shows its own state and does the obvious thing when clicked.
+  function receiveStatus() {
     const ledger = app.inboxLedger;
-    const backup = app.backup;
-    const parts = [];
-    const details = [];
-    let warning = false;
     const problem = inboxSourceProblem();
-    if (app.inboxReceive.running) {
-      parts.push("受信中…");
-    } else if (problem) {
-      parts.push("受け取り先が未設定");
-      details.push(`${problem}（クリックで設定を開きます）`);
-      warning = true;
-    } else if (ledger.lastError) {
-      parts.push("受信エラー");
-      details.push(`${ledger.lastError}（クリックで再試行します）`);
-      warning = true;
-    } else {
-      parts.push(ledger.lastCheckedAt ? `受信 ${formatTime(ledger.lastCheckedAt)}` : "受信待ち");
-      details.push("クリックで今すぐ受け取ります");
-    }
-    if (backupSupported()) {
-      if (!backup.handle) {
-        parts.push("バックアップ未設定");
-        details.push("設定の「バックアップ」で保存先を選んでください");
-      } else if (backup.permission !== "granted") {
-        parts.push("バックアップ要許可");
-        details.push("クリックするとバックアップの保存を再開します");
-        warning = true;
-      } else if (backup.lastError) {
-        parts.push("バックアップ失敗");
-        details.push(backup.lastError);
-        warning = true;
-      } else if (backup.lastSavedAt) {
-        parts.push(`保存 ${formatTime(backup.lastSavedAt)}`);
-      }
-    }
-    return { text: parts.join("・"), detail: details.join("\n"), warning };
+    if (app.inboxReceive.running) return { text: "受信中…", detail: "スマホからのカードを確認しています", warning: false };
+    if (problem) return { text: "受信: 未設定", detail: `${problem}。押すと設定を開きます`, warning: true };
+    if (ledger.lastError) return { text: "受信エラー", detail: `${ledger.lastError}。押すともう一度試します`, warning: true };
+    return {
+      text: ledger.lastCheckedAt ? `受信 ${formatTime(ledger.lastCheckedAt)}` : "受信",
+      detail: "押すと今すぐスマホからのカードを受け取ります（開いている間は5分ごとに自動で確認します）",
+      warning: false
+    };
   }
 
-  function onSyncStatusClick() {
+  function backupStatus() {
+    const backup = app.backup;
+    if (app.storageWriteFailed) return { text: "端末保存に失敗", detail: "ブラウザ内に保存できていません。空き容量を確認してください。押すとバックアップファイルには保存します", warning: true };
+    if (backup.saving) return { text: "保存中…", detail: "バックアップファイルに書き込んでいます", warning: false };
+    if (!backupSupported()) return { text: "JSONを書き出す", detail: "押すと、全データを暗号化したJSONファイルをダウンロードします", warning: false };
+    if (!backup.handle) return { text: "保存先を選ぶ", detail: "押して保存先のファイルを選ぶと、以後は変更のたびに自動でそのファイルへ保存します", warning: true };
+    if (backup.permission !== "granted") return { text: "保存を再開", detail: `${backup.fileName} への保存の許可が切れています。押すと再開します`, warning: true };
+    if (backup.lastError) return { text: "保存失敗", detail: `${backup.lastError}。押すともう一度保存します`, warning: true };
+    return {
+      text: backup.lastSavedAt ? `保存 ${formatTime(backup.lastSavedAt)}${hasUnsavedBackup() ? "（未保存あり）" : ""}` : "保存",
+      detail: `${backup.fileName} に自動で保存しています。押すと今すぐ保存します`,
+      warning: false
+    };
+  }
+
+  function onReceiveClick() {
     if (app.settings.role !== "pc") return;
     if (inboxSourceProblem()) {
       openPcSettingsModal();
       return;
     }
-    if (app.backup.handle && app.backup.permission !== "granted") {
-      saveBackupNow({ userGesture: true });
+    receiveInbox({ manual: true });
+  }
+
+  async function onBackupClick() {
+    if (app.settings.role !== "pc") return;
+    if (!backupSupported()) {
+      exportBackupFile();
       return;
     }
-    receiveInbox({ manual: true });
+    if (!app.backup.handle) {
+      await chooseBackupFile();
+      return;
+    }
+    const saved = await saveBackupNow({ userGesture: true });
+    if (!saved && app.backup.permission !== "granted") toast("保存の許可が得られませんでした。もう一度押すと確認が出ます");
   }
 
   function openTrashModal() {
@@ -4714,21 +4723,14 @@
 
   function updateStatus() {
     if (isCaptureVisible()) renderCaptureStatus();
-    els.syncStatus.classList.remove("warning");
-    els.syncStatus.title = "";
-    if (app.storageWriteFailed) {
-      els.syncStatus.textContent = "端末保存に失敗";
-      els.syncStatus.classList.add("warning");
-      return;
-    }
-    if (app.settings.role === "pc") {
-      const status = pcStatus();
-      els.syncStatus.textContent = status.text;
-      els.syncStatus.title = status.detail;
-      els.syncStatus.classList.toggle("warning", status.warning);
-      return;
-    }
-    els.syncStatus.textContent = "ローカル保存";
+    if (!els.receiveButton || !els.backupButton) return;
+    const apply = (button, status) => {
+      button.textContent = status.text;
+      button.title = status.detail;
+      button.classList.toggle("warning", status.warning);
+    };
+    apply(els.receiveButton, receiveStatus());
+    apply(els.backupButton, backupStatus());
   }
 
   function schedulePersist(delay = 120) {

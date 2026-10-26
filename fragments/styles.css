@@ -605,7 +605,6 @@ body.dragging-entity .workspace * {
 }
 
 .brand,
-.sync-status,
 .toolbar,
 .composer,
 .inspector {
@@ -669,24 +668,54 @@ body.dragging-entity .workspace * {
   box-shadow: 0 0 24px rgba(103, 232, 249, 0.36);
 }
 
-.sync-status {
-  justify-self: start;
-  min-height: 36px;
-  display: flex;
-  align-items: center;
-  padding: 7px 12px;
-  border-radius: 999px;
-  color: var(--muted);
-  font-size: 13px;
-}
-
 .toolbar {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: center;
   gap: 6px;
   min-height: 52px;
   padding: 6px;
   border-radius: 14px;
+}
+
+.tool-button {
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--fast),
+    transform var(--fast),
+    border-color var(--fast);
+}
+
+.tool-button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(103, 232, 249, 0.38);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.tool-button:disabled {
+  cursor: default;
+  opacity: 0.38;
+}
+
+.tool-button:disabled:hover {
+  transform: none;
+  border-color: var(--line);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.tool-button.active {
+  border-color: rgba(255, 209, 102, 0.48);
+  background: rgba(255, 209, 102, 0.16);
+  color: #fff0bd;
 }
 
 .panel-toggle {
@@ -761,7 +790,7 @@ body.dragging-entity .workspace * {
   position: absolute;
   z-index: 28;
   left: 18px;
-  top: 82px;
+  bottom: max(18px, env(safe-area-inset-bottom));
   width: min(420px, calc(100vw - 36px));
   display: grid;
   grid-template-columns: 1fr 44px;
@@ -1411,12 +1440,40 @@ html.capture-mode #app {
   margin-top: 0;
 }
 
-body.role-pc .sync-status {
-  cursor: pointer;
+.status-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-self: start;
+  pointer-events: auto;
 }
 
-.sync-status.warning {
-  border-color: rgba(255, 209, 102, 0.42);
+.status-button {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(10, 14, 23, 0.76);
+  color: var(--text);
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+  backdrop-filter: blur(18px);
+  box-shadow: 0 14px 42px rgba(0, 0, 0, 0.36);
+  transition:
+    background var(--fast),
+    transform var(--fast),
+    border-color var(--fast);
+}
+
+.status-button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(103, 232, 249, 0.38);
+}
+
+.status-button.warning {
+  border-color: rgba(255, 209, 102, 0.48);
+  background: rgba(255, 209, 102, 0.12);
   color: #ffe6a0;
 }
 
@@ -1596,7 +1653,7 @@ body.role-pc .sync-status {
     right: max(10px, calc(env(safe-area-inset-right) + 10px));
   }
 
-  .sync-status {
+  .status-group {
     display: none;
   }
 
@@ -1605,9 +1662,7 @@ body.role-pc .sync-status {
   }
 
   .toolbar {
-    flex-wrap: wrap;
-    max-width: 232px;
-    justify-content: flex-end;
+    max-width: 260px;
   }
 
   .project-item {
@@ -1627,7 +1682,6 @@ body.role-pc .sync-status {
     left: 10px;
     right: 64px;
     bottom: max(10px, env(safe-area-inset-bottom));
-    top: auto;
     width: auto;
     grid-template-columns: 1fr 48px;
     border-radius: 18px;
