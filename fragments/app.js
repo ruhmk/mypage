@@ -9,7 +9,7 @@
   const DRIVE_FILE = "today-fragments.json";
   const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
   const GROUP_COLORS = ["#67e8f9", "#ff7aa8", "#ffd166", "#8ff0c4", "#a78bfa"];
-  const APP_VERSION = "38";
+  const APP_VERSION = "39";
   const DEFAULT_PROJECT_ID = "project_main";
   const DEFAULT_PROJECT_NAME = "メイン";
   const NOTE_CARD_WIDTH = 210;
@@ -288,7 +288,7 @@
 
   // Posts written on the phone and waiting for (or already sent to) the inbox in the data repository.
   function createEmptyCapture() {
-    return { projectId: "", groupId: "", draft: "", posts: [], groups: [], lastSentAt: "", lastError: "", catalog: null };
+    return { projectId: "", groupId: "", draft: "", posts: [], groups: [], lastSentAt: "", lastError: "", lastNotice: "", catalog: null };
   }
 
   function normalizeCapture(capture) {
@@ -301,6 +301,7 @@
       groups: (Array.isArray(capture.groups) ? capture.groups : []).filter(normalizeCaptureGroup),
       lastSentAt: isoValue(capture.lastSentAt, ""),
       lastError: textValue(capture.lastError),
+      lastNotice: textValue(capture.lastNotice),
       catalog: normalizeCatalog(capture.catalog)
     };
   }
@@ -1011,6 +1012,11 @@
       action = '<button id="capture-send-now" class="mini-button" type="button">今すぐ送る</button>';
     } else if (app.capture.lastSentAt) {
       text = `すべて送信済み（最終 ${formatDateTime(app.capture.lastSentAt)}）`;
+      if (app.capture.lastNotice) {
+        text = `${text}。${app.capture.lastNotice}`;
+        warning = true;
+        action = '<button id="capture-notice-ok" class="mini-button" type="button">OK</button>';
+      }
     } else {
       text = "まだ送ったカードはありません";
     }
@@ -1022,6 +1028,11 @@
     el.innerHTML = `<span>${escapeHtml(text)}</span>${action}`;
     $("#capture-status-settings")?.addEventListener("click", openCaptureSettings);
     $("#capture-send-now")?.addEventListener("click", () => sendInbox());
+    $("#capture-notice-ok")?.addEventListener("click", () => {
+      app.capture.lastNotice = "";
+      schedulePersist();
+      renderCaptureStatus();
+    });
   }
 
   function renderCapturePosts() {
@@ -1124,6 +1135,7 @@
       <div class="form-row">
         <label>同期パスワード</label>
         <input id="${prefix}-password" type="password" value="${escapeAttr(app.settings.syncPassword)}" autocomplete="current-password" />
+        <small id="${prefix}-password-code" class="password-code">確認コード: …</small>
       </div>
       ${
         ready
@@ -1143,6 +1155,24 @@
       $(`#${prefix}-inbox-fields`).classList.remove("hidden");
       event.currentTarget.closest(".inbox-summary")?.classList.add("hidden");
     });
+    const password = $(`#${prefix}-password`);
+    const code = $(`#${prefix}-password-code`);
+    if (!password || !code) return;
+    const refresh = async () => {
+      const value = password.value;
+      const text = await passwordCheckCode(value);
+      if (password.value !== value || !code.isConnected) return;
+      code.textContent = value ? `確認コード: ${text}（PCとスマホで同じなら、パスワードは一致しています）` : "確認コード: なし（未入力）";
+    };
+    password.addEventListener("input", refresh);
+    refresh();
+  }
+
+  // Four characters derived from the password, so two devices can compare passwords by eye without showing them.
+  async function passwordCheckCode(password) {
+    if (!password) return "";
+    const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", utf8(`today-fragments-check|${password}`)));
+    return Array.from(digest.subarray(0, 2), (byte) => byte.toString(16).padStart(2, "0")).join("").toUpperCase();
   }
 
   function readInboxFields(prefix) {
@@ -3852,10 +3882,31 @@
     const path = inboxPath(month);
     for (let attempt = 0; ; attempt += 1) {
       const remote = await readInboxFile(path);
+      if (remote.unreadable) {
+        // The file was written with a different sync password (typically after the phone was reset and the password retyped).
+        // The phone still holds this month's posts, so keep the old file aside and rebuild the month from them.
+        await keepUnreadableInboxFile(month, remote.text);
+        app.capture.lastNotice = `送り先の${month}のファイルは別のパスワードで書かれていたため、スマホにあるカードで作り直しました`;
+      }
       const result = await writeInboxFile(path, buildInboxDoc(month, remote.doc), remote.sha);
       if (result.ok) return;
       // Someone else updated the file between our read and write; read again and merge once more.
       if (!result.conflict || attempt >= 2) throw result.error;
+    }
+  }
+
+  async function keepUnreadableInboxFile(month, text) {
+    const stamp = nowIso().replace(/[-:]/g, "").slice(0, 15);
+    const copyPath = `${INBOX_FOLDER}/${month}.unreadable-${stamp}.enc.json`;
+    try {
+      const response = await fetch(inboxContentUrl(copyPath), {
+        method: "PUT",
+        headers: inboxHeaders(),
+        body: JSON.stringify({ message: "Keep unreadable Today Fragments file", content: bytesToBase64(utf8(text)), branch: inboxConfig().branch })
+      });
+      if (!response.ok) console.warn(`could not keep a copy of the unreadable inbox file (${response.status})`);
+    } catch (error) {
+      console.warn(error);
     }
   }
 
@@ -3901,7 +3952,22 @@
     } else {
       throw new Error("送り先のファイルを読めませんでした");
     }
-    const doc = await decryptObject(JSON.parse(text), app.settings.syncPassword);
+    let envelope;
+    try {
+      envelope = JSON.parse(text);
+    } catch {
+      throw new Error("送り先に別の形式のファイルがあるため、上書きせずに止めました");
+    }
+    if (envelope?.app !== "Today Fragments" || !isPlainObject(envelope.cipher)) {
+      throw new Error("送り先に別の形式のファイルがあるため、上書きせずに止めました");
+    }
+    let doc;
+    try {
+      doc = await decryptObject(envelope, app.settings.syncPassword);
+    } catch (error) {
+      if (!/パスワード/.test(error?.message || "")) throw error;
+      return { sha: json.sha || "", doc: null, unreadable: true, text };
+    }
     if (doc?.type !== INBOX_TYPE) throw new Error("送り先に別の形式のファイルがあるため、上書きせずに止めました");
     return { sha: json.sha || "", doc };
   }
@@ -4060,6 +4126,7 @@
     } catch (error) {
       console.warn(error);
       ledger.lastError = error instanceof TypeError ? "通信できませんでした" : error.message || "受け取りに失敗しました";
+      if (/パスワード/.test(ledger.lastError)) ledger.lastError = "スマホと同期パスワードが違います。両方の設定画面の「確認コード」を見比べてください";
       if (options.manual) toast(ledger.lastError);
     } finally {
       state.running = false;
@@ -4942,7 +5009,15 @@
       }
       const payload = Array.from({ length: session.total }, (_, i) => session.chunks.get(i + 1)).join("");
       const envelope = JSON.parse(decodeUtf8(base64UrlToBytes(payload)));
-      const delta = await decryptObject(envelope, app.settings.syncPassword);
+      let delta;
+      try {
+        delta = await decryptObject(envelope, app.settings.syncPassword);
+      } catch (error) {
+        if (/パスワード/.test(error?.message || "")) {
+          throw new Error("PCとスマホの同期パスワードが違います。両方の設定画面に出る「確認コード」が同じになるように、どちらかのパスワードを直してください");
+        }
+        throw error;
+      }
       if (delta?.type === CATALOG_TYPE) {
         app.qrParts.delete(sessionId);
         const result = applyCatalog(delta);

@@ -1452,6 +1452,12 @@ html.capture-mode #app {
   gap: 8px;
 }
 
+.password-code {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .inbox-summary {
   display: grid;
   gap: 6px;
