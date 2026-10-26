@@ -538,7 +538,8 @@ function normalizeEvents(events) {
         source: event.source || "family",
         note: event.note || "",
         allDay: Boolean(event.allDay),
-        manualAllDay: Boolean(event.manualAllDay) || kitagawaAllDay,
+        // 仕事の終日予定は【北河】だけ表示する。古いデータのmanualAllDayは使わない。
+        manualAllDay: kitagawaAllDay,
         workDayOff: Boolean(event.workDayOff) || (kitagawaAllDay && isKitagawaFullDayOffTitle(title))
       };
     });
