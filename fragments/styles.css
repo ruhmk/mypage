@@ -1369,6 +1369,248 @@ body.dragging-entity .workspace * {
   color: var(--muted);
   font-size: 13px;
   line-height: 1.6;
+  white-space: pre-line;
+}
+
+html.capture-mode,
+html.capture-mode body,
+html.capture-mode #app {
+  height: auto;
+  min-height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.capture-screen {
+  min-height: 100dvh;
+  padding: max(16px, calc(env(safe-area-inset-top) + 10px)) max(16px, env(safe-area-inset-right))
+    max(24px, calc(env(safe-area-inset-bottom) + 16px)) max(16px, env(safe-area-inset-left));
+  background: var(--bg);
+}
+
+.capture-wrap {
+  width: min(640px, 100%);
+  margin: 0 auto;
+  display: grid;
+  gap: 14px;
+}
+
+.capture-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.capture-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.capture-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.capture-status.warning {
+  border-color: rgba(255, 209, 102, 0.42);
+  background: rgba(255, 209, 102, 0.08);
+  color: #ffe6a0;
+}
+
+.capture-form {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--panel-strong);
+}
+
+.capture-label {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.capture-label-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.inbox-summary {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+  padding: 12px 14px;
+  border: 1px solid rgba(103, 232, 249, 0.3);
+  border-radius: 12px;
+  background: rgba(103, 232, 249, 0.07);
+}
+
+.inbox-summary strong {
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+
+.inbox-summary span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.settings-section {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.settings-section h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.settings-section .button-row {
+  margin-top: 0;
+}
+
+body.role-pc .sync-status {
+  cursor: pointer;
+}
+
+.sync-status.warning {
+  border-color: rgba(255, 209, 102, 0.42);
+  color: #ffe6a0;
+}
+
+/* 16px keeps iOS Safari from zooming in when a field gets focus. */
+.capture-form select,
+.capture-form textarea,
+.capture-new-group input {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 12px;
+  color: var(--text);
+  background: rgba(5, 8, 15, 0.72);
+  font-size: 16px;
+  outline: none;
+}
+
+.capture-form textarea {
+  min-height: 132px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.capture-form select:focus,
+.capture-form textarea:focus,
+.capture-new-group input:focus {
+  border-color: rgba(103, 232, 249, 0.5);
+}
+
+.capture-chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.capture-chip {
+  flex: 0 0 auto;
+  min-height: 38px;
+  padding: 6px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.capture-chip.selected {
+  border-color: var(--chip-color, var(--cyan));
+  background: color-mix(in srgb, var(--chip-color, var(--cyan)), transparent 78%);
+}
+
+.capture-chip-add {
+  color: var(--muted);
+  border-style: dashed;
+}
+
+.capture-new-group {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.capture-send {
+  min-height: 50px;
+  font-size: 16px;
+}
+
+.capture-posts h2 {
+  margin: 4px 0 8px;
+  font-size: 15px;
+}
+
+.capture-post-list {
+  display: grid;
+  gap: 8px;
+}
+
+.capture-post {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(18, 24, 36, 0.92);
+}
+
+.capture-post p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.capture-post small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.capture-badge {
+  justify-self: start;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(143, 240, 196, 0.14);
+  color: #bff7dc;
+  font-size: 11px;
+}
+
+.capture-badge.unsent {
+  background: rgba(255, 209, 102, 0.16);
+  color: #ffe6a0;
 }
 
 .toast {

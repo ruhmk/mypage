@@ -9,7 +9,7 @@
   const DRIVE_FILE = "today-fragments.json";
   const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
   const GROUP_COLORS = ["#67e8f9", "#ff7aa8", "#ffd166", "#8ff0c4", "#a78bfa"];
-  const APP_VERSION = "34";
+  const APP_VERSION = "38";
   const DEFAULT_PROJECT_ID = "project_main";
   const DEFAULT_PROJECT_NAME = "メイン";
   const NOTE_CARD_WIDTH = 210;
@@ -26,9 +26,32 @@
     { id: "related", label: "関連", color: "#67e8f9" },
     { id: "cause", label: "原因", color: "#ffd166" }
   ];
+  const NOTE_FIELDS = ["id", "title", "body", "createdAt", "updatedAt", "localDate", "x", "y", "groupIds", "locked", "trashedAt", "deletedAt"];
+  const GROUP_FIELDS = ["id", "title", "createdAt", "updatedAt", "x", "y", "w", "h", "color", "locked", "trashedAt", "deletedAt"];
+  const CONNECTION_FIELDS = ["id", "from", "to", "kind", "style", "createdAt", "updatedAt", "trashedAt", "deletedAt"];
+  const QR_MAX_FRAMES = 500;
+  const QR_MAX_SESSIONS = 3;
+  const KDF_MIN_ITERATIONS = 100000;
+  const KDF_MAX_ITERATIONS = 2000000;
+  const INBOX_TYPE = "today-fragments-inbox";
+  const INBOX_FOLDER = "inbox";
+  const INBOX_BRANCH = "fragments-data";
+  const POST_FIELDS = ["id", "projectId", "projectName", "groupId", "groupTitle", "body", "createdAt", "localDate", "deviceId"];
+  const CAPTURE_GROUP_FIELDS = ["id", "projectId", "title", "createdAt"];
+  const INBOX_SEND_DELAY = 2500;
+  const INBOX_RETRY_DELAYS = [30000, 120000, 600000, 1800000];
+  const SENT_POST_KEEP_DAYS = 62;
+  const INBOX_RECEIVE_INTERVAL = 5 * 60 * 1000;
+  const INBOX_FIRST_MONTHS = 12;
+  const CATALOG_TYPE = "today-fragments-catalog";
+  const BACKUP_TYPE = "today-fragments-backup";
+  const BACKUP_HANDLE_KEY = "today-fragments-backup-handle-v1";
+  const BACKUP_SAVE_DELAY = 20000;
+  const QR_FRAME_INTERVAL = 800;
 
   const els = {};
   const loadedScripts = new Map();
+  let idbConnection = null;
   const app = {
     data: null,
     settings: null,
@@ -48,6 +71,16 @@
     pinchStart: null,
     qrParts: new Map(),
     scanSession: 0,
+    scanStream: null,
+    storageReadError: null,
+    storageWriteFailed: false,
+    storageWarnedAt: 0,
+    capture: null,
+    inboxSend: { sending: false, again: false, timer: 0, failures: 0, branchReady: false },
+    inboxLedger: null,
+    inboxReceive: { running: false, timer: 0 },
+    backup: { handle: null, fileName: "", permission: "", lastSavedAt: "", lastError: "", dirty: false, saving: false, timer: 0 },
+    qrTimer: 0,
     dragHoverGroupId: "",
     lastEntityTap: null,
     entityTapCandidates: new Map(),
@@ -69,9 +102,13 @@
     collectEls();
     await loadState();
     registerServiceWorker();
+    if (app.storageReadError) {
+      renderStorageError(app.storageReadError);
+      return;
+    }
     bindWorkspaceEvents();
     if (app.settings.role) {
-      startWorkspace();
+      startApp();
     } else {
       renderSetup();
     }
@@ -109,12 +146,29 @@
     els.resetView = $("#reset-view");
     els.movementLock = $("#movement-lock");
     els.particleLayer = $(".particle-layer");
+    els.capture = $("#capture");
+    if (!els.capture) {
+      // A stale cached index.html can be paired with this script; add the posting screen's container so the phone still opens.
+      els.capture = document.createElement("section");
+      els.capture.id = "capture";
+      els.capture.className = "capture-screen hidden";
+      $("#app").prepend(els.capture);
+    }
   }
 
   async function loadState() {
-    const stored = await idbGet(STATE_KEY).catch(() => null);
+    let stored = null;
+    try {
+      stored = await idbGet(STATE_KEY);
+    } catch (error) {
+      // A failed read is not the same as "no data yet": block writes so the stored notes are never replaced by an empty state.
+      console.warn(error);
+      app.storageReadError = error || new Error("storage read failed");
+    }
     app.settings = mergeSettings(stored?.settings || {});
     app.panelsCollapsed = Boolean(app.settings.panelsCollapsed);
+    app.capture = normalizeCapture(stored?.capture);
+    app.inboxLedger = normalizeInboxLedger(stored?.inboxLedger);
     setupProjectsFromStoredState(stored || {});
     if (!app.settings.deviceId) app.settings.deviceId = uid("device");
     if (!app.data.deviceId) app.data.deviceId = app.settings.deviceId;
@@ -174,48 +228,177 @@
     const merged = { ...base, ...data };
     merged.schemaVersion = Math.max(2, Number(merged.schemaVersion) || 1);
     merged.project = { ...base.project, ...(data.project || {}) };
-    merged.project.id ||= app.activeProjectId || DEFAULT_PROJECT_ID;
-    merged.project.name ||= currentProject()?.name || DEFAULT_PROJECT_NAME;
-    merged.notes = Array.isArray(data.notes) ? data.notes : [];
-    merged.groups = Array.isArray(data.groups) ? data.groups : [];
-    merged.connections = Array.isArray(data.connections) ? data.connections : [];
-    merged.notes.forEach((note) => {
-      note.groupIds = Array.isArray(note.groupIds) ? note.groupIds : [];
-      note.x = Number.isFinite(note.x) ? note.x : 0;
-      note.y = Number.isFinite(note.y) ? note.y : 0;
-      note.createdAt ||= nowIso();
-      note.updatedAt ||= note.createdAt;
-      note.localDate ||= localDate(note.createdAt);
-      note.locked = Boolean(note.locked);
-    });
-    merged.groups.forEach((group) => {
-      group.x = Number.isFinite(group.x) ? group.x : 0;
-      group.y = Number.isFinite(group.y) ? group.y : 0;
-      group.w = Number.isFinite(group.w) ? group.w : 320;
-      group.h = Number.isFinite(group.h) ? group.h : 220;
-      group.createdAt ||= nowIso();
-      group.updatedAt ||= group.createdAt;
-      group.color ||= GROUP_COLORS[0];
-      group.locked = Boolean(group.locked);
-    });
-    merged.connections.forEach((connection) => {
-      connection.from = normalizeEndpoint(connection.from);
-      connection.to = normalizeEndpoint(connection.to);
-      connection.kind = CONNECTION_KINDS.some((kind) => kind.id === connection.kind) ? connection.kind : "related";
-      connection.style = CONNECTION_STYLES.includes(connection.style) ? connection.style : "solid";
-      connection.createdAt ||= nowIso();
-      connection.updatedAt ||= connection.createdAt;
-      connection.trashedAt ||= "";
-      connection.deletedAt ||= "";
-    });
+    merged.project.id = isSafeId(merged.project.id) ? merged.project.id : app.activeProjectId || DEFAULT_PROJECT_ID;
+    merged.project.name = textValue(merged.project.name) || currentProject()?.name || DEFAULT_PROJECT_NAME;
+    merged.createdAt = isoValue(merged.createdAt, base.createdAt);
+    merged.updatedAt = isoValue(merged.updatedAt, merged.createdAt);
+    merged.deviceId = textValue(merged.deviceId);
+    merged.notes = (Array.isArray(data.notes) ? data.notes : []).filter(normalizeNote);
+    merged.groups = (Array.isArray(data.groups) ? data.groups : []).filter(normalizeGroup);
+    merged.connections = (Array.isArray(data.connections) ? data.connections : []).filter(normalizeConnection);
     return merged;
   }
 
-  function normalizeEndpoint(endpoint = {}) {
+  // Data can arrive from Drive, GitHub, QR or a pasted string, so every value that reaches innerHTML or a style attribute is checked here.
+  // Each function fixes the entity in place and returns false when it cannot be used at all.
+  function normalizeNote(note) {
+    if (!isPlainObject(note) || !isSafeId(note.id)) return false;
+    note.title = textValue(note.title);
+    note.body = textValue(note.body);
+    note.groupIds = Array.isArray(note.groupIds) ? note.groupIds.filter(isSafeId) : [];
+    note.x = finiteNumber(note.x, 0);
+    note.y = finiteNumber(note.y, 0);
+    note.createdAt = isoValue(note.createdAt, nowIso());
+    note.updatedAt = isoValue(note.updatedAt, note.createdAt);
+    note.localDate = /^\d{4}-\d{2}-\d{2}$/.test(note.localDate) ? note.localDate : localDate(note.createdAt);
+    note.locked = Boolean(note.locked);
+    note.trashedAt = markerValue(note.trashedAt, note.updatedAt);
+    note.deletedAt = markerValue(note.deletedAt, note.updatedAt);
+    return true;
+  }
+
+  function normalizeGroup(group) {
+    if (!isPlainObject(group) || !isSafeId(group.id)) return false;
+    group.title = textValue(group.title);
+    group.x = finiteNumber(group.x, 0);
+    group.y = finiteNumber(group.y, 0);
+    group.w = finiteNumber(group.w, 320);
+    group.h = finiteNumber(group.h, 220);
+    group.createdAt = isoValue(group.createdAt, nowIso());
+    group.updatedAt = isoValue(group.updatedAt, group.createdAt);
+    group.color = isSafeColor(group.color) ? group.color : GROUP_COLORS[0];
+    group.locked = Boolean(group.locked);
+    group.trashedAt = markerValue(group.trashedAt, group.updatedAt);
+    group.deletedAt = markerValue(group.deletedAt, group.updatedAt);
+    return true;
+  }
+
+  function normalizeConnection(connection) {
+    if (!isPlainObject(connection) || !isSafeId(connection.id)) return false;
+    connection.from = normalizeEndpoint(connection.from);
+    connection.to = normalizeEndpoint(connection.to);
+    connection.kind = CONNECTION_KINDS.some((kind) => kind.id === connection.kind) ? connection.kind : "related";
+    connection.style = CONNECTION_STYLES.includes(connection.style) ? connection.style : "solid";
+    connection.createdAt = isoValue(connection.createdAt, nowIso());
+    connection.updatedAt = isoValue(connection.updatedAt, connection.createdAt);
+    connection.trashedAt = markerValue(connection.trashedAt, connection.updatedAt);
+    connection.deletedAt = markerValue(connection.deletedAt, connection.updatedAt);
+    return true;
+  }
+
+  // Posts written on the phone and waiting for (or already sent to) the inbox in the data repository.
+  function createEmptyCapture() {
+    return { projectId: "", groupId: "", draft: "", posts: [], groups: [], lastSentAt: "", lastError: "", catalog: null };
+  }
+
+  function normalizeCapture(capture) {
+    if (!isPlainObject(capture)) return createEmptyCapture();
     return {
-      type: endpoint.type === "group" ? "group" : "note",
-      id: endpoint.id || ""
+      projectId: isSafeId(capture.projectId) ? capture.projectId : "",
+      groupId: isSafeId(capture.groupId) ? capture.groupId : "",
+      draft: textValue(capture.draft),
+      posts: (Array.isArray(capture.posts) ? capture.posts : []).filter(normalizePost),
+      groups: (Array.isArray(capture.groups) ? capture.groups : []).filter(normalizeCaptureGroup),
+      lastSentAt: isoValue(capture.lastSentAt, ""),
+      lastError: textValue(capture.lastError),
+      catalog: normalizeCatalog(capture.catalog)
     };
+  }
+
+  // The project and group list the PC shows to the phone by QR. Once received, it replaces the phone's own old data as the source of choices.
+  function normalizeCatalog(catalog) {
+    if (!isPlainObject(catalog) || !Array.isArray(catalog.projects)) return null;
+    const projects = catalog.projects
+      .filter((project) => isPlainObject(project) && isSafeId(project.id))
+      .map((project) => ({
+        id: project.id,
+        name: textValue(project.name) || DEFAULT_PROJECT_NAME,
+        groups: (Array.isArray(project.groups) ? project.groups : [])
+          .filter((group) => isPlainObject(group) && isSafeId(group.id))
+          .map((group) => ({ id: group.id, title: textValue(group.title) || "グループ", color: isSafeColor(group.color) ? group.color : "" }))
+      }));
+    if (!projects.length) return null;
+    return { receivedAt: isoValue(catalog.receivedAt, nowIso()), projects };
+  }
+
+  // What the PC has already taken from the inbox, so a deleted card or project is never imported twice.
+  function normalizeInboxLedger(ledger) {
+    const source = isPlainObject(ledger) ? ledger : {};
+    const pickIds = (map, valueCheck) =>
+      Object.fromEntries(Object.entries(isPlainObject(map) ? map : {}).filter(([key, value]) => isSafeId(key) && valueCheck(value)));
+    return {
+      importedPosts: pickIds(source.importedPosts, (value) => typeof value === "string"),
+      groupMap: pickIds(source.groupMap, isSafeId),
+      lastCheckedAt: isoValue(source.lastCheckedAt, ""),
+      lastMonth: /^\d{4}-\d{2}$/.test(source.lastMonth) ? source.lastMonth : "",
+      lastError: textValue(source.lastError),
+      lastReceivedCount: Number.isFinite(source.lastReceivedCount) ? source.lastReceivedCount : 0
+    };
+  }
+
+  function normalizePost(post) {
+    if (!isPlainObject(post) || !isSafeId(post.id) || !isSafeId(post.projectId)) return false;
+    post.projectName = textValue(post.projectName) || DEFAULT_PROJECT_NAME;
+    post.groupId = isSafeId(post.groupId) ? post.groupId : "";
+    post.groupTitle = textValue(post.groupTitle);
+    post.body = textValue(post.body);
+    post.createdAt = isoValue(post.createdAt, nowIso());
+    post.localDate = /^\d{4}-\d{2}-\d{2}$/.test(post.localDate) ? post.localDate : localDate(post.createdAt);
+    post.deviceId = textValue(post.deviceId);
+    post.sentAt = isoValue(post.sentAt, "");
+    return true;
+  }
+
+  function normalizeCaptureGroup(group) {
+    if (!isPlainObject(group) || !isSafeId(group.id) || !isSafeId(group.projectId)) return false;
+    group.title = textValue(group.title).trim();
+    if (!group.title) return false;
+    group.createdAt = isoValue(group.createdAt, nowIso());
+    group.sentAt = isoValue(group.sentAt, "");
+    return true;
+  }
+
+  function normalizeEndpoint(endpoint) {
+    return {
+      type: endpoint?.type === "group" ? "group" : "note",
+      id: isSafeId(endpoint?.id) ? endpoint.id : ""
+    };
+  }
+
+  function isPlainObject(value) {
+    return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+  }
+
+  function isSafeId(value) {
+    // Every id this app has generated is "<prefix>_<letters and digits>".
+    return typeof value === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(value);
+  }
+
+  function isSafeColor(value) {
+    return typeof value === "string" && /^#[0-9a-fA-F]{3,8}$/.test(value);
+  }
+
+  function textValue(value) {
+    if (typeof value === "string") return value;
+    return value === null || value === undefined ? "" : String(value);
+  }
+
+  function finiteNumber(value, fallback) {
+    return Number.isFinite(value) ? value : fallback;
+  }
+
+  function isoValue(value, fallback) {
+    return typeof value === "string" && value && !Number.isNaN(Date.parse(value)) ? value : fallback;
+  }
+
+  function markerValue(value, fallback) {
+    // Keep anything truthy as a marker so a trashed or deleted entity never comes back to life.
+    if (!value) return "";
+    return isoValue(value, fallback);
+  }
+
+  function pickFields(source, fields) {
+    return Object.fromEntries(fields.filter((field) => Object.prototype.hasOwnProperty.call(source, field)).map((field) => [field, source[field]]));
   }
 
   function createProjectItem(options = {}) {
@@ -223,11 +406,11 @@
     const data = options.data || {};
     return {
       id: options.id || uid("project"),
-      name: options.name || data.project?.name || DEFAULT_PROJECT_NAME,
-      createdAt: options.createdAt || data.project?.createdAt || data.createdAt || timestamp,
-      updatedAt: options.updatedAt || data.updatedAt || timestamp,
-      lastOpenedAt: options.lastOpenedAt || timestamp,
-      archivedAt: options.archivedAt || "",
+      name: textValue(options.name || data.project?.name) || DEFAULT_PROJECT_NAME,
+      createdAt: isoValue(options.createdAt || data.project?.createdAt || data.createdAt, timestamp),
+      updatedAt: isoValue(options.updatedAt || data.updatedAt, timestamp),
+      lastOpenedAt: isoValue(options.lastOpenedAt, timestamp),
+      archivedAt: markerValue(options.archivedAt, timestamp),
       noteCount: Number.isFinite(options.noteCount) ? options.noteCount : (Array.isArray(data.notes) ? data.notes.filter(isVisibleEntity).length : 0),
       groupCount: Number.isFinite(options.groupCount) ? options.groupCount : (Array.isArray(data.groups) ? data.groups.filter(isVisibleEntity).length : 0),
       connectionCount: Number.isFinite(options.connectionCount)
@@ -240,8 +423,9 @@
     const timestamp = nowIso();
     const items = Array.isArray(projects.items) ? projects.items : [];
     const normalized = items
+      .filter(isPlainObject)
       .map((item) => createProjectItem(item))
-      .filter((item, index, all) => item.id && all.findIndex((candidate) => candidate.id === item.id) === index);
+      .filter((item, index, all) => isSafeId(item.id) && all.findIndex((candidate) => candidate.id === item.id) === index);
     if (!normalized.length) normalized.push(createProjectItem({ id: DEFAULT_PROJECT_ID, name: DEFAULT_PROJECT_NAME }));
     const activeProjectId = normalized.some((item) => item.id === projects.activeProjectId) ? projects.activeProjectId : normalized[0].id;
     return {
@@ -293,6 +477,7 @@
   }
 
   function mergeSettings(settings) {
+    // Spread the stored settings first so the nested defaults below are filled in rather than replaced.
     return {
       role: "",
       deviceId: "",
@@ -301,6 +486,8 @@
       movementLocked: false,
       panelsCollapsed: false,
       mobileListMode: false,
+      phoneView: "capture",
+      ...settings,
       drive: {
         clientId: "",
         folderName: DRIVE_FOLDER,
@@ -317,7 +504,27 @@
         token: "",
         ...(settings.github || {})
       },
-      ...settings
+      inbox: {
+        owner: "",
+        repo: "",
+        branch: "",
+        token: "",
+        ...(settings.inbox || {})
+      }
+    };
+  }
+
+  // Where the phone's cards go. Empty inbox fields fall back to the GitHub settings the phone already has,
+  // so the existing repository and token are reused with a data-only branch that never touches the published site.
+  function inboxConfig() {
+    const inbox = app.settings.inbox;
+    const github = app.settings.github;
+    return {
+      owner: inbox.owner || github.owner || "",
+      repo: inbox.repo || github.repo || "",
+      branch: inbox.branch || INBOX_BRANCH,
+      token: inbox.token || github.token || "",
+      custom: Boolean(inbox.owner || inbox.repo || inbox.branch || inbox.token)
     };
   }
 
@@ -416,11 +623,11 @@
         <div class="mode-grid">
           <button class="mode-card" data-mode="phone">
             <strong>スマホで始める</strong>
-            <span>Driveを本体にして、GitHub同期とPC取り込みを扱います。</span>
+            <span>カードを書いてグループを選ぶだけ。書いたカードは自動でPCへ送ります。</span>
           </button>
           <button class="mode-card" data-mode="pc">
             <strong>PCで使う</strong>
-            <span>GitHubの暗号化データを読み、編集差分はQRでスマホへ渡します。</span>
+            <span>スマホから届いたカードを受け取って、並べたり線を引いたりして整理します。</span>
           </button>
         </div>
         <div id="setup-detail"></div>
@@ -431,139 +638,125 @@
     });
   }
 
+  function renderStorageError(error) {
+    document.documentElement.classList.add("setup-mode");
+    document.documentElement.classList.remove("workspace-mode");
+    els.workspace.classList.add("hidden");
+    els.setup.classList.remove("hidden");
+    els.setup.innerHTML = `
+      <div class="setup-wrap">
+        <div class="setup-title">
+          <h1>Today Fragments</h1>
+        </div>
+        <section class="setup-card">
+          <h2>端末内のデータを読み込めませんでした</h2>
+          <p class="status-line">保存されているメモを守るため、この画面では何も保存しません。ページを再読み込みしてください。</p>
+          <p class="status-line">何度か試しても直らない場合は、ブラウザを一度閉じてから開き直してください。</p>
+          <p class="status-line">詳細: ${escapeHtml(error?.name || "")} ${escapeHtml(error?.message || "")}</p>
+          <div class="button-row">
+            <button id="storage-reload" class="primary-button" type="button">再読み込み</button>
+          </div>
+        </section>
+      </div>
+    `;
+    $("#storage-reload").addEventListener("click", () => location.reload());
+  }
+
   function renderSetupDetail(mode) {
     const detail = $("#setup-detail", els.setup);
-    const g = app.settings.github;
-    const d = app.settings.drive;
     if (mode === "phone") {
       detail.innerHTML = `
         <section class="setup-card">
           <h2>スマホ設定</h2>
+          <p class="status-line">送り先は、データ用に作ったGitHubの公開リポジトリです。カードは同期パスワードで暗号化して送ります。</p>
           <div class="form-grid">
-            <div class="form-row">
-              <label>Google OAuthクライアントID</label>
-              <input id="setup-drive-client" value="${escapeAttr(d.clientId)}" placeholder="xxxxx.apps.googleusercontent.com" />
-            </div>
-            <div class="form-row">
-              <label>同期パスワード</label>
-              <input id="setup-password" type="password" value="${escapeAttr(app.settings.syncPassword)}" autocomplete="current-password" />
-            </div>
-            <div class="field-split">
-              <div class="form-row">
-                <label>GitHubユーザー/組織</label>
-                <input id="setup-gh-owner" value="${escapeAttr(g.owner)}" placeholder="owner" />
-              </div>
-              <div class="form-row">
-                <label>リポジトリ</label>
-                <input id="setup-gh-repo" value="${escapeAttr(g.repo)}" placeholder="repo" />
-              </div>
-            </div>
-            <div class="field-split">
-              <div class="form-row">
-                <label>ブランチ</label>
-                <input id="setup-gh-branch" value="${escapeAttr(g.branch)}" placeholder="main" />
-              </div>
-              <div class="form-row">
-                <label>同期ファイル</label>
-                <input id="setup-gh-path" value="${escapeAttr(g.path)}" />
-              </div>
-            </div>
-            <div class="form-row">
-              <label>GitHubトークン</label>
-              <input id="setup-gh-token" type="password" value="${escapeAttr(g.token)}" autocomplete="off" />
-            </div>
+            ${inboxFieldsHtml("setup")}
             <div class="button-row">
               <button id="setup-phone-start" class="primary-button" type="button">開始</button>
-              <button id="setup-drive-connect" class="soft-button" type="button">Drive接続</button>
+              <button id="setup-inbox-test" class="soft-button" type="button">接続を確認</button>
             </div>
             <p id="setup-status" class="status-line"></p>
           </div>
         </section>
       `;
+      bindInboxFields("setup");
       $("#setup-phone-start").addEventListener("click", async () => {
-        readSetupFields("phone");
+        readInboxFields("setup");
         app.settings.role = "phone";
+        app.settings.phoneView = "capture";
         await persistState();
-        startWorkspace();
+        startApp();
       });
-      $("#setup-drive-connect").addEventListener("click", async () => {
-        readSetupFields("phone");
-        await persistState();
-        await connectGoogleDrive($("#setup-status"));
-      });
+      $("#setup-inbox-test").addEventListener("click", () => runInboxTest("setup", $("#setup-status")));
       return;
     }
 
     detail.innerHTML = `
       <section class="setup-card">
         <h2>PC設定</h2>
+        <p class="status-line">スマホから届くカードを受け取って、PCで並べたり線を引いたりします。受け取り先は、スマホと同じデータ用リポジトリです。</p>
         <div class="form-grid">
-          <div class="field-split">
-            <div class="form-row">
-              <label>GitHubユーザー/組織</label>
-              <input id="setup-gh-owner" value="${escapeAttr(g.owner)}" placeholder="owner" />
-            </div>
-            <div class="form-row">
-              <label>リポジトリ</label>
-              <input id="setup-gh-repo" value="${escapeAttr(g.repo)}" placeholder="repo" />
-            </div>
-          </div>
-          <div class="field-split">
-            <div class="form-row">
-              <label>ブランチ</label>
-              <input id="setup-gh-branch" value="${escapeAttr(g.branch)}" placeholder="main" />
-            </div>
-            <div class="form-row">
-              <label>同期ファイル</label>
-              <input id="setup-gh-path" value="${escapeAttr(g.path)}" />
-            </div>
-          </div>
-          <div class="form-row">
-            <label>同期パスワード</label>
-            <input id="setup-password" type="password" value="${escapeAttr(app.settings.syncPassword)}" autocomplete="current-password" />
-          </div>
+          ${inboxFieldsHtml("setup", { token: false, label: "受け取り先" })}
           <label class="pill"><input id="setup-save-password" type="checkbox" ${app.settings.savePassword ? "checked" : ""} /> パスワードを保存</label>
           <div class="button-row">
-            <button id="setup-pc-start" class="primary-button" type="button">読み込んで開始</button>
+            <button id="setup-pc-start" class="primary-button" type="button">開始</button>
+            <button id="setup-pc-restore" class="soft-button" type="button">バックアップから復元して開始</button>
           </div>
           <p id="setup-status" class="status-line"></p>
+          <p class="status-line">スマホに今までのデータがある場合は、開始したあと設定の「引っ越し」から取り込めます。</p>
         </div>
       </section>
     `;
+    bindInboxFields("setup");
+    const readPcSetup = () => {
+      readInboxFields("setup");
+      // With "save password" off the password stays in memory for this session only; persistState leaves it out.
+      app.settings.savePassword = $("#setup-save-password")?.checked ?? true;
+    };
     $("#setup-pc-start").addEventListener("click", async () => {
-      readSetupFields("pc");
+      readPcSetup();
+      app.settings.role = "pc";
+      await persistState();
+      startApp();
+    });
+    $("#setup-pc-restore").addEventListener("click", async () => {
+      readPcSetup();
       const status = $("#setup-status");
+      const file = await pickBackupFile();
+      if (!file) return;
       try {
-        status.textContent = "GitHubから読み込み中";
-        await loadGithubSnapshot();
+        status.textContent = "復元中";
+        await restoreBackup(file);
         app.settings.role = "pc";
-        if (!app.settings.savePassword) app.settings.syncPassword = "";
         await persistState();
-        startWorkspace();
+        startApp();
+        toast("バックアップから復元しました");
       } catch (error) {
-        status.textContent = error.message || "読み込みに失敗しました";
+        status.textContent = error.message || "復元に失敗しました";
       }
     });
   }
 
-  function readSetupFields(role) {
-    const github = app.settings.github;
-    github.owner = $("#setup-gh-owner")?.value.trim() || "";
-    github.repo = $("#setup-gh-repo")?.value.trim() || "";
-    github.branch = $("#setup-gh-branch")?.value.trim() || "main";
-    github.path = $("#setup-gh-path")?.value.trim() || GITHUB_DEFAULT_PATH;
-    if (role === "phone") {
-      github.token = $("#setup-gh-token")?.value.trim() || "";
-      app.settings.drive.clientId = $("#setup-drive-client")?.value.trim() || "";
+  function startApp() {
+    if (app.settings.role === "phone" && app.settings.phoneView !== "canvas") {
+      showCapture();
+      return;
     }
-    app.settings.savePassword = $("#setup-save-password")?.checked ?? true;
-    app.settings.syncPassword = $("#setup-password")?.value || "";
+    startWorkspace();
+    if (app.settings.role === "pc") initPcServices();
+  }
+
+  async function initPcServices() {
+    await loadBackupHandle();
+    updateStatus();
+    window.setTimeout(() => receiveInbox(), 1500);
   }
 
   function startWorkspace() {
-    document.documentElement.classList.remove("setup-mode");
+    document.documentElement.classList.remove("setup-mode", "capture-mode");
     document.documentElement.classList.add("workspace-mode");
     els.setup.classList.add("hidden");
+    els.capture.classList.add("hidden");
     els.workspace.classList.remove("hidden");
     document.body.classList.toggle("role-phone", app.settings.role === "phone");
     document.body.classList.toggle("role-pc", app.settings.role === "pc");
@@ -583,6 +776,402 @@
     updateUndoRedoButtons();
     renderAll();
     updateStatus();
+  }
+
+  // Phone posting screen: pick a project and group, write, and the card is sent to the data repository automatically.
+  // It deliberately avoids the canvas, WebGL and particles so it stays light on phones.
+  function showCapture() {
+    document.documentElement.classList.remove("setup-mode", "workspace-mode");
+    document.documentElement.classList.add("capture-mode");
+    els.setup.classList.add("hidden");
+    els.workspace.classList.add("hidden");
+    els.capture.classList.remove("hidden");
+    renderCapture();
+    if (hasUnsentCapture()) scheduleInboxSend(1000);
+  }
+
+  function isCaptureVisible() {
+    return Boolean(els.capture && !els.capture.classList.contains("hidden"));
+  }
+
+  function renderCapture() {
+    const project = captureProject();
+    els.capture.innerHTML = `
+      <div class="capture-wrap">
+        <header class="capture-head">
+          <div class="capture-brand"><span class="brand-mark"></span><strong>Today Fragments</strong></div>
+          <button id="capture-settings" class="icon-button" type="button" title="送り先の設定" aria-label="送り先の設定"><span>⚙</span></button>
+        </header>
+        <div id="capture-status" class="capture-status" aria-live="polite"></div>
+        <form id="capture-form" class="capture-form" autocomplete="off">
+          <label class="capture-label" for="capture-project">案件</label>
+          <select id="capture-project">${captureProjectOptions(project.id)}</select>
+          <div class="capture-label-row">
+            <span class="capture-label">グループ${
+              app.capture.catalog ? `（PCの一覧 ${escapeHtml(formatDateTime(app.capture.catalog.receivedAt))}）` : ""
+            }</span>
+            <button id="capture-read-catalog" class="mini-button" type="button">PCの一覧を読み取る</button>
+          </div>
+          <div id="capture-groups" class="capture-chips"></div>
+          <div id="capture-new-group" class="capture-new-group hidden">
+            <input id="capture-new-group-name" maxlength="40" placeholder="新しいグループ名" />
+            <button id="capture-new-group-add" class="soft-button" type="button">追加</button>
+          </div>
+          <textarea id="capture-body" rows="5" placeholder="今日あったこと"></textarea>
+          <button class="primary-button capture-send" type="submit">送る</button>
+        </form>
+        <section class="capture-posts">
+          <h2>送ったカード</h2>
+          <div id="capture-posts" class="capture-post-list"></div>
+        </section>
+        <button id="capture-open-canvas" class="soft-button" type="button">これまでの画面を開く（引っ越しが終わるまで）</button>
+      </div>
+    `;
+    const body = $("#capture-body");
+    body.value = app.capture.draft || "";
+    body.addEventListener("input", () => {
+      // Keep the draft so a sleep or a killed Safari tab does not lose what was being typed.
+      app.capture.draft = body.value;
+      schedulePersist(600);
+    });
+    body.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) submitCapturePost(event);
+    });
+    $("#capture-form").addEventListener("submit", submitCapturePost);
+    $("#capture-project").addEventListener("change", (event) => {
+      app.capture.projectId = event.target.value;
+      app.capture.groupId = "";
+      schedulePersist();
+      renderCaptureGroups();
+    });
+    $("#capture-new-group-add").addEventListener("click", addCaptureGroup);
+    $("#capture-new-group-name").addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        addCaptureGroup();
+      }
+    });
+    $("#capture-settings").addEventListener("click", openCaptureSettings);
+    $("#capture-read-catalog").addEventListener("click", openImportModal);
+    $("#capture-open-canvas").addEventListener("click", openCanvasFromCapture);
+    renderCaptureGroups();
+    renderCaptureStatus();
+    renderCapturePosts();
+  }
+
+  // Choices come from the PC's list once it has been read by QR; until then, from the phone's own older data.
+  function captureProjects() {
+    if (app.capture.catalog) return app.capture.catalog.projects.map((project) => ({ id: project.id, name: project.name }));
+    return app.projects.items
+      .filter((project) => !project.archivedAt)
+      .sort((a, b) => (b.lastOpenedAt || "").localeCompare(a.lastOpenedAt || ""))
+      .map((project) => ({ id: project.id, name: project.name || DEFAULT_PROJECT_NAME }));
+  }
+
+  function captureProject() {
+    const items = captureProjects();
+    const fallback = app.projects.items[0];
+    const project =
+      items.find((item) => item.id === app.capture.projectId) ||
+      items.find((item) => item.id === app.activeProjectId) ||
+      items[0] || { id: fallback.id, name: fallback.name || DEFAULT_PROJECT_NAME };
+    app.capture.projectId = project.id;
+    return project;
+  }
+
+  function captureProjectOptions(selectedId) {
+    return captureProjects()
+      .map((project) => `<option value="${escapeAttr(project.id)}" ${project.id === selectedId ? "selected" : ""}>${escapeHtml(project.name)}</option>`)
+      .join("");
+  }
+
+  function captureGroupsFor(projectId) {
+    let base;
+    if (app.capture.catalog) {
+      base = app.capture.catalog.projects.find((project) => project.id === projectId)?.groups || [];
+    } else {
+      const data = projectId === app.activeProjectId ? app.data : app.projectStore[projectId]?.data;
+      base = (data?.groups || []).filter(isVisibleEntity).map((group) => ({ id: group.id, title: group.title || "グループ", color: group.color }));
+    }
+    // Groups made on the phone stay listed until the PC's list shows them (by id, or by the same name).
+    const added = app.capture.groups
+      .filter((group) => group.projectId === projectId && !base.some((item) => item.id === group.id || item.title === group.title))
+      .map((group) => ({ id: group.id, title: group.title, color: "" }));
+    return [...base, ...added];
+  }
+
+  function applyCatalog(catalog) {
+    const normalized = normalizeCatalog({ ...catalog, receivedAt: nowIso() });
+    if (!normalized) throw new Error("PCの一覧に案件がありません");
+    app.capture.catalog = normalized;
+    if (!normalized.projects.some((project) => project.id === app.capture.projectId)) {
+      app.capture.projectId = normalized.projects[0].id;
+      app.capture.groupId = "";
+    }
+    return { projects: normalized.projects.length, groups: normalized.projects.reduce((total, project) => total + project.groups.length, 0) };
+  }
+
+  function renderCaptureGroups() {
+    const container = $("#capture-groups");
+    if (!container) return;
+    const groups = captureGroupsFor(app.capture.projectId);
+    if (app.capture.groupId && !groups.some((group) => group.id === app.capture.groupId)) {
+      // A phone-made group the PC now lists under its own id: keep the same choice selected.
+      const own = app.capture.groups.find((group) => group.id === app.capture.groupId);
+      app.capture.groupId = (own && groups.find((group) => group.title === own.title)?.id) || "";
+    }
+    const chip = (id, label, color = "") =>
+      `<button class="capture-chip ${app.capture.groupId === id ? "selected" : ""}" type="button" data-group="${escapeAttr(id)}"${
+        isSafeColor(color) ? ` style="--chip-color:${color}"` : ""
+      }>${escapeHtml(label)}</button>`;
+    container.innerHTML = [
+      chip("", "未分類"),
+      ...groups.map((group) => chip(group.id, group.title, group.color)),
+      '<button class="capture-chip capture-chip-add" type="button" data-add-group>＋ 新しいグループ</button>'
+    ].join("");
+    $$("[data-group]", container).forEach((button) => {
+      button.addEventListener("click", () => {
+        app.capture.groupId = button.dataset.group;
+        schedulePersist();
+        renderCaptureGroups();
+      });
+    });
+    $("[data-add-group]", container).addEventListener("click", () => {
+      $("#capture-new-group").classList.remove("hidden");
+      $("#capture-new-group-name").focus();
+    });
+  }
+
+  function addCaptureGroup() {
+    const input = $("#capture-new-group-name");
+    const title = input.value.trim().slice(0, 40);
+    if (!title) return;
+    const projectId = app.capture.projectId;
+    const existing = captureGroupsFor(projectId).find((group) => group.title === title);
+    if (existing) {
+      app.capture.groupId = existing.id;
+    } else {
+      const group = { id: uid("group"), projectId, title, createdAt: nowIso(), sentAt: "" };
+      app.capture.groups.push(group);
+      app.capture.groupId = group.id;
+      scheduleInboxSend();
+    }
+    input.value = "";
+    $("#capture-new-group").classList.add("hidden");
+    schedulePersist();
+    renderCaptureGroups();
+  }
+
+  function submitCapturePost(event) {
+    event.preventDefault();
+    const bodyEl = $("#capture-body");
+    const body = bodyEl.value.trim();
+    if (!body) return;
+    const project = captureProject();
+    const group = captureGroupsFor(project.id).find((item) => item.id === app.capture.groupId) || null;
+    const timestamp = nowIso();
+    app.capture.posts.unshift({
+      id: uid("note"),
+      projectId: project.id,
+      projectName: project.name || DEFAULT_PROJECT_NAME,
+      groupId: group?.id || "",
+      groupTitle: group?.title || "",
+      body,
+      createdAt: timestamp,
+      localDate: localDate(timestamp),
+      deviceId: app.settings.deviceId,
+      sentAt: ""
+    });
+    app.capture.draft = "";
+    bodyEl.value = "";
+    schedulePersist();
+    renderCaptureStatus();
+    renderCapturePosts();
+    toast("追加しました");
+    scheduleInboxSend();
+  }
+
+  function renderCaptureStatus() {
+    const el = $("#capture-status");
+    if (!el) return;
+    const unsent = app.capture.posts.filter((post) => !post.sentAt).length;
+    const problem = inboxSettingsProblem();
+    let text;
+    let warning = false;
+    let action = "";
+    if (app.inboxSend.sending) {
+      text = "送信中…";
+    } else if (problem) {
+      text = `${problem}。設定から入力してください`;
+      warning = true;
+      action = '<button id="capture-status-settings" class="mini-button" type="button">設定を開く</button>';
+    } else if (unsent) {
+      text = `未送信 ${unsent}件${app.capture.lastError ? `（${app.capture.lastError}）` : ""}`;
+      warning = Boolean(app.capture.lastError);
+      action = '<button id="capture-send-now" class="mini-button" type="button">今すぐ送る</button>';
+    } else if (app.capture.lastSentAt) {
+      text = `すべて送信済み（最終 ${formatDateTime(app.capture.lastSentAt)}）`;
+    } else {
+      text = "まだ送ったカードはありません";
+    }
+    if (app.storageWriteFailed) {
+      text = `端末内に保存できていません。${text}`;
+      warning = true;
+    }
+    el.classList.toggle("warning", warning);
+    el.innerHTML = `<span>${escapeHtml(text)}</span>${action}`;
+    $("#capture-status-settings")?.addEventListener("click", openCaptureSettings);
+    $("#capture-send-now")?.addEventListener("click", () => sendInbox());
+  }
+
+  function renderCapturePosts() {
+    const el = $("#capture-posts");
+    if (!el) return;
+    const posts = app.capture.posts.slice(0, 30);
+    el.innerHTML = posts.length
+      ? posts
+          .map(
+            (post) => `
+              <article class="capture-post">
+                <p>${escapeHtml(compactBody(post.body, 160))}</p>
+                <small>${escapeHtml(formatDateTime(post.createdAt))} / ${escapeHtml(post.projectName)} / ${escapeHtml(post.groupTitle || "未分類")}</small>
+                <span class="capture-badge ${post.sentAt ? "" : "unsent"}">${post.sentAt ? "送信済み" : "未送信"}</span>
+              </article>
+            `
+          )
+          .join("")
+      : '<p class="status-line">まだありません。</p>';
+  }
+
+  function openCaptureSettings() {
+    openModal(`
+      <div class="modal-head">
+        <h2>送り先の設定</h2>
+        <button class="close-button" data-close type="button">×</button>
+      </div>
+      <div class="form-grid">
+        <p class="status-line">カードは同期パスワードで暗号化して、GitHubのデータ用ブランチへ送ります。サイトの公開には影響しません。</p>
+        ${inboxFieldsHtml("capture-settings")}
+        <div class="button-row">
+          <button id="capture-settings-test" class="primary-button" type="button">接続を確認</button>
+          <button id="capture-settings-save" class="soft-button" type="button">保存</button>
+        </div>
+        <p id="capture-settings-status" class="status-line"></p>
+      </div>
+    `);
+    bindInboxFields("capture-settings");
+    $("#capture-settings-save").addEventListener("click", async () => {
+      readInboxFields("capture-settings");
+      app.capture.lastError = "";
+      await persistState();
+      closeModal();
+      renderCaptureStatus();
+      toast("保存しました");
+      if (hasUnsentCapture()) sendInbox();
+    });
+    $("#capture-settings-test").addEventListener("click", () => runInboxTest("capture-settings", $("#capture-settings-status")));
+  }
+
+  async function openCanvasFromCapture() {
+    app.settings.phoneView = "canvas";
+    await persistState();
+    startWorkspace();
+  }
+
+  async function returnToCapture() {
+    app.settings.phoneView = "capture";
+    finishActiveEntityDrag();
+    resetViewportInteraction();
+    await persistState();
+    closeModal();
+    showCapture();
+  }
+
+  // Shows a one-line summary when the target can be taken from the existing GitHub settings; the fields stay behind a toggle.
+  // The PC only reads the public files, so with token:false no token field is rendered.
+  function inboxFieldsHtml(prefix, options = {}) {
+    const config = inboxConfig();
+    const withToken = options.token !== false;
+    const ready = Boolean(config.owner && config.repo && (!withToken || config.token));
+    const label = options.label || "送り先";
+    const fields = `
+      <div class="field-split">
+        <div class="form-row">
+          <label>GitHubユーザー/組織</label>
+          <input id="${prefix}-inbox-owner" value="${escapeAttr(config.owner)}" placeholder="owner" autocapitalize="off" spellcheck="false" />
+        </div>
+        <div class="form-row">
+          <label>リポジトリ</label>
+          <input id="${prefix}-inbox-repo" value="${escapeAttr(config.repo)}" placeholder="mypage" autocapitalize="off" spellcheck="false" />
+        </div>
+      </div>
+      <div class="${withToken ? "field-split" : "form-row"}">
+        <div class="form-row">
+          <label>データ用ブランチ</label>
+          <input id="${prefix}-inbox-branch" value="${escapeAttr(config.branch)}" placeholder="${INBOX_BRANCH}" autocapitalize="off" spellcheck="false" />
+        </div>
+        ${
+          withToken
+            ? `<div class="form-row">
+          <label>トークン</label>
+          <input id="${prefix}-inbox-token" type="password" value="${escapeAttr(config.token)}" autocomplete="off" />
+        </div>`
+            : ""
+        }
+      </div>
+    `;
+    return `
+      <div class="form-row">
+        <label>同期パスワード</label>
+        <input id="${prefix}-password" type="password" value="${escapeAttr(app.settings.syncPassword)}" autocomplete="current-password" />
+      </div>
+      ${
+        ready
+          ? `<div class="inbox-summary">
+        <strong>${escapeHtml(label)}: ${escapeHtml(config.owner)} / ${escapeHtml(config.repo)}</strong>
+        <span>データ用ブランチ「${escapeHtml(config.branch)}」。${config.custom ? "個別に設定した送り先です。" : "今までのGitHub設定をそのまま使います。"}</span>
+        <button id="${prefix}-inbox-toggle" class="mini-button" type="button">別の場所にする</button>
+      </div>`
+          : ""
+      }
+      <div id="${prefix}-inbox-fields" class="form-grid ${ready ? "hidden" : ""}">${fields}</div>
+    `;
+  }
+
+  function bindInboxFields(prefix) {
+    $(`#${prefix}-inbox-toggle`)?.addEventListener("click", (event) => {
+      $(`#${prefix}-inbox-fields`).classList.remove("hidden");
+      event.currentTarget.closest(".inbox-summary")?.classList.add("hidden");
+    });
+  }
+
+  function readInboxFields(prefix) {
+    const inbox = app.settings.inbox;
+    const github = app.settings.github;
+    // Hidden fields leave the stored values alone; a value equal to the GitHub setting is stored as "inherit".
+    if (!$(`#${prefix}-inbox-fields`)?.classList.contains("hidden")) {
+      const read = (name) => $(`#${prefix}-inbox-${name}`)?.value.trim();
+      const owner = read("owner");
+      const repo = read("repo");
+      const branch = read("branch");
+      const token = read("token");
+      if (owner !== undefined) inbox.owner = owner === github.owner ? "" : owner;
+      if (repo !== undefined) inbox.repo = repo === github.repo ? "" : repo;
+      if (branch !== undefined) inbox.branch = branch === INBOX_BRANCH ? "" : branch;
+      if (token !== undefined) inbox.token = token === github.token ? "" : token;
+    }
+    app.settings.syncPassword = $(`#${prefix}-password`)?.value || "";
+  }
+
+  async function runInboxTest(prefix, statusEl) {
+    readInboxFields(prefix);
+    statusEl.textContent = "確認中";
+    try {
+      statusEl.textContent = await testInboxConnection();
+      await persistState();
+    } catch (error) {
+      statusEl.textContent = error.message || "確認に失敗しました";
+    }
   }
 
   function bindWorkspaceEvents() {
@@ -605,6 +1194,7 @@
     els.projectSwitcher?.addEventListener("click", () => openProjectsModal(false));
     els.listModeToggle?.addEventListener("click", toggleMobileListMode);
     els.panelToggle.addEventListener("click", togglePanels);
+    els.syncStatus.addEventListener("click", onSyncStatusClick);
     els.undoAction.addEventListener("click", undo);
     els.redoAction.addEventListener("click", redo);
     els.resetView?.addEventListener("click", resetViewToContent);
@@ -626,6 +1216,7 @@
       resetViewportInteraction();
     });
     window.addEventListener("resize", () => {
+      if (isCaptureVisible()) return;
       applyPerformanceMode();
       applyMobileListMode();
       if (!useLightweightEffects()) initWebGl();
@@ -641,7 +1232,17 @@
         resetViewportInteraction();
         persistState();
         if (app.settings.role === "phone") saveDriveNow();
+        if (app.settings.role === "pc" && hasUnsavedBackup()) saveBackupNow();
       }
+      // Try again when the app comes back or before it goes to sleep; failures fall back to the retry timer.
+      if (app.settings.role === "phone" && hasUnsentCapture()) sendInbox();
+      if (app.settings.role === "pc" && document.visibilityState === "visible") {
+        const lastChecked = Date.parse(app.inboxLedger.lastCheckedAt || "") || 0;
+        if (Date.now() - lastChecked > 60000) receiveInbox();
+      }
+    });
+    window.addEventListener("online", () => {
+      if (app.settings.role === "phone" && hasUnsentCapture()) sendInbox();
     });
   }
 
@@ -730,10 +1331,10 @@
         const delay = -(seed % 4200);
         const rotate = ((seed % 9) - 4) * 0.26;
         return `
-          <article class="group-node ${selected ? "selected" : ""} ${cardCount ? "has-cards" : ""} ${group.locked ? "locked" : ""}" data-id="${group.id}" draggable="false" style="left:${group.x}px;top:${group.y}px;width:${group.w}px;height:${group.h}px;--group-color:${group.color};--group-radius:${radius};--float-delay:${delay}ms;--float-rotate:${rotate}deg">
+          <article class="group-node ${selected ? "selected" : ""} ${cardCount ? "has-cards" : ""} ${group.locked ? "locked" : ""}" data-id="${escapeAttr(group.id)}" draggable="false" style="left:${group.x}px;top:${group.y}px;width:${group.w}px;height:${group.h}px;--group-color:${group.color};--group-radius:${radius};--float-delay:${delay}ms;--float-rotate:${rotate}deg">
             <span class="group-label" draggable="false">${escapeHtml(group.title || "グループ")}</span>
             ${group.locked ? '<span class="lock-badge">LOCK</span>' : ""}
-            <span class="resize-handle" data-resize="${group.id}"></span>
+            <span class="resize-handle" data-resize="${escapeAttr(group.id)}"></span>
           </article>
         `;
       })
@@ -760,7 +1361,7 @@
         const delay = -(seed % 3600);
         const rotate = ((seed % 11) - 5) * 0.32;
         return `
-          <article class="note-card ${selected ? "selected" : ""} ${primaryGroup ? "grouped" : ""} ${note.locked ? "locked" : ""}" data-id="${note.id}" draggable="false" style="left:${note.x}px;top:${note.y}px;--card-color:${primaryGroup?.color || "#67e8f9"};--float-delay:${delay}ms;--float-rotate:${rotate}deg">
+          <article class="note-card ${selected ? "selected" : ""} ${primaryGroup ? "grouped" : ""} ${note.locked ? "locked" : ""}" data-id="${escapeAttr(note.id)}" draggable="false" style="left:${note.x}px;top:${note.y}px;--card-color:${primaryGroup?.color || "#67e8f9"};--float-delay:${delay}ms;--float-rotate:${rotate}deg">
             <h2 class="note-title" draggable="false">${escapeHtml(title || "無題")}</h2>
             ${note.locked ? '<span class="lock-badge">LOCK</span>' : ""}
           </article>
@@ -830,7 +1431,7 @@
           const points = connectionPoints(connection);
           if (!points) return "";
           return `
-            <g class="connection-node ${selected ? "selected" : ""}" data-id="${connection.id}" style="--connection-color:${kind.color}">
+            <g class="connection-node ${selected ? "selected" : ""}" data-id="${escapeAttr(connection.id)}" style="--connection-color:${kind.color}">
               <path class="connection-path connection-hit" d="${d}"></path>
               <path class="connection-path connection-main ${connection.style}" d="${d}"></path>
               <path class="connection-path connection-flow ${connection.style}" d="${d}"></path>
@@ -1101,7 +1702,7 @@
         </div>
         <div class="form-row">
           <label>接続</label>
-          <button id="connection-start" class="soft-button" type="button" data-type="${type}" data-id="${id}">接続開始</button>
+          <button id="connection-start" class="soft-button" type="button" data-type="${escapeAttr(type)}" data-id="${escapeAttr(id)}">接続開始</button>
         </div>
       </div>
     `;
@@ -1473,9 +2074,9 @@
     };
   }
 
-  function getContainingGroups(note) {
+  function getContainingGroups(note, groups = app.data.groups) {
     const center = noteCenter(note);
-    return app.data.groups
+    return groups
       .filter((group) => isVisibleEntity(group))
       .filter((group) => center.x >= group.x && center.x <= group.x + group.w && center.y >= group.y && center.y <= group.y + group.h)
       .sort((a, b) => a.w * a.h - b.w * b.h);
@@ -1672,8 +2273,12 @@
     });
   }
 
-  function updateNoteGroups(note) {
-    const groupIds = getContainingGroups(note).map((group) => group.id);
+  function updateAllNoteGroupsIn(data) {
+    data.notes.filter((note) => isVisibleEntity(note)).forEach((note) => updateNoteGroups(note, data.groups));
+  }
+
+  function updateNoteGroups(note, groups = app.data.groups) {
+    const groupIds = getContainingGroups(note, groups).map((group) => group.id);
     const before = (note.groupIds || []).join("|");
     const after = groupIds.join("|");
     note.groupIds = groupIds;
@@ -1956,9 +2561,12 @@
   }
 
   function onKeyDown(event) {
+    if (isCaptureVisible()) return;
     const key = event.key.toLowerCase();
     const modifier = event.ctrlKey || event.metaKey;
     if (!modifier) return;
+    // While typing, Ctrl+Z belongs to the text field; the canvas history must not be rewound underneath it.
+    if (event.target?.closest?.("input, textarea, select, [contenteditable='true']")) return;
     if (key === "0") {
       event.preventDefault();
       resetViewToContent();
@@ -2078,10 +2686,10 @@
     toast("視点を中央に戻しました");
   }
 
-  function contentBounds() {
+  function contentBounds(data = app.data) {
     const rects = [
-      ...app.data.notes.filter((note) => isVisibleEntity(note)).map(noteBounds),
-      ...app.data.groups.filter((group) => isVisibleEntity(group)).map((group) => ({
+      ...data.notes.filter((note) => isVisibleEntity(note)).map(noteBounds),
+      ...data.groups.filter((group) => isVisibleEntity(group)).map((group) => ({
         x: group.x,
         y: group.y,
         w: group.w,
@@ -2509,6 +3117,10 @@
   }
 
   function openSettingsModal() {
+    if (app.settings.role === "pc") {
+      openPcSettingsModal();
+      return;
+    }
     const g = app.settings.github;
     const d = app.settings.drive;
     const phoneFields =
@@ -2557,15 +3169,14 @@
         ${phoneFields}
         <div class="button-row">
           <button id="settings-save" class="primary-button" type="button">保存</button>
-          ${
-            app.settings.role === "phone"
-              ? '<button id="settings-drive-connect" class="soft-button" type="button">Drive接続</button><button id="settings-github-test" class="soft-button" type="button">GitHub確認</button>'
-              : '<button id="settings-github-load" class="soft-button" type="button">GitHubから再読込</button>'
-          }
+          <button id="settings-open-capture" class="soft-button" type="button">投稿画面に戻る</button>
+          <button id="settings-drive-connect" class="soft-button" type="button">Drive接続</button>
+          <button id="settings-github-test" class="soft-button" type="button">GitHub確認</button>
         </div>
         <p id="settings-status" class="status-line"></p>
       </div>
     `);
+    $("#settings-open-capture")?.addEventListener("click", returnToCapture);
     $("#settings-save").addEventListener("click", async () => {
       readSettingsModal();
       await persistState();
@@ -2587,19 +3198,233 @@
         status.textContent = error.message || "GitHub確認に失敗しました";
       }
     });
-    $("#settings-github-load")?.addEventListener("click", async () => {
-      readSettingsModal();
-      const status = $("#settings-status");
-      try {
-        status.textContent = "読み込み中";
-        await loadGithubSnapshot();
-        await persistState();
-        renderAll();
-        status.textContent = "読み込みました";
-      } catch (error) {
-        status.textContent = error.message || "読み込みに失敗しました";
-      }
+  }
+
+  function openPcSettingsModal() {
+    const g = app.settings.github;
+    openModal(`
+      <div class="modal-head">
+        <h2>設定</h2>
+        <button class="close-button" data-close type="button">×</button>
+      </div>
+      <div class="form-grid">
+        <section class="settings-section">
+          <h3>スマホからの受け取り</h3>
+          ${inboxFieldsHtml("pc-settings", { token: false, label: "受け取り先" })}
+          <label class="pill"><input id="pc-settings-save-password" type="checkbox" ${app.settings.savePassword ? "checked" : ""} /> パスワードを保存</label>
+          <p class="status-line">${escapeHtml(receiveSummary())}</p>
+          <div class="button-row">
+            <button id="pc-settings-check" class="primary-button" type="button">接続を確認</button>
+            <button id="pc-settings-receive" class="soft-button" type="button">今すぐ受け取る</button>
+            <button id="pc-settings-save" class="soft-button" type="button">保存</button>
+          </div>
+        </section>
+        <section class="settings-section">
+          <h3>バックアップ</h3>
+          <p class="status-line">${escapeHtml(backupSummary())}</p>
+          <div class="button-row">
+            ${
+              backupSupported()
+                ? '<button id="pc-backup-choose" class="soft-button" type="button">保存先を選ぶ</button><button id="pc-backup-now" class="soft-button" type="button">今すぐ保存</button>'
+                : ""
+            }
+            <button id="pc-backup-export" class="soft-button" type="button">ファイルに書き出す</button>
+            <button id="pc-backup-restore" class="soft-button" type="button">バックアップから復元</button>
+          </div>
+        </section>
+        <section class="settings-section">
+          <h3>引っ越し（スマホにあった今までのデータ）</h3>
+          <p class="status-line">先にスマホの「これまでの画面」で ⇧（GitHub同期）を押してから実行してください。スマホにあった全部の案件を、このPCのデータと合わせて取り込みます。PCのデータは消えず、何度実行しても大丈夫です。${
+            app.settings.migratedAt ? `\n前回の引っ越し: ${formatDateTime(app.settings.migratedAt)}` : ""
+          }</p>
+          ${
+            g.owner && g.repo
+              ? `<div class="inbox-summary">
+            <strong>旧同期先: ${escapeHtml(g.owner)} / ${escapeHtml(g.repo)}</strong>
+            <span>ブランチ「${escapeHtml(g.branch || "main")}」の ${escapeHtml(githubSyncBasePath())} フォルダ</span>
+            <button id="legacy-toggle" class="mini-button" type="button">別の場所にする</button>
+          </div>`
+              : ""
+          }
+          <div id="legacy-fields" class="form-grid ${g.owner && g.repo ? "hidden" : ""}">
+            <div class="field-split">
+              <div class="form-row">
+                <label>旧同期先のユーザー/組織</label>
+                <input id="settings-gh-owner" value="${escapeAttr(g.owner)}" spellcheck="false" />
+              </div>
+              <div class="form-row">
+                <label>旧同期先のリポジトリ</label>
+                <input id="settings-gh-repo" value="${escapeAttr(g.repo)}" spellcheck="false" />
+              </div>
+            </div>
+            <div class="field-split">
+              <div class="form-row">
+                <label>ブランチ</label>
+                <input id="settings-gh-branch" value="${escapeAttr(g.branch)}" spellcheck="false" />
+              </div>
+              <div class="form-row">
+                <label>同期ファイル</label>
+                <input id="settings-gh-path" value="${escapeAttr(g.path)}" spellcheck="false" />
+              </div>
+            </div>
+          </div>
+          <div class="button-row">
+            <button id="pc-migrate" class="soft-button" type="button">引っ越しを実行</button>
+          </div>
+        </section>
+        <p id="settings-status" class="status-line"></p>
+      </div>
+    `);
+    const status = $("#settings-status");
+    bindInboxFields("pc-settings");
+    $("#legacy-toggle")?.addEventListener("click", (event) => {
+      $("#legacy-fields").classList.remove("hidden");
+      event.currentTarget.closest(".inbox-summary")?.classList.add("hidden");
     });
+    const readPcSettings = () => {
+      readInboxFields("pc-settings");
+      app.settings.savePassword = $("#pc-settings-save-password")?.checked ?? true;
+      if (!$("#legacy-fields").classList.contains("hidden")) {
+        app.settings.github.owner = $("#settings-gh-owner")?.value.trim() || "";
+        app.settings.github.repo = $("#settings-gh-repo")?.value.trim() || "";
+        app.settings.github.branch = $("#settings-gh-branch")?.value.trim() || "main";
+        app.settings.github.path = $("#settings-gh-path")?.value.trim() || GITHUB_DEFAULT_PATH;
+      }
+    };
+    const run = async (label, action) => {
+      readPcSettings();
+      await persistState();
+      status.textContent = label;
+      try {
+        status.textContent = (await action()) || "";
+      } catch (error) {
+        status.textContent = error.message || "失敗しました";
+      }
+      updateStatus();
+    };
+    $("#pc-settings-save").addEventListener("click", () =>
+      run("保存中", async () => {
+        receiveInbox();
+        return "保存しました";
+      })
+    );
+    $("#pc-settings-receive").addEventListener("click", () =>
+      run("受け取り中", async () => {
+        await receiveInbox({ manual: true });
+        return app.inboxLedger.lastError || receiveSummary();
+      })
+    );
+    $("#pc-settings-check").addEventListener("click", () => run("確認中", checkInboxSource));
+    $("#pc-backup-choose")?.addEventListener("click", async () => {
+      readPcSettings();
+      if (await chooseBackupFile()) status.textContent = backupSummary();
+    });
+    $("#pc-backup-now")?.addEventListener("click", async () => {
+      readPcSettings();
+      if (!app.backup.handle) {
+        status.textContent = "先に「保存先を選ぶ」でファイルを選んでください";
+        return;
+      }
+      await saveBackupNow({ userGesture: true });
+      status.textContent = backupSummary();
+    });
+    $("#pc-backup-export").addEventListener("click", () => {
+      readPcSettings();
+      exportBackupFile();
+    });
+    $("#pc-backup-restore").addEventListener("click", async () => {
+      readPcSettings();
+      if (!confirm("今のPCのデータは、バックアップの内容に置き換わります。よろしいですか？")) return;
+      const file = await pickBackupFile();
+      if (!file) return;
+      await run("復元中", async () => {
+        const result = await restoreBackup(file);
+        renderAll();
+        await persistState();
+        receiveInbox();
+        return `復元しました（案件${result.projects}件）。バックアップの後にスマホから届いたカードは、このあと受け取ります`;
+      });
+    });
+    $("#pc-migrate").addEventListener("click", () =>
+      run("旧同期先から読み込み中", async () => {
+        const summary = await migrateLegacyData();
+        return `引っ越しが終わりました（案件${summary.projects}件・追加${summary.created}件・更新${summary.updated}件）`;
+      })
+    );
+  }
+
+  function receiveSummary() {
+    const ledger = app.inboxLedger;
+    if (ledger.lastError) return `受け取りに失敗しました: ${ledger.lastError}`;
+    if (!ledger.lastCheckedAt) return "まだ受け取っていません。開いている間は5分ごとに自動で確認します";
+    return `最終確認 ${formatDateTime(ledger.lastCheckedAt)}（前回 ${ledger.lastReceivedCount}件受け取り）。開いている間は5分ごとに自動で確認します`;
+  }
+
+  function backupSummary() {
+    const backup = app.backup;
+    if (!backupSupported()) {
+      return "このブラウザはファイルへの自動保存に対応していません。時々「ファイルに書き出す」で保存してください";
+    }
+    if (!backup.handle) {
+      return "保存先が未設定です。「保存先を選ぶ」でPC内のファイルを選ぶと、変更のたびに暗号化して自動で保存します";
+    }
+    const lines = [`保存先: ${backup.fileName}`, `最終保存: ${backup.lastSavedAt ? formatDateTime(backup.lastSavedAt) : "まだ"}`];
+    if (backup.permission !== "granted") lines.push("ブラウザの再起動などで保存の許可が切れています。上部の表示か「今すぐ保存」を押すと再開します");
+    if (backup.lastError) lines.push(`前回の失敗: ${backup.lastError}`);
+    return lines.join("\n");
+  }
+
+  function pcStatus() {
+    const ledger = app.inboxLedger;
+    const backup = app.backup;
+    const parts = [];
+    const details = [];
+    let warning = false;
+    const problem = inboxSourceProblem();
+    if (app.inboxReceive.running) {
+      parts.push("受信中…");
+    } else if (problem) {
+      parts.push("受け取り先が未設定");
+      details.push(`${problem}（クリックで設定を開きます）`);
+      warning = true;
+    } else if (ledger.lastError) {
+      parts.push("受信エラー");
+      details.push(`${ledger.lastError}（クリックで再試行します）`);
+      warning = true;
+    } else {
+      parts.push(ledger.lastCheckedAt ? `受信 ${formatTime(ledger.lastCheckedAt)}` : "受信待ち");
+      details.push("クリックで今すぐ受け取ります");
+    }
+    if (backupSupported()) {
+      if (!backup.handle) {
+        parts.push("バックアップ未設定");
+        details.push("設定の「バックアップ」で保存先を選んでください");
+      } else if (backup.permission !== "granted") {
+        parts.push("バックアップ要許可");
+        details.push("クリックするとバックアップの保存を再開します");
+        warning = true;
+      } else if (backup.lastError) {
+        parts.push("バックアップ失敗");
+        details.push(backup.lastError);
+        warning = true;
+      } else if (backup.lastSavedAt) {
+        parts.push(`保存 ${formatTime(backup.lastSavedAt)}`);
+      }
+    }
+    return { text: parts.join("・"), detail: details.join("\n"), warning };
+  }
+
+  function onSyncStatusClick() {
+    if (app.settings.role !== "pc") return;
+    if (inboxSourceProblem()) {
+      openSettingsModal();
+      return;
+    }
+    if (app.backup.handle && app.backup.permission !== "granted") {
+      saveBackupNow({ userGesture: true });
+      return;
+    }
+    receiveInbox({ manual: true });
   }
 
   function readSettingsModal() {
@@ -2636,8 +3461,8 @@
                       <strong>${escapeHtml(item.title || "無題")}</strong>
                       <p class="status-line">${escapeHtml(item.body || "")}</p>
                       <div class="button-row">
-                        <button class="soft-button" data-restore="${item.type}:${item.id}" type="button">戻す</button>
-                        <button class="danger-button" data-delete="${item.type}:${item.id}" type="button">完全削除</button>
+                        <button class="soft-button" data-restore="${escapeAttr(`${item.type}:${item.id}`)}" type="button">戻す</button>
+                        <button class="danger-button" data-delete="${escapeAttr(`${item.type}:${item.id}`)}" type="button">完全削除</button>
                       </div>
                     </div>
                   `
@@ -2707,6 +3532,14 @@
     if (file) {
       drive.fileId = file.id;
       const remote = await driveFetchJson(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`);
+      // The Drive file holds whichever project was open last, so merge it into that project rather than the one on screen.
+      const remoteProjectId = isSafeId(remote?.project?.id) ? remote.project.id : DEFAULT_PROJECT_ID;
+      if (remoteProjectId !== app.activeProjectId) {
+        saveActiveProjectToStore();
+        const project = ensureProjectExists(remoteProjectId, textValue(remote?.project?.name) || DEFAULT_PROJECT_NAME);
+        activateProject(remoteProjectId, { render: false, persist: false });
+        toast(`Driveの「${project.name}」を開きました`);
+      }
       const result = mergeData(remote, { markDirty: false });
       if (result.changed) {
         toast(`Driveから${result.changed}件取り込みました`);
@@ -2813,7 +3646,8 @@
       for (const project of app.projects.items) {
         const entry = app.projectStore[project.id];
         if (!entry?.data) continue;
-        await putGithubEncryptedObject(githubProjectDataPath(project.id), sanitizeData(entry.data), `Update Today Fragments project ${project.name || project.id}`);
+        // The commit history of a public repository is readable by anyone, so project names stay out of the message.
+        await putGithubEncryptedObject(githubProjectDataPath(project.id), sanitizeData(entry.data), "Update Today Fragments project data");
       }
       app.dirty = createEmptyDirty();
       Object.values(app.projectStore).forEach((entry) => {
@@ -2826,45 +3660,6 @@
     } finally {
       updateStatus();
     }
-  }
-
-  async function loadGithubSnapshot() {
-    requireGithubSettings(false);
-    requirePassword();
-    await loadGithubProjectSnapshot();
-    return;
-    const g = app.settings.github;
-    const url = `https://raw.githubusercontent.com/${encodeURIComponent(g.owner)}/${encodeURIComponent(g.repo)}/${encodeURIComponent(g.branch || "main")}/${g.path}?t=${Date.now()}`;
-    const response = await fetch(url, { cache: "no-store" });
-    if (!response.ok) throw new Error("先にスマホでGitHub同期してください");
-    const envelope = await response.json();
-    const remoteData = await decryptObject(envelope, app.settings.syncPassword);
-    mergeData(remoteData, { markDirty: false });
-  }
-
-  async function loadGithubProjectSnapshot() {
-    const remoteIndex = await loadGithubEncryptedObject(githubProjectIndexPath()).catch((error) => {
-      if (error.status === 404) return null;
-      throw error;
-    });
-    if (remoteIndex?.type === "today-fragments-project-index") {
-      app.projects = normalizeProjectsIndex(remoteIndex);
-      app.activeProjectId = app.projects.activeProjectId;
-      app.projectStore = normalizeProjectStore(app.projectStore || {});
-      await loadProjectFromGithubIfNeeded(app.activeProjectId, { force: true });
-      activateProject(app.activeProjectId, { render: false, persist: false });
-      return;
-    }
-    const remoteData = await loadGithubEncryptedObject(app.settings.github.path);
-    const project = ensureProjectExists(DEFAULT_PROJECT_ID, remoteData.project?.name || DEFAULT_PROJECT_NAME);
-    app.projects.activeProjectId = project.id;
-    app.projectStore[project.id] = {
-      data: normalizeData({ ...remoteData, project: { id: project.id, name: project.name, createdAt: project.createdAt } }),
-      dirty: createEmptyDirty(),
-      view: { x: 0, y: 0, zoom: 1 },
-      selected: null
-    };
-    activateProject(project.id, { render: false, persist: false });
   }
 
   async function loadProjectFromGithubIfNeeded(projectId, options = {}) {
@@ -2971,6 +3766,758 @@
     throw await makeGithubError(fileResponse);
   }
 
+  // Inbox: the phone appends its posts to one encrypted file per month in the data repository (inbox/YYYY-MM.enc.json).
+  // Each write re-reads the remote file and merges by id, so a resend or a second device never drops posts already there.
+  function hasUnsentCapture() {
+    return Boolean(app.capture?.posts.some((post) => !post.sentAt) || app.capture?.groups.some((group) => !group.sentAt));
+  }
+
+  function scheduleInboxSend(delay = INBOX_SEND_DELAY) {
+    if (app.settings.role !== "phone") return;
+    clearTimeout(app.inboxSend.timer);
+    app.inboxSend.timer = window.setTimeout(sendInbox, delay);
+  }
+
+  function scheduleInboxRetry() {
+    const delay = INBOX_RETRY_DELAYS[Math.min(app.inboxSend.failures, INBOX_RETRY_DELAYS.length) - 1] || INBOX_RETRY_DELAYS[0];
+    scheduleInboxSend(delay);
+  }
+
+  async function sendInbox() {
+    const state = app.inboxSend;
+    if (app.settings.role !== "phone") return;
+    clearTimeout(state.timer);
+    state.timer = 0;
+    if (state.sending) {
+      state.again = true;
+      return;
+    }
+    const unsentPosts = app.capture.posts.filter((post) => !post.sentAt);
+    const unsentGroups = app.capture.groups.filter((group) => !group.sentAt);
+    if (!unsentPosts.length && !unsentGroups.length) return;
+    const problem = inboxSettingsProblem();
+    if (problem) {
+      renderCaptureStatus();
+      return;
+    }
+    if (navigator.onLine === false) {
+      // The "online" listener resends once the connection is back.
+      app.capture.lastError = "圏外のため、電波が戻ったら自動で送ります";
+      renderCaptureStatus();
+      return;
+    }
+    state.sending = true;
+    renderCaptureStatus();
+    try {
+      if (!state.branchReady) {
+        await ensureInboxBranch();
+        state.branchReady = true;
+      }
+      const months = new Set(unsentPosts.map((post) => inboxMonth(post.createdAt)));
+      if (!months.size) months.add(inboxMonth(nowIso()));
+      for (const month of months) {
+        await sendInboxMonth(month);
+      }
+      const sentAt = nowIso();
+      unsentPosts.forEach((post) => {
+        post.sentAt = sentAt;
+      });
+      unsentGroups.forEach((group) => {
+        group.sentAt = sentAt;
+      });
+      app.capture.lastSentAt = sentAt;
+      app.capture.lastError = "";
+      state.failures = 0;
+      pruneSentPosts();
+    } catch (error) {
+      console.warn(error);
+      state.failures += 1;
+      // fetch rejects with a TypeError (English browser text) when the network is down.
+      const reason = error instanceof TypeError ? "通信できませんでした" : error.message || "送信できませんでした";
+      app.capture.lastError = `${reason}。自動で再送します`;
+      scheduleInboxRetry();
+    } finally {
+      state.sending = false;
+      await persistState();
+      renderCaptureStatus();
+      renderCapturePosts();
+      if (state.again) {
+        state.again = false;
+        scheduleInboxSend(500);
+      }
+    }
+  }
+
+  async function sendInboxMonth(month) {
+    const path = inboxPath(month);
+    for (let attempt = 0; ; attempt += 1) {
+      const remote = await readInboxFile(path);
+      const result = await writeInboxFile(path, buildInboxDoc(month, remote.doc), remote.sha);
+      if (result.ok) return;
+      // Someone else updated the file between our read and write; read again and merge once more.
+      if (!result.conflict || attempt >= 2) throw result.error;
+    }
+  }
+
+  function buildInboxDoc(month, remoteDoc) {
+    const posts = new Map();
+    const groups = new Map();
+    (Array.isArray(remoteDoc?.posts) ? remoteDoc.posts : []).forEach((item) => {
+      const post = isPlainObject(item) ? pickFields(item, POST_FIELDS) : null;
+      if (post && normalizePost(post)) posts.set(post.id, pickFields(post, POST_FIELDS));
+    });
+    (Array.isArray(remoteDoc?.groups) ? remoteDoc.groups : []).forEach((item) => {
+      const group = isPlainObject(item) ? pickFields(item, CAPTURE_GROUP_FIELDS) : null;
+      if (group && normalizeCaptureGroup(group)) groups.set(group.id, pickFields(group, CAPTURE_GROUP_FIELDS));
+    });
+    app.capture.posts.filter((post) => inboxMonth(post.createdAt) === month).forEach((post) => posts.set(post.id, pickFields(post, POST_FIELDS)));
+    app.capture.groups.forEach((group) => groups.set(group.id, pickFields(group, CAPTURE_GROUP_FIELDS)));
+    return {
+      type: INBOX_TYPE,
+      schemaVersion: 1,
+      app: "Today Fragments",
+      month,
+      updatedAt: nowIso(),
+      deviceId: app.settings.deviceId,
+      posts: [...posts.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+      groups: [...groups.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    };
+  }
+
+  async function readInboxFile(path) {
+    const branch = inboxConfig().branch;
+    const response = await fetch(`${inboxContentUrl(path)}?ref=${encodeURIComponent(branch)}`, { headers: inboxHeaders(), cache: "no-store" });
+    if (response.status === 404) return { sha: "", doc: null };
+    if (!response.ok) throw await makeGithubError(response);
+    const json = await response.json();
+    let text;
+    if (json.encoding === "base64" && json.content) {
+      text = decodeUtf8(base64ToBytes(json.content.replace(/\s/g, "")));
+    } else if (json.download_url) {
+      // The contents API leaves "content" empty for larger files; fall back to the raw download.
+      const raw = await fetch(json.download_url, { cache: "no-store" });
+      if (!raw.ok) throw new Error(`GitHub ${raw.status}`);
+      text = await raw.text();
+    } else {
+      throw new Error("送り先のファイルを読めませんでした");
+    }
+    const doc = await decryptObject(JSON.parse(text), app.settings.syncPassword);
+    if (doc?.type !== INBOX_TYPE) throw new Error("送り先に別の形式のファイルがあるため、上書きせずに止めました");
+    return { sha: json.sha || "", doc };
+  }
+
+  async function writeInboxFile(path, doc, sha) {
+    const envelope = await encryptObject(doc, app.settings.syncPassword);
+    const body = {
+      // The repository is public, so the message carries no project names or text.
+      message: "Add Today Fragments posts",
+      content: bytesToBase64(utf8(JSON.stringify(envelope))),
+      branch: inboxConfig().branch
+    };
+    if (sha) body.sha = sha;
+    const response = await fetch(inboxContentUrl(path), { method: "PUT", headers: inboxHeaders(), body: JSON.stringify(body) });
+    if (response.ok) return { ok: true };
+    const conflict = response.status === 409 || response.status === 422;
+    return { ok: false, conflict, error: await makeGithubError(response) };
+  }
+
+  function pruneSentPosts() {
+    // Sent posts live on in the data repository; the phone only keeps recent ones for its list.
+    const cutoff = Date.now() - SENT_POST_KEEP_DAYS * 24 * 60 * 60 * 1000;
+    app.capture.posts = app.capture.posts.filter((post) => !post.sentAt || Date.parse(post.createdAt) >= cutoff);
+  }
+
+  function inboxMonth(iso) {
+    return localDate(iso).slice(0, 7);
+  }
+
+  function inboxPath(month) {
+    return `${INBOX_FOLDER}/${month}.enc.json`;
+  }
+
+  function inboxRepoUrl() {
+    const inbox = inboxConfig();
+    return `https://api.github.com/repos/${encodeURIComponent(inbox.owner)}/${encodeURIComponent(inbox.repo)}`;
+  }
+
+  function inboxContentUrl(path) {
+    return `${inboxRepoUrl()}/contents/${path.split("/").map(encodeURIComponent).join("/")}`;
+  }
+
+  function inboxHeaders() {
+    return {
+      Accept: "application/vnd.github+json",
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${inboxConfig().token}`
+    };
+  }
+
+  function inboxSettingsProblem() {
+    const inbox = inboxConfig();
+    if (!inbox.owner || !inbox.repo) return "送り先のリポジトリが未設定です";
+    if (!inbox.token) return "送り先のトークンが未設定です";
+    if (!app.settings.syncPassword) return "同期パスワードが未設定です";
+    return "";
+  }
+
+  // Creates the data-only branch on first use. It is cut from the repository's default branch (not the published one),
+  // so writing to it never triggers a site build. Needs the token's normal "Contents: write" permission.
+  async function ensureInboxBranch() {
+    const inbox = inboxConfig();
+    const branchResponse = await fetch(`${inboxRepoUrl()}/branches/${encodeURIComponent(inbox.branch)}`, { headers: inboxHeaders(), cache: "no-store" });
+    if (branchResponse.ok) return { created: false };
+    if (branchResponse.status !== 404) throw await makeGithubError(branchResponse);
+    const repoResponse = await fetch(inboxRepoUrl(), { headers: inboxHeaders(), cache: "no-store" });
+    if (!repoResponse.ok) throw await makeGithubError(repoResponse);
+    const repo = await repoResponse.json();
+    const base = repo.default_branch || "main";
+    const refResponse = await fetch(`${inboxRepoUrl()}/git/ref/heads/${encodeURIComponent(base)}`, { headers: inboxHeaders(), cache: "no-store" });
+    if (!refResponse.ok) throw new Error(`データ用ブランチの元になるブランチ「${base}」を読めませんでした（GitHub ${refResponse.status}）`);
+    const sha = (await refResponse.json())?.object?.sha;
+    if (!sha) throw new Error("データ用ブランチを作る準備に失敗しました");
+    const createResponse = await fetch(`${inboxRepoUrl()}/git/refs`, {
+      method: "POST",
+      headers: inboxHeaders(),
+      body: JSON.stringify({ ref: `refs/heads/${inbox.branch}`, sha })
+    });
+    if (createResponse.status === 422) {
+      // Someone (another send) created it a moment ago.
+      const again = await fetch(`${inboxRepoUrl()}/branches/${encodeURIComponent(inbox.branch)}`, { headers: inboxHeaders(), cache: "no-store" });
+      if (again.ok) return { created: false };
+    }
+    if (!createResponse.ok) {
+      if (createResponse.status === 403 || createResponse.status === 404) {
+        throw new Error("データ用のブランチを作れませんでした。トークンに Contents の Read and write 権限があるか確認してください");
+      }
+      throw await makeGithubError(createResponse);
+    }
+    return { created: true };
+  }
+
+  async function testInboxConnection() {
+    const problem = inboxSettingsProblem();
+    if (problem) throw new Error(problem);
+    const inbox = inboxConfig();
+    const repoResponse = await fetch(inboxRepoUrl(), { headers: inboxHeaders(), cache: "no-store" });
+    if (!repoResponse.ok) throw await makeGithubError(repoResponse);
+    const repo = await repoResponse.json();
+    const branch = await ensureInboxBranch();
+    app.inboxSend.branchReady = true;
+    const lines = [`接続OK: ${inbox.owner}/${inbox.repo}`];
+    lines.push(branch.created ? `データ用のブランチ「${inbox.branch}」を作りました` : `データ用のブランチ「${inbox.branch}」は準備済みです`);
+    if (repo.private) lines.push("注意: 非公開リポジトリです。PCから読めないので、公開リポジトリにしてください");
+    if (inbox.branch === (app.settings.github.branch || "")) {
+      lines.push("注意: サイトを公開しているブランチと同じです。送るたびに公開処理が走るので、別のブランチ名にしてください");
+    }
+    return lines.join("\n");
+  }
+
+  // PC side of the inbox: read the phone's monthly files through public raw URLs (no token on the PC)
+  // and place each new card inside the group chosen on the phone. The ledger keeps every id already taken.
+  function scheduleInboxReceive(delay = INBOX_RECEIVE_INTERVAL) {
+    if (app.settings.role !== "pc") return;
+    clearTimeout(app.inboxReceive.timer);
+    app.inboxReceive.timer = window.setTimeout(() => receiveInbox(), delay);
+  }
+
+  function inboxSourceProblem() {
+    const inbox = inboxConfig();
+    if (!inbox.owner || !inbox.repo) return "受け取り先のリポジトリが未設定です";
+    if (!app.settings.syncPassword) return "同期パスワードが未設定です";
+    return "";
+  }
+
+  async function receiveInbox(options = {}) {
+    const state = app.inboxReceive;
+    const ledger = app.inboxLedger;
+    if (app.settings.role !== "pc" || state.running) return;
+    clearTimeout(state.timer);
+    if (inboxSourceProblem()) {
+      updateStatus();
+      return;
+    }
+    if (app.activeEntityDrag || app.pointers.size) {
+      // Re-rendering in the middle of a drag would cut it off; try again shortly.
+      scheduleInboxReceive(5000);
+      return;
+    }
+    state.running = true;
+    updateStatus();
+    try {
+      const docs = [];
+      for (const month of inboxMonthsToCheck()) {
+        const doc = await fetchInboxMonth(month);
+        if (doc) docs.push(doc);
+      }
+      const result = applyInboxDocs(docs);
+      ledger.lastCheckedAt = nowIso();
+      ledger.lastMonth = inboxMonth(ledger.lastCheckedAt);
+      ledger.lastError = "";
+      ledger.lastReceivedCount = result.posts;
+      await persistState();
+      if (result.posts) toast(`スマホから${result.posts}件受け取りました`);
+      else if (options.manual) toast("新しいカードはありません");
+    } catch (error) {
+      console.warn(error);
+      ledger.lastError = error instanceof TypeError ? "通信できませんでした" : error.message || "受け取りに失敗しました";
+      if (options.manual) toast(ledger.lastError);
+    } finally {
+      state.running = false;
+      updateStatus();
+      scheduleInboxReceive();
+    }
+  }
+
+  function inboxMonthsToCheck() {
+    const current = inboxMonth(nowIso());
+    const oldest = shiftMonth(current, -INBOX_FIRST_MONTHS);
+    // Look one month back from the last check, because a card written offline at the end of a month lands in that month's file.
+    let start = app.inboxLedger.lastMonth ? shiftMonth(app.inboxLedger.lastMonth, -1) : shiftMonth(current, 1 - INBOX_FIRST_MONTHS);
+    if (start < oldest) start = oldest;
+    if (start > current) start = shiftMonth(current, -1);
+    const months = [];
+    for (let month = start; month <= current; month = shiftMonth(month, 1)) months.push(month);
+    return months;
+  }
+
+  function shiftMonth(month, delta) {
+    const [year, value] = month.split("-").map(Number);
+    const date = new Date(year, value - 1 + delta, 1);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+  }
+
+  function inboxRawUrl(month) {
+    const inbox = inboxConfig();
+    return `https://raw.githubusercontent.com/${encodeURIComponent(inbox.owner)}/${encodeURIComponent(inbox.repo)}/${encodeURIComponent(
+      inbox.branch
+    )}/${INBOX_FOLDER}/${month}.enc.json?t=${Date.now()}`;
+  }
+
+  async function fetchInboxMonth(month) {
+    const response = await fetch(inboxRawUrl(month), { cache: "no-store" });
+    if (response.status === 404) return null;
+    if (!response.ok) throw new Error(`受け取り先を読めませんでした（GitHub ${response.status}）`);
+    const doc = await decryptObject(await response.json(), app.settings.syncPassword);
+    if (doc?.type !== INBOX_TYPE) throw new Error("受け取り先に別の形式のファイルがあります");
+    return doc;
+  }
+
+  function applyInboxDocs(docs) {
+    const ledger = app.inboxLedger;
+    const groups = new Map();
+    const posts = new Map();
+    docs.forEach((doc) => {
+      (Array.isArray(doc.groups) ? doc.groups : []).forEach((item) => {
+        const group = isPlainObject(item) ? pickFields(item, CAPTURE_GROUP_FIELDS) : null;
+        if (group && normalizeCaptureGroup(group)) groups.set(group.id, group);
+      });
+      (Array.isArray(doc.posts) ? doc.posts : []).forEach((item) => {
+        const post = isPlainObject(item) ? pickFields(item, POST_FIELDS) : null;
+        if (post && normalizePost(post)) posts.set(post.id, post);
+      });
+    });
+    const projectNames = new Map([...posts.values()].map((post) => [post.projectId, post.projectName]));
+    const touched = new Set();
+    let createdGroups = 0;
+    groups.forEach((group) => {
+      if (ledger.groupMap[group.id]) return;
+      const data = inboxProjectData(group.projectId, projectNames.get(group.projectId));
+      const target = resolveOrCreateGroup(data, group.id, group.title);
+      ledger.groupMap[group.id] = target.id;
+      if (target.created) {
+        createdGroups += 1;
+        touched.add(group.projectId);
+      }
+    });
+    let importedPosts = 0;
+    [...posts.values()]
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .forEach((post) => {
+        if (ledger.importedPosts[post.id]) return;
+        const data = inboxProjectData(post.projectId, post.projectName);
+        ledger.importedPosts[post.id] = nowIso();
+        if (data.notes.some((note) => note.id === post.id)) return;
+        const group = findInboxGroup(data, post);
+        const spot = group ? spotInGroup(data, group) : spotNearView(data, post.projectId);
+        const timestamp = nowIso();
+        const note = {
+          id: post.id,
+          title: "",
+          body: post.body,
+          createdAt: post.createdAt,
+          updatedAt: timestamp,
+          localDate: post.localDate,
+          x: spot.x,
+          y: spot.y,
+          groupIds: [],
+          locked: false,
+          trashedAt: "",
+          deletedAt: ""
+        };
+        data.notes.push(note);
+        updateNoteGroups(note, data.groups);
+        data.updatedAt = timestamp;
+        importedPosts += 1;
+        touched.add(post.projectId);
+      });
+    touched.forEach((projectId) => {
+      refreshProjectCounts(projectId);
+      if (projectId === app.activeProjectId) {
+        // Undo snapshots from before the import would silently drop the new cards, and the ledger would never bring them back.
+        app.history = { undo: [], redo: [], restoring: false };
+        updateUndoRedoButtons();
+        // Leave the inspector alone so typing in it is not interrupted.
+        renderGroups();
+        renderConnections();
+        renderCards();
+        renderMobileList();
+      }
+    });
+    return { posts: importedPosts, groups: createdGroups };
+  }
+
+  function inboxProjectData(projectId, name) {
+    ensureProjectExists(projectId, name || DEFAULT_PROJECT_NAME);
+    return projectId === app.activeProjectId ? app.data : app.projectStore[projectId].data;
+  }
+
+  function refreshProjectCounts(projectId) {
+    const project = app.projects.items.find((item) => item.id === projectId);
+    const data = projectId === app.activeProjectId ? app.data : app.projectStore[projectId]?.data;
+    if (!project || !data) return;
+    updateAllNoteGroupsIn(data);
+    project.updatedAt = data.updatedAt || project.updatedAt;
+    project.noteCount = data.notes.filter(isVisibleEntity).length;
+    project.groupCount = data.groups.filter(isVisibleEntity).length;
+    project.connectionCount = data.connections.filter(isVisibleEntity).length;
+  }
+
+  function resolveOrCreateGroup(data, id, title) {
+    // A group the PC already has (even one deleted later) is never recreated; a same-named group is reused.
+    const byId = data.groups.find((group) => group.id === id);
+    if (byId) return { id: byId.id, created: false };
+    const byTitle = data.groups.find((group) => isVisibleEntity(group) && (group.title || "") === title);
+    if (byTitle) return { id: byTitle.id, created: false };
+    const bounds = contentBounds(data);
+    const timestamp = nowIso();
+    data.groups.push({
+      id,
+      title,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      x: bounds ? Math.round(bounds.x + bounds.w + 80) : 0,
+      y: bounds ? Math.round(bounds.y) : 0,
+      w: 340,
+      h: 240,
+      color: GROUP_COLORS[data.groups.length % GROUP_COLORS.length],
+      locked: false,
+      trashedAt: "",
+      deletedAt: ""
+    });
+    data.updatedAt = timestamp;
+    return { id, created: true };
+  }
+
+  function findInboxGroup(data, post) {
+    const visible = data.groups.filter(isVisibleEntity);
+    const mappedId = post.groupId ? app.inboxLedger.groupMap[post.groupId] || post.groupId : "";
+    return (
+      visible.find((group) => group.id === mappedId) ||
+      (post.groupTitle ? visible.find((group) => (group.title || "") === post.groupTitle) : null) ||
+      null
+    );
+  }
+
+  function rectsOverlap(a, b) {
+    return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+  }
+
+  function spotInGroup(data, group) {
+    const stepX = NOTE_CARD_WIDTH + 18;
+    const stepY = NOTE_CARD_HEIGHT + 18;
+    const left = group.x + 24;
+    const top = group.y + 52;
+    const columns = Math.max(1, Math.floor((group.w - 48 + 18) / stepX));
+    const taken = data.notes.filter(isVisibleEntity).map(noteBounds);
+    for (let row = 0; row < 500; row += 1) {
+      for (let column = 0; column < columns; column += 1) {
+        const rect = { x: Math.round(left + column * stepX), y: Math.round(top + row * stepY), w: NOTE_CARD_WIDTH, h: NOTE_CARD_HEIGHT };
+        if (taken.some((other) => rectsOverlap(rect, other))) continue;
+        const bottom = rect.y + rect.h + 24;
+        if (bottom > group.y + group.h && !group.locked) {
+          group.h = Math.round(bottom - group.y);
+          group.updatedAt = nowIso();
+        }
+        return rect;
+      }
+    }
+    return { x: Math.round(left), y: Math.round(top) };
+  }
+
+  function spotNearView(data, projectId) {
+    // Unsorted cards land near the middle of what the PC was last looking at, outside every group.
+    const view = projectId === app.activeProjectId ? app.view : app.projectStore[projectId]?.view || { x: 0, y: 0, zoom: 1 };
+    const zoom = view.zoom || 1;
+    const stepX = NOTE_CARD_WIDTH + 18;
+    const stepY = NOTE_CARD_HEIGHT + 18;
+    const left = Math.round((window.innerWidth / 2 - view.x) / zoom - stepX * 2);
+    const top = Math.round((window.innerHeight / 2 - view.y) / zoom - stepY);
+    const taken = data.notes.filter(isVisibleEntity).map(noteBounds);
+    const groups = data.groups.filter(isVisibleEntity);
+    for (let row = 0; row < 500; row += 1) {
+      for (let column = 0; column < 4; column += 1) {
+        const rect = { x: left + column * stepX, y: top + row * stepY, w: NOTE_CARD_WIDTH, h: NOTE_CARD_HEIGHT };
+        if (taken.some((other) => rectsOverlap(rect, other))) continue;
+        if (getContainingGroups(rect, groups).length) continue;
+        return rect;
+      }
+    }
+    return { x: left, y: top };
+  }
+
+  async function checkInboxSource() {
+    const problem = inboxSourceProblem();
+    if (problem) throw new Error(problem);
+    const inbox = inboxConfig();
+    // No token on the PC: if the anonymous API cannot see the repository, the raw files cannot be read either.
+    const repoResponse = await fetch(inboxRepoUrl(), { cache: "no-store" });
+    if (repoResponse.status === 404) throw new Error("リポジトリが見つからないか、非公開です。PCから読むには公開リポジトリが必要です");
+    if (!repoResponse.ok && repoResponse.status !== 403) throw new Error(`GitHub ${repoResponse.status}`);
+    const branchResponse = await fetch(`${inboxRepoUrl()}/branches/${encodeURIComponent(inbox.branch)}`, { cache: "no-store" });
+    if (branchResponse.status === 404) {
+      return `リポジトリ ${inbox.owner}/${inbox.repo} は見えますが、データ用のブランチ「${inbox.branch}」がまだありません。\nスマホの設定で「接続を確認」を押すと作られます`;
+    }
+    const doc = await fetchInboxMonth(inboxMonth(nowIso()));
+    if (!doc) return `接続OK: ${inbox.owner}/${inbox.repo}（${inbox.branch}）\n今月のカードはまだ届いていません`;
+    return `接続OK: ${inbox.owner}/${inbox.repo}（${inbox.branch}）\n今月のファイルを読めました（カード${Array.isArray(doc.posts) ? doc.posts.length : 0}件）`;
+  }
+
+  // PC backup: an encrypted copy of every project written to a file the user picked once.
+  // The company browser may wipe site data, so this file (plus the inbox) is how the PC recovers.
+  function backupSupported() {
+    return typeof window.showSaveFilePicker === "function";
+  }
+
+  async function loadBackupHandle() {
+    try {
+      const record = await idbGet(BACKUP_HANDLE_KEY);
+      if (!record?.handle) return;
+      app.backup.handle = record.handle;
+      app.backup.fileName = textValue(record.fileName || record.handle.name);
+      app.backup.lastSavedAt = isoValue(record.lastSavedAt, "");
+      app.backup.permission = await record.handle.queryPermission({ mode: "readwrite" });
+    } catch (error) {
+      console.warn(error);
+    }
+  }
+
+  async function chooseBackupFile() {
+    if (!backupSupported()) {
+      toast("このブラウザはファイルへの自動保存に対応していません。「ファイルに書き出す」を使ってください");
+      return false;
+    }
+    try {
+      requirePassword();
+      const handle = await window.showSaveFilePicker({
+        suggestedName: "today-fragments-backup.json",
+        types: [{ description: "Today Fragments バックアップ", accept: { "application/json": [".json"] } }]
+      });
+      Object.assign(app.backup, { handle, fileName: handle.name, permission: "granted", lastError: "" });
+      return saveBackupNow({ userGesture: true });
+    } catch (error) {
+      if (error?.name === "AbortError") return false;
+      app.backup.lastError = error.message || "保存先を選べませんでした";
+      toast(app.backup.lastError);
+      updateStatus();
+      return false;
+    }
+  }
+
+  function scheduleBackupSave(delay = BACKUP_SAVE_DELAY) {
+    const backup = app.backup;
+    backup.revision = (backup.revision || 0) + 1;
+    if (!backup.handle) return;
+    // Wait for a pause in editing, but never hold a pending save back for more than two minutes.
+    if (backup.timer && Date.now() - backup.pendingSince > 120000) return;
+    if (!backup.timer) backup.pendingSince = Date.now();
+    clearTimeout(backup.timer);
+    backup.timer = window.setTimeout(() => saveBackupNow(), delay);
+  }
+
+  function hasUnsavedBackup() {
+    return Boolean(app.backup.handle && (app.backup.revision || 0) !== (app.backup.savedRevision || 0));
+  }
+
+  async function saveBackupNow(options = {}) {
+    const backup = app.backup;
+    if (app.settings.role !== "pc" || !backup.handle || backup.saving) return false;
+    clearTimeout(backup.timer);
+    backup.timer = 0;
+    const revision = backup.revision || 0;
+    backup.saving = true;
+    try {
+      if (!app.settings.syncPassword) throw new Error("同期パスワードが未設定のため、バックアップを暗号化できません");
+      let permission = await backup.handle.queryPermission({ mode: "readwrite" });
+      // Browsers ask again after a restart; that prompt is only allowed right after a click.
+      if (permission !== "granted" && options.userGesture) permission = await backup.handle.requestPermission({ mode: "readwrite" });
+      backup.permission = permission;
+      if (permission !== "granted") return false;
+      const envelope = await encryptObject(buildBackup(), app.settings.syncPassword);
+      const writable = await backup.handle.createWritable();
+      await writable.write(JSON.stringify(envelope));
+      await writable.close();
+      backup.lastSavedAt = nowIso();
+      backup.lastError = "";
+      backup.savedRevision = revision;
+      await idbSet(BACKUP_HANDLE_KEY, { handle: backup.handle, fileName: backup.fileName, lastSavedAt: backup.lastSavedAt });
+      if (options.userGesture) toast("バックアップを保存しました");
+      return true;
+    } catch (error) {
+      console.warn(error);
+      backup.lastError = error.message || "バックアップを保存できませんでした";
+      if (options.userGesture) toast(backup.lastError);
+      return false;
+    } finally {
+      backup.saving = false;
+      if (hasUnsavedBackup() && backup.permission === "granted" && !backup.lastError) {
+        backup.pendingSince = Date.now();
+        backup.timer = window.setTimeout(() => saveBackupNow(), BACKUP_SAVE_DELAY);
+      }
+      updateStatus();
+    }
+  }
+
+  function buildBackup() {
+    saveActiveProjectToStore();
+    return {
+      type: BACKUP_TYPE,
+      schemaVersion: 1,
+      app: "Today Fragments",
+      createdAt: nowIso(),
+      deviceId: app.settings.deviceId,
+      activeProjectId: app.activeProjectId,
+      projects: app.projects,
+      projectStore: Object.fromEntries(Object.entries(app.projectStore).map(([projectId, entry]) => [projectId, { data: entry.data, view: entry.view }])),
+      inboxLedger: app.inboxLedger,
+      // Where the cards come from, so a restored PC keeps receiving. No passwords or tokens.
+      inbox: { owner: inboxConfig().owner, repo: inboxConfig().repo, branch: inboxConfig().branch }
+    };
+  }
+
+  async function exportBackupFile() {
+    try {
+      requirePassword();
+      const envelope = await encryptObject(buildBackup(), app.settings.syncPassword);
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(new Blob([JSON.stringify(envelope)], { type: "application/json" }));
+      link.download = `today-fragments-backup-${localDate().replaceAll("-", "")}.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(link.href), 10000);
+      toast("バックアップを書き出しました");
+    } catch (error) {
+      toast(error.message || "書き出せませんでした");
+    }
+  }
+
+  function pickBackupFile() {
+    return new Promise((resolve) => {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = ".json,application/json";
+      input.addEventListener("change", () => resolve(input.files?.[0] || null), { once: true });
+      input.addEventListener("cancel", () => resolve(null), { once: true });
+      input.click();
+    });
+  }
+
+  async function restoreBackup(file) {
+    requirePassword();
+    if (file.size > 50 * 1024 * 1024) throw new Error("ファイルが大きすぎます");
+    let envelope;
+    try {
+      envelope = JSON.parse(await file.text());
+    } catch {
+      throw new Error("バックアップファイルを読めませんでした");
+    }
+    const backup = await decryptObject(envelope, app.settings.syncPassword);
+    if (backup?.type !== BACKUP_TYPE) throw new Error("Today Fragmentsのバックアップファイルではありません");
+    app.projects = normalizeProjectsIndex(backup.projects);
+    const store = isPlainObject(backup.projectStore) ? backup.projectStore : {};
+    app.projectStore = normalizeProjectStore(
+      Object.fromEntries(
+        Object.entries(store)
+          .filter(([projectId]) => isSafeId(projectId))
+          .map(([projectId, entry]) => [projectId, { data: entry?.data, view: entry?.view, dirty: createEmptyDirty() }])
+      )
+    );
+    app.inboxLedger = normalizeInboxLedger(backup.inboxLedger);
+    const inbox = isPlainObject(backup.inbox) ? backup.inbox : {};
+    if (!inboxConfig().repo && textValue(inbox.repo)) {
+      app.settings.inbox.owner = textValue(inbox.owner);
+      app.settings.inbox.repo = textValue(inbox.repo);
+      app.settings.inbox.branch = textValue(inbox.branch) || INBOX_BRANCH;
+    }
+    const activeId = app.projects.items.some((item) => item.id === backup.activeProjectId) ? backup.activeProjectId : app.projects.items[0].id;
+    activateProject(activeId, { render: false, persist: false });
+    return { projects: app.projects.items.length };
+  }
+
+  // One-time move of everything the phone used to hold (the old GitHub sync files) into the PC.
+  // It merges instead of replacing, so running it again or after editing on the PC is safe.
+  async function migrateLegacyData() {
+    requireGithubSettings(false);
+    requirePassword();
+    saveActiveProjectToStore();
+    const loadOptional = (path) =>
+      loadGithubEncryptedObject(path).catch((error) => {
+        if (error.status === 404) return null;
+        throw error;
+      });
+    const sources = [];
+    const remoteIndex = await loadOptional(githubProjectIndexPath());
+    if (remoteIndex?.type === "today-fragments-project-index") {
+      for (const item of normalizeProjectsIndex(remoteIndex).items) {
+        const data = await loadOptional(githubProjectDataPath(item.id));
+        if (data) sources.push({ item, data });
+      }
+    } else {
+      const data = await loadOptional(app.settings.github.path);
+      if (!data) throw new Error("旧同期先にデータが見つかりません。スマホの「これまでの画面」でGitHub同期をしてから試してください");
+      sources.push({ item: createProjectItem({ id: DEFAULT_PROJECT_ID, name: textValue(data.project?.name) || DEFAULT_PROJECT_NAME }), data });
+    }
+    const summary = { projects: 0, created: 0, updated: 0 };
+    sources.forEach(({ item, data }) => {
+      const existed = app.projects.items.some((project) => project.id === item.id);
+      const project = ensureProjectExists(item.id, item.name);
+      if (!existed) {
+        project.createdAt = item.createdAt;
+        project.archivedAt = item.archivedAt;
+      } else if (item.name && item.updatedAt > (project.updatedAt || "")) {
+        project.name = item.name;
+      }
+      const target = item.id === app.activeProjectId ? app.data : app.projectStore[item.id].data;
+      if (item.id === app.activeProjectId) target.project.name = project.name;
+      const result = mergeDataInto(target, data);
+      summary.projects += 1;
+      summary.created += result.created;
+      summary.updated += result.updated;
+      refreshProjectCounts(item.id);
+    });
+    // From here on the PC is the main copy, so the old list of changes waiting to go to the phone has no use.
+    app.dirty = createEmptyDirty();
+    Object.values(app.projectStore).forEach((entry) => {
+      entry.dirty = createEmptyDirty();
+    });
+    app.settings.migratedAt = nowIso();
+    app.history = { undo: [], redo: [], restoring: false };
+    updateUndoRedoButtons();
+    renderAll();
+    await persistState();
+    return summary;
+  }
+
   async function makeGithubError(response) {
     let detail = "";
     try {
@@ -3063,45 +4610,43 @@
     if (!app.settings.syncPassword) throw new Error("同期パスワードが必要です");
   }
 
+  // PC → phone: only the project and group list travels by QR now; cards flow the other way through the inbox.
   async function openQrModal() {
     if (app.settings.role !== "pc") return;
     try {
       requirePassword();
-      const delta = buildDirtyDelta();
-      if (!delta.notes.length && !delta.groups.length && !delta.connections.length) {
-        toast("未同期の変更はありません");
-        return;
-      }
-      const envelope = await encryptObject(delta, app.settings.syncPassword);
+      saveActiveProjectToStore();
+      const catalog = buildCatalog();
+      const envelope = await encryptObject(catalog, app.settings.syncPassword);
       const payload = bytesToBase64Url(utf8(JSON.stringify(envelope)));
       const sessionId = uid("qr").replace(/_/g, "");
       const chunks = chunkString(payload, 300);
+      const groupCount = catalog.projects.reduce((total, project) => total + project.groups.length, 0);
       let index = 0;
+      let playing = chunks.length > 1;
       openModal(`
         <div class="modal-head">
-          <h2>QRでスマホへ</h2>
+          <h2>グループ一覧をスマホへ</h2>
           <button class="close-button" data-close type="button">×</button>
         </div>
+        <p class="status-line">スマホの投稿画面で「PCの一覧を読み取る」を押して、このQRにカメラを向けてください。${
+          chunks.length > 1 ? "QRは自動で切り替わるので、全部読めるまで向けたままにしてください。" : ""
+        }（案件${catalog.projects.length}件・グループ${groupCount}件）</p>
         <div class="qr-wrap"><canvas id="qr-canvas"></canvas><textarea id="qr-fallback" class="output-box hidden" readonly></textarea></div>
         <p id="qr-count" class="status-line"></p>
         <div class="button-row">
           <button id="qr-prev" class="soft-button" type="button">前へ</button>
-          <button id="qr-next" class="primary-button" type="button">次へ</button>
-          <button id="qr-clear" class="soft-button" type="button">送信済みにする</button>
+          <button id="qr-toggle" class="soft-button" type="button">${playing ? "一時停止" : "自動で切り替え"}</button>
+          <button id="qr-next" class="soft-button" type="button">次へ</button>
         </div>
       `);
-      const render = async () => {
-        const frame = `TFQR1.${sessionId}.${index + 1}.${chunks.length}.${chunks[index]}`;
-        $("#qr-count").textContent = `${index + 1} / ${chunks.length}`;
-        $("#qr-prev").disabled = index === 0;
-        $("#qr-next").disabled = index === chunks.length - 1;
+      const render = () => {
         const canvas = $("#qr-canvas");
+        if (!canvas) return;
+        const frame = `TFQR1.${sessionId}.${index + 1}.${chunks.length}.${chunks[index]}`;
         const fallback = $("#qr-fallback");
-        if (window.QRCode?.toCanvas) {
-          fallback.classList.add("hidden");
-          canvas.classList.remove("hidden");
-          await window.QRCode.toCanvas(canvas, frame, { width: 360, margin: 2, errorCorrectionLevel: "M" });
-        } else if (window.qrcode) {
+        $("#qr-count").textContent = `${index + 1} / ${chunks.length}`;
+        if (window.qrcode) {
           fallback.classList.add("hidden");
           canvas.classList.remove("hidden");
           drawQrToCanvas(canvas, frame);
@@ -3111,25 +4656,46 @@
           fallback.value = frame;
         }
       };
-      $("#qr-prev").addEventListener("click", () => {
-        index = Math.max(0, index - 1);
+      const step = (delta) => {
+        index = (index + delta + chunks.length) % chunks.length;
         render();
+      };
+      $("#qr-prev").addEventListener("click", () => step(-1));
+      $("#qr-next").addEventListener("click", () => step(1));
+      $("#qr-toggle").addEventListener("click", (event) => {
+        playing = !playing;
+        event.currentTarget.textContent = playing ? "一時停止" : "自動で切り替え";
       });
-      $("#qr-next").addEventListener("click", () => {
-        index = Math.min(chunks.length - 1, index + 1);
-        render();
-      });
-      $("#qr-clear").addEventListener("click", async () => {
-        app.dirty = { notes: {}, groups: {}, connections: {} };
-        await persistState();
-        closeModal();
-        updateStatus();
-        toast("未同期を消しました");
-      });
-      await render();
+      $("#qr-toggle").disabled = chunks.length < 2;
+      render();
+      if (chunks.length > 1) {
+        app.qrTimer = window.setInterval(() => {
+          if (playing) step(1);
+        }, QR_FRAME_INTERVAL);
+      }
     } catch (error) {
       toast(error.message || "QRを作れませんでした");
     }
+  }
+
+  function stopQrTimer() {
+    window.clearInterval(app.qrTimer);
+    app.qrTimer = 0;
+  }
+
+  function buildCatalog() {
+    const projects = app.projects.items
+      .filter((project) => !project.archivedAt)
+      .sort((a, b) => (b.lastOpenedAt || "").localeCompare(a.lastOpenedAt || ""))
+      .map((project) => {
+        const data = project.id === app.activeProjectId ? app.data : app.projectStore[project.id]?.data;
+        return {
+          id: project.id,
+          name: project.name || DEFAULT_PROJECT_NAME,
+          groups: (data?.groups || []).filter(isVisibleEntity).map((group) => ({ id: group.id, title: group.title || "グループ", color: group.color }))
+        };
+      });
+    return { type: CATALOG_TYPE, schemaVersion: 1, createdAt: nowIso(), projects };
   }
 
   function drawQrToCanvas(canvas, text) {
@@ -3160,28 +4726,11 @@
     }
   }
 
-  function buildDirtyDelta() {
-    const noteIds = new Set(Object.keys(app.dirty.notes || {}));
-    const groupIds = new Set(Object.keys(app.dirty.groups || {}));
-    const connectionIds = new Set(Object.keys(app.dirty.connections || {}));
-    return {
-      type: "today-fragments-delta",
-      schemaVersion: 1,
-      projectId: app.activeProjectId,
-      projectName: currentProject()?.name || DEFAULT_PROJECT_NAME,
-      createdAt: nowIso(),
-      fromDeviceId: app.settings.deviceId,
-      notes: app.data.notes.filter((note) => noteIds.has(note.id)),
-      groups: app.data.groups.filter((group) => groupIds.has(group.id)),
-      connections: app.data.connections.filter((connection) => connectionIds.has(connection.id))
-    };
-  }
-
   function openImportModal() {
     if (app.settings.role !== "phone") return;
     openModal(`
       <div class="modal-head">
-        <h2>PCから取り込み</h2>
+        <h2>PCから読み取り</h2>
         <button class="close-button" data-close type="button">×</button>
       </div>
       <video id="scan-video" class="scan-video" autoplay playsinline webkit-playsinline muted></video>
@@ -3202,9 +4751,8 @@
   async function startQrScan() {
     const status = $("#scan-status");
     const video = $("#scan-video");
-    app.scanSession += 1;
-    const session = app.scanSession;
     stopScanStream();
+    const session = app.scanSession;
     if (!window.isSecureContext && location.hostname !== "localhost" && location.hostname !== "127.0.0.1") {
       status.textContent = "カメラはHTTPSで開いた時だけ使えます。GitHub Pagesのhttps URLで開いてください";
       return;
@@ -3220,10 +4768,11 @@
       video.setAttribute("playsinline", "");
       video.setAttribute("webkit-playsinline", "");
       const stream = await openCameraStream();
-      if (session !== app.scanSession) {
+      if (session !== app.scanSession || !video.isConnected) {
         stream.getTracks().forEach((track) => track.stop());
         return;
       }
+      app.scanStream = stream;
       video.srcObject = stream;
       await video.play().catch(() => {});
       status.textContent = "QR読取準備中";
@@ -3359,10 +4908,10 @@
   }
 
   async function handleQrText(text, options = {}) {
-    const status = $("#scan-status");
+    const status = $("#scan-status") || { textContent: "" };
     const normalized = extractQrFrame(text);
     if (!normalized) {
-      if (status) status.textContent = options.manual ? "QRの文字列ではありません。PC側のQR表示に出ている文字列を貼ってください" : "QRを読み取れませんでした";
+      status.textContent = options.manual ? "QRの文字列ではありません。PC側のQR表示に出ている文字列を貼ってください" : "QRを読み取れませんでした";
       return;
     }
     text = normalized;
@@ -3375,12 +4924,16 @@
       const total = Number(totalText);
       if (!sessionId || !index || !total || !chunk) throw new Error("QR形式が違います");
       if (index < 1 || index > total) throw new Error("QRの番号が正しくありません");
-      if (!app.qrParts.has(sessionId)) app.qrParts.set(sessionId, { total, chunks: new Map() });
+      if (total > QR_MAX_FRAMES) throw new Error("QRの枚数が多すぎます");
+      if (!app.qrParts.has(sessionId)) {
+        // Keep only the most recent sets so stray frames cannot pile up in memory.
+        while (app.qrParts.size >= QR_MAX_SESSIONS) app.qrParts.delete(app.qrParts.keys().next().value);
+        app.qrParts.set(sessionId, { total, chunks: new Map() });
+      }
       const session = app.qrParts.get(sessionId);
       if (session.total !== total) throw new Error("別のQRセットが混ざっています");
       session.chunks.set(index, chunk);
       status.textContent = `${session.chunks.size} / ${session.total} 読み取り済み`;
-      toast(`${session.chunks.size} / ${session.total} 読み取り済み`);
       if (session.chunks.size !== session.total) return;
       const missing = Array.from({ length: session.total }, (_, i) => i + 1).filter((part) => !session.chunks.has(part));
       if (missing.length) {
@@ -3390,10 +4943,20 @@
       const payload = Array.from({ length: session.total }, (_, i) => session.chunks.get(i + 1)).join("");
       const envelope = JSON.parse(decodeUtf8(base64UrlToBytes(payload)));
       const delta = await decryptObject(envelope, app.settings.syncPassword);
-      if (delta.type !== "today-fragments-delta") throw new Error("取り込みデータが違います");
+      if (delta?.type === CATALOG_TYPE) {
+        app.qrParts.delete(sessionId);
+        const result = applyCatalog(delta);
+        await persistState();
+        closeModal();
+        if (isCaptureVisible()) renderCapture();
+        toast(`PCの一覧を読み込みました（案件${result.projects}件・グループ${result.groups}件）`);
+        return;
+      }
+      if (delta?.type !== "today-fragments-delta") throw new Error("取り込みデータが違います");
+      if (delta.projectId && !isSafeId(delta.projectId)) throw new Error("取り込みデータの案件IDが正しくありません");
       if (delta.projectId && delta.projectId !== app.activeProjectId) {
         saveActiveProjectToStore();
-        ensureProjectExists(delta.projectId, delta.projectName || DEFAULT_PROJECT_NAME);
+        ensureProjectExists(delta.projectId, textValue(delta.projectName) || DEFAULT_PROJECT_NAME);
         activateProject(delta.projectId, { render: false, persist: false });
       }
       const result = mergeData(delta, { markDirty: false });
@@ -3415,62 +4978,43 @@
     return match ? match[0] : "";
   }
 
-  function mergeData(incoming, options = {}) {
-    const result = { changed: 0, created: 0, updated: 0 };
-    const incomingNotes = Array.isArray(incoming.notes) ? incoming.notes : [];
-    const incomingGroups = Array.isArray(incoming.groups) ? incoming.groups : [];
-    const incomingConnections = Array.isArray(incoming.connections) ? incoming.connections : [];
-    incomingNotes.forEach((note) => {
-      const existing = findNote(note.id);
-      if (!existing) {
-        app.data.notes.push(normalizeData({ notes: [note], groups: [] }).notes[0]);
-        result.changed += 1;
-        result.created += 1;
-        return;
-      }
-      if ((note.updatedAt || "") > (existing.updatedAt || "")) {
-        Object.assign(existing, note);
-        result.changed += 1;
-        result.updated += 1;
-      }
-    });
-    incomingGroups.forEach((group) => {
-      const existing = findGroup(group.id);
-      if (!existing) {
-        app.data.groups.push(normalizeData({ notes: [], groups: [group] }).groups[0]);
-        result.changed += 1;
-        result.created += 1;
-        return;
-      }
-      if ((group.updatedAt || "") > (existing.updatedAt || "")) {
-        Object.assign(existing, group);
-        result.changed += 1;
-        result.updated += 1;
-      }
-    });
-    incomingConnections.forEach((connection) => {
-      const normalized = normalizeData({ notes: [], groups: [], connections: [connection] }).connections[0];
-      const existing = findConnection(connection.id);
-      if (!existing) {
-        app.data.connections.push(normalized);
-        result.changed += 1;
-        result.created += 1;
-        return;
-      }
-      if ((connection.updatedAt || "") > (existing.updatedAt || "")) {
-        Object.assign(existing, normalized);
-        result.changed += 1;
-        result.updated += 1;
-      }
-    });
+  function mergeData(incoming) {
+    return mergeDataInto(app.data, incoming);
+  }
+
+  // Merges by id with "newer updatedAt wins"; works on any project's data, not only the one on screen.
+  function mergeDataInto(target, incoming) {
+    const result = { changed: 0, created: 0, updated: 0, skipped: 0 };
+    if (!isPlainObject(incoming)) return result;
+    const mergeEntities = (items, fields, normalize, list) => {
+      (Array.isArray(items) ? items : []).forEach((item) => {
+        // Copy only known fields so unexpected keys in imported JSON never land on live objects.
+        const entity = isPlainObject(item) ? pickFields(item, fields) : null;
+        if (!entity || !normalize(entity)) {
+          result.skipped += 1;
+          return;
+        }
+        const existing = list.find((candidate) => candidate.id === entity.id);
+        if (!existing) {
+          list.push(entity);
+          result.changed += 1;
+          result.created += 1;
+          return;
+        }
+        if (entity.updatedAt > (existing.updatedAt || "")) {
+          Object.assign(existing, entity);
+          result.changed += 1;
+          result.updated += 1;
+        }
+      });
+    };
+    mergeEntities(incoming.notes, NOTE_FIELDS, normalizeNote, target.notes);
+    mergeEntities(incoming.groups, GROUP_FIELDS, normalizeGroup, target.groups);
+    mergeEntities(incoming.connections, CONNECTION_FIELDS, normalizeConnection, target.connections);
+    if (result.skipped) console.warn(`mergeData skipped ${result.skipped} invalid entities`);
     if (result.changed) {
-      app.data.updatedAt = nowIso();
-      updateAllNoteGroups();
-    }
-    if (options.markDirty && app.settings.role === "pc") {
-      incomingNotes.forEach((note) => (app.dirty.notes[note.id] = note.updatedAt || nowIso()));
-      incomingGroups.forEach((group) => (app.dirty.groups[group.id] = group.updatedAt || nowIso()));
-      incomingConnections.forEach((connection) => (app.dirty.connections[connection.id] = connection.updatedAt || nowIso()));
+      target.updatedAt = nowIso();
+      updateAllNoteGroupsIn(target);
     }
     return result;
   }
@@ -3506,11 +5050,29 @@
   }
 
   async function decryptObject(envelope, password) {
-    const salt = base64UrlToBytes(envelope.kdf.salt);
-    const iv = base64UrlToBytes(envelope.cipher.iv);
-    const data = base64UrlToBytes(envelope.cipher.data);
-    const key = await deriveKey(password, salt, envelope.kdf.iterations);
-    const plainCompressed = new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, data));
+    // The envelope is read before authentication, so its parameters are checked before any expensive work.
+    const kdf = envelope?.kdf;
+    const cipherInfo = envelope?.cipher;
+    const iterations = Number(kdf?.iterations);
+    const validEnvelope =
+      kdf?.name === "PBKDF2" &&
+      kdf?.hash === "SHA-256" &&
+      cipherInfo?.name === "AES-GCM" &&
+      Number.isInteger(iterations) &&
+      iterations >= KDF_MIN_ITERATIONS &&
+      iterations <= KDF_MAX_ITERATIONS &&
+      [kdf?.salt, cipherInfo?.iv, cipherInfo?.data].every((value) => typeof value === "string" && /^[A-Za-z0-9_-]+$/.test(value));
+    if (!validEnvelope) throw new Error("暗号化データの形式が正しくありません");
+    const salt = base64UrlToBytes(kdf.salt);
+    const iv = base64UrlToBytes(cipherInfo.iv);
+    const data = base64UrlToBytes(cipherInfo.data);
+    const key = await deriveKey(password, salt, iterations);
+    let plainCompressed;
+    try {
+      plainCompressed = new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, data));
+    } catch {
+      throw new Error("同期パスワードが違うか、データが壊れています");
+    }
     const plain = await decompressBytes(plainCompressed, envelope.compression);
     return JSON.parse(decodeUtf8(plain));
   }
@@ -3691,6 +5253,7 @@
 
   function openModal(html) {
     stopScanStream();
+    stopQrTimer();
     els.modalRoot.classList.add("active");
     els.modalRoot.innerHTML = `<div class="modal-backdrop"><section class="modal-panel">${html}</section></div>`;
     $$("[data-close]", els.modalRoot).forEach((button) => button.addEventListener("click", closeModal));
@@ -3701,11 +5264,18 @@
 
   function closeModal() {
     stopScanStream();
+    stopQrTimer();
     els.modalRoot.classList.remove("active");
     els.modalRoot.innerHTML = "";
   }
 
   function stopScanStream() {
+    // Bumping the session also cancels a camera request still waiting for permission, so a closed dialog never leaves the camera on.
+    app.scanSession += 1;
+    if (app.scanStream) {
+      app.scanStream.getTracks().forEach((track) => track.stop());
+      app.scanStream = null;
+    }
     const video = $("#scan-video");
     const stream = video?.srcObject;
     if (stream) {
@@ -3715,12 +5285,19 @@
   }
 
   function updateStatus() {
-    const pendingCount =
-      Object.keys(app.dirty.notes || {}).length +
-      Object.keys(app.dirty.groups || {}).length +
-      Object.keys(app.dirty.connections || {}).length;
+    if (isCaptureVisible()) renderCaptureStatus();
+    els.syncStatus.classList.remove("warning");
+    els.syncStatus.title = "";
+    if (app.storageWriteFailed) {
+      els.syncStatus.textContent = "端末保存に失敗";
+      els.syncStatus.classList.add("warning");
+      return;
+    }
     if (app.settings.role === "pc") {
-      els.syncStatus.textContent = pendingCount ? `未同期 ${pendingCount}件` : "PCローカル保存";
+      const status = pcStatus();
+      els.syncStatus.textContent = status.text;
+      els.syncStatus.title = status.detail;
+      els.syncStatus.classList.toggle("warning", status.warning);
       return;
     }
     if (app.drive.saving) {
@@ -3734,23 +5311,48 @@
     }
   }
 
-  function schedulePersist() {
+  function schedulePersist(delay = 120) {
     clearTimeout(app.saveTimer);
-    app.saveTimer = window.setTimeout(persistState, 120);
+    app.saveTimer = window.setTimeout(persistState, delay);
   }
 
   async function persistState() {
+    if (app.storageReadError) return false;
     app.data.updatedAt = app.data.updatedAt || nowIso();
     saveActiveProjectToStore();
-    await idbSet(STATE_KEY, {
-      settings: app.settings,
-      projects: app.projects,
-      activeProjectId: app.activeProjectId,
-      projectStore: app.projectStore,
-      data: app.data,
-      dirty: app.dirty,
-      view: app.view
-    });
+    try {
+      await idbSet(STATE_KEY, {
+        settings: persistableSettings(),
+        projects: app.projects,
+        activeProjectId: app.activeProjectId,
+        projectStore: app.projectStore,
+        data: app.data,
+        dirty: app.dirty,
+        view: app.view,
+        capture: app.capture,
+        inboxLedger: app.inboxLedger
+      });
+    } catch (error) {
+      console.warn(error);
+      app.storageWriteFailed = true;
+      updateStatus();
+      if (Date.now() - app.storageWarnedAt > 30000) {
+        app.storageWarnedAt = Date.now();
+        toast("端末内に保存できませんでした。空き容量を確認してください");
+      }
+      return false;
+    }
+    if (app.storageWriteFailed) {
+      app.storageWriteFailed = false;
+      updateStatus();
+    }
+    if (app.settings.role === "pc") scheduleBackupSave();
+    return true;
+  }
+
+  function persistableSettings() {
+    if (app.settings.savePassword) return app.settings;
+    return { ...app.settings, syncPassword: "" };
   }
 
   function findNote(id) {
@@ -3901,33 +5503,56 @@
   }
 
   function idbOpen() {
-    return new Promise((resolve, reject) => {
+    if (idbConnection) return idbConnection;
+    idbConnection = new Promise((resolve, reject) => {
       const request = indexedDB.open(DB_NAME, DB_VERSION);
       request.onupgradeneeded = () => {
         request.result.createObjectStore("kv");
       };
-      request.onsuccess = () => resolve(request.result);
+      request.onsuccess = () => {
+        const db = request.result;
+        // Reopen lazily if another tab upgrades the database or the browser closes the connection.
+        db.onversionchange = () => {
+          db.close();
+          idbConnection = null;
+        };
+        db.onclose = () => {
+          idbConnection = null;
+        };
+        resolve(db);
+      };
       request.onerror = () => reject(request.error);
     });
+    idbConnection.catch(() => {
+      idbConnection = null;
+    });
+    return idbConnection;
   }
 
-  async function idbGet(key) {
-    const db = await idbOpen();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction("kv", "readonly");
-      const request = tx.objectStore("kv").get(key);
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
+  async function idbRequest(mode, operate) {
+    for (let attempt = 0; ; attempt += 1) {
+      const db = await idbOpen();
+      try {
+        return await new Promise((resolve, reject) => {
+          const tx = db.transaction("kv", mode);
+          const request = operate(tx.objectStore("kv"));
+          tx.oncomplete = () => resolve(request.result);
+          tx.onerror = () => reject(tx.error || request.error);
+          // Quota errors abort the transaction without an error event; without this the save never settles.
+          tx.onabort = () => reject(tx.error || new Error("IndexedDB transaction aborted"));
+        });
+      } catch (error) {
+        if (attempt >= 1 || error?.name !== "InvalidStateError") throw error;
+        idbConnection = null;
+      }
+    }
   }
 
-  async function idbSet(key, value) {
-    const db = await idbOpen();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction("kv", "readwrite");
-      tx.objectStore("kv").put(value, key);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
+  function idbGet(key) {
+    return idbRequest("readonly", (store) => store.get(key));
+  }
+
+  function idbSet(key, value) {
+    return idbRequest("readwrite", (store) => store.put(value, key));
   }
 })();

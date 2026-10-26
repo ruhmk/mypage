@@ -1,16 +1,16 @@
-const CACHE_NAME = "today-fragments-v34";
+const CACHE_NAME = "today-fragments-v38";
 const CORE_ASSETS = [
   "./",
   "./index.html",
   "./styles.css",
-  "./styles.css?v=34",
+  "./styles.css?v=38",
   "./app.js",
-  "./app.js?v=34",
+  "./app.js?v=38",
   "./manifest.webmanifest",
   "./vendor/qrcode-generator.js",
-  "./vendor/qrcode-generator.js?v=34",
+  "./vendor/qrcode-generator.js?v=38",
   "./vendor/jsQR.js",
-  "./vendor/jsQR.js?v=34",
+  "./vendor/jsQR.js?v=38",
   "./icons/icon-192.svg",
   "./icons/icon-512.svg"
 ];
@@ -28,7 +28,8 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))))
+      // Other apps on the same GitHub Pages origin share the cache storage, so only delete this app's old caches.
+      .then((keys) => Promise.all(keys.filter((key) => key.startsWith("today-fragments-") && key !== CACHE_NAME).map((key) => caches.delete(key))))
       .then(() => self.clients.claim())
   );
 });
