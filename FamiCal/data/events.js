@@ -1,23 +1,5 @@
-window.FAMILY_CALENDAR_UPDATED_AT = "2026-10-27T00:40:26.202Z";
+window.FAMILY_CALENDAR_UPDATED_AT = "2026-10-28T00:40:26.045Z";
 window.FAMILY_CALENDAR_EVENTS = [
-  {
-    "id": "personal-4KbwOmWru2Wo82PTkI",
-    "title": "8〜12時佐川",
-    "start": "2026-09-26T23:00:00.000Z",
-    "end": "2026-09-27T03:00:00.000Z",
-    "source": "personal",
-    "note": "",
-    "allDay": false
-  },
-  {
-    "id": "personal-Mw9jK_AbgxsK--ZWSi",
-    "title": "15時イメージア",
-    "start": "2026-09-27T05:00:00.000Z",
-    "end": "2026-09-27T08:00:00.000Z",
-    "source": "personal",
-    "note": "",
-    "allDay": false
-  },
   {
     "id": "work-xvFSmL1mdhkMKM3Nkn",
     "title": "朝会",
@@ -1478,17 +1460,6 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
-    "id": "work-XwPpj_d0bqPW7UsTvr",
-    "title": "仕事",
-    "start": "2026-10-28T03:00:00.000Z",
-    "end": "2026-10-28T05:00:00.000Z",
-    "source": "work",
-    "note": "",
-    "allDay": false,
-    "manualAllDay": false,
-    "workDayOff": false
-  },
-  {
     "id": "work-HDENwJ2VmVWES_9BZV",
     "title": "仕事",
     "start": "2026-10-28T03:00:00.000Z",
@@ -1500,10 +1471,10 @@ window.FAMILY_CALENDAR_EVENTS = [
     "workDayOff": false
   },
   {
-    "id": "work-v49i7lCBpHo_vwhG2P",
+    "id": "work-qqMuthWzsxx3rTLzyC",
     "title": "仕事",
-    "start": "2026-10-28T06:00:00.000Z",
-    "end": "2026-10-28T06:30:00.000Z",
+    "start": "2026-10-28T04:00:00.000Z",
+    "end": "2026-10-28T06:00:00.000Z",
     "source": "work",
     "note": "",
     "allDay": false,
@@ -1698,6 +1669,17 @@ window.FAMILY_CALENDAR_EVENTS = [
     "title": "仕事",
     "start": "2026-11-04T02:00:00.000Z",
     "end": "2026-11-04T02:30:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": false,
+    "manualAllDay": false,
+    "workDayOff": false
+  },
+  {
+    "id": "work-TKSbLE5_ojaCheNNm_",
+    "title": "仕事",
+    "start": "2026-11-04T02:30:00.000Z",
+    "end": "2026-11-04T03:00:00.000Z",
     "source": "work",
     "note": "",
     "allDay": false,
