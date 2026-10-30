@@ -1508,6 +1508,18 @@ button:disabled {
   color: var(--cyan)
 }
 
+/* JSONファイルに保存していない変更があるときの印 */
+.save-button.dirty::after {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 5px;
+  border-radius: 50%;
+  background: #ffd36b;
+  vertical-align: middle
+}
+
 .context-label-short {
   display: none
 }

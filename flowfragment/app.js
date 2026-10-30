@@ -1,12 +1,15 @@
-// Flow Fragments app.js（2026-10-19 整理版）
-// 構成：状態と保存（load / sanitizeState / persist / 履歴）→ 描画（render / renderWorld / renderEdges / renderInspector）
+// Flow Fragments app.js（2026-10-19 整理版／2026-10-28 データ保護の修正／2026-10-30 親子・表操作の修正、複数タブ・保存状態の表示、差分描画、細部の不整合）
+// 構成：状態と保存（load / sanitizeState / persist / 履歴）→ 描画（render / renderWorld / renderEdges / renderInspector。カード・領域・線は patchChildren で差分更新）
 //      → 操作（trackPointer を土台にしたドラッグ・リサイズ・接続・パン）→ 時系列表 → 書き出し（PNG / AI用ZIP）→ ファイル入出力 → 初期化
 (() => {
   "use strict";
   // 保存キー。KEY／UI_KEY の形式は従来どおり。RECOVERY_KEY は壊れていた保存データの退避先（読込時に書き、アプリからは読まない）。
+  // BACKUP_KEY は「新規ファイル」直前の内容の退避先（アプリからは読まない）。FILE_KEY は最後にJSONファイルへ保存・読込した内容の指紋。
   const KEY = "flow-fragments-state-v1",
     UI_KEY = "flow-fragments-ui-v1",
     RECOVERY_KEY = "flow-fragments-state-v1-recovery",
+    BACKUP_KEY = "flow-fragments-state-v1-before-new",
+    FILE_KEY = "flow-fragments-file-v1",
     FILE_DB = "flow-fragments-recent-files",
     FILE_STORE = "files",
     COLORS = ["#66e7f5", "#ff7da8", "#ffd36b", "#88efbd", "#b196ff"],
@@ -51,6 +54,11 @@
     edgeFrame: 0,
     edgeDirty: null,
     edgeNodes: new Map(),
+    worldCache: {
+      cards: new Map(),
+      groups: new Map()
+    },
+    timelineHtml: "",
     panFrame: 0,
     hoverFrame: 0,
     hoverEvent: null,
@@ -62,7 +70,9 @@
     currentFileId: "",
     currentFileHandle: null,
     fileTransitionBusy: false,
-    recoveredFromBroken: false,
+    recovery: null,
+    persistBlocked: "",
+    saveFailed: false,
     ui: {
       sidebarCollapsed: false,
       inspectorCollapsed: false
@@ -159,9 +169,13 @@
   }
 
   // ブラウザ内保存データの読込。壊れていた場合は元の文字列を RECOVERY_KEY に退避してからサンプルで開始する。
+  // 退避できなかったときは元データを KEY に残すため、自動保存を止める（persistBlocked）。
   function load() {
-    const raw = localStorage.getItem(KEY);
-    let next = null;
+    let raw = null,
+      next = null;
+    try {
+      raw = localStorage.getItem(KEY)
+    } catch {}
     if (raw != null) {
       try {
         next = sanitizeState(JSON.parse(raw))
@@ -169,10 +183,16 @@
         next = null
       }
       if (!next) {
+        let saved = false;
         try {
-          localStorage.setItem(RECOVERY_KEY, raw)
+          localStorage.setItem(RECOVERY_KEY, raw);
+          saved = localStorage.getItem(RECOVERY_KEY) === raw
         } catch {}
-        app.recoveredFromBroken = true
+        app.recovery = {
+          saved,
+          raw
+        };
+        app.persistBlocked = saved ? "" : "recovery"
       }
     }
     app.state = next || defaultState();
@@ -302,9 +322,21 @@
     return JSON.stringify(app.state)
   }
 
+  // 履歴の各項目は { snap: 状態のJSON, file: その時点の保存先 }。Undo/Redo で保存先も一緒に戻し、
+  // ファイルを開く前の内容を開いた後のファイルへ上書きしないようにする。
+  function fileContext() {
+    return {
+      id: app.currentFileId,
+      handle: app.currentFileHandle
+    }
+  }
+
   // Undo 履歴はすべてここを通す（上限・Redo破棄・ボタン状態を一元化）
   function pushHistory(snap = snapshot()) {
-    app.history.undo.push(snap);
+    app.history.undo.push({
+      snap,
+      file: fileContext()
+    });
     if (app.history.undo.length > HISTORY_LIMIT) app.history.undo.shift();
     app.history.redo = [];
     updateHistory()
@@ -319,29 +351,41 @@
     pushHistory()
   }
 
-  function restore(raw) {
+  function restore(entry) {
     app.activeDrag?.finish();
-    app.state = JSON.parse(raw);
+    app.state = JSON.parse(entry.snap);
     app.activeFlowId = app.state.activeFlowId;
+    app.currentFileId = entry.file.id;
+    app.currentFileHandle = entry.file.handle;
     app.selected = null;
     app.multiSelected.clear();
     app.multiGroups.clear();
+    renderRecentFiles();
     render();
     persist()
   }
 
+  // 進行中の操作は履歴を取り出す前に終わらせる（終了処理が積む履歴で Redo が消えないように）
   function undo() {
+    app.activeDrag?.finish();
     const s = app.history.undo.pop();
     if (!s) return;
-    app.history.redo.push(snapshot());
+    app.history.redo.push({
+      snap: snapshot(),
+      file: fileContext()
+    });
     restore(s);
     updateHistory()
   }
 
   function redo() {
+    app.activeDrag?.finish();
     const s = app.history.redo.pop();
     if (!s) return;
-    app.history.undo.push(snapshot());
+    app.history.undo.push({
+      snap: snapshot(),
+      file: fileContext()
+    });
     restore(s);
     updateHistory()
   }
@@ -351,14 +395,68 @@
     $("#redo").disabled = !app.history.redo.length
   }
 
+  // 自動保存を止めている理由ごとの表示（persistBlocked の値）
+  const BLOCKED_STATUS = {
+    recovery: "ブラウザ内保存を停止中（読めなかった元データを保護しています）",
+    otherTab: "ブラウザ内保存を停止中（別のタブで更新されました）"
+  };
+
   function saveNow() {
     app.saveTimer = 0;
-    try {
-      localStorage.setItem(KEY, JSON.stringify(app.state));
-      $("#save-status").textContent = "ブラウザ内に保存済み"
-    } catch {
-      $("#save-status").textContent = "ブラウザ内保存に失敗（JSON保存してください）"
+    const json = JSON.stringify(app.state);
+    updateFileStatus();
+    if (app.persistBlocked) {
+      $("#save-status").textContent = BLOCKED_STATUS[app.persistBlocked];
+      // 別のタブとの食い違いは、選んでもらうまで編集のたびに案内し直す
+      if (app.persistBlocked === "otherTab" && !$("#other-tab-dialog")) showOtherTabDialog();
+      return
     }
+    try {
+      localStorage.setItem(KEY, json);
+      $("#save-status").textContent = "ブラウザ内に保存済み";
+      app.saveFailed = false
+    } catch {
+      $("#save-status").textContent = "ブラウザ内保存に失敗（JSON保存してください）";
+      // 左カラムを閉じていると表示が見えないので、失敗し始めたときだけトーストでも知らせる
+      if (!app.saveFailed) toast("ブラウザ内への自動保存に失敗しました。JSONファイルに保存してください");
+      app.saveFailed = true
+    }
+  }
+
+  // 内容の短い指紋（FNV-1a）。JSONファイルに保存した内容と今の内容が同じかの判定に使う。
+  // 表示中のフロー（activeFlowId）の切替は編集ではないので、フローの中身だけで作る。
+  function fingerprint(state = app.state) {
+    const s = JSON.stringify(state.flows);
+    let h = 0x811c9dc5;
+    for (let i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 0x01000193)
+    }
+    return `${(h>>>0).toString(36)}:${s.length}`
+  }
+
+  // 「保存」ボタンの印：最後にJSONファイルへ保存（または読込）した内容と今の内容が違えば、未保存の印を付ける。
+  // 記録は FILE_KEY に置くので、再訪後や別のタブでも同じ判定になる。
+  function updateFileStatus() {
+    let saved = null;
+    try {
+      saved = JSON.parse(localStorage.getItem(FILE_KEY))
+    } catch {}
+    const clean = !!saved && saved.hash === fingerprint(),
+      button = $("#export-json");
+    button.classList.toggle("dirty", !clean);
+    button.title = clean ? `JSONファイルに保存済み${saved.name?`（${saved.name}）`:""}` : "JSONファイルに保存していない変更があります"
+  }
+
+  function markFileSaved(name, hash = fingerprint()) {
+    try {
+      localStorage.setItem(FILE_KEY, JSON.stringify({
+        hash,
+        name,
+        savedAt: new Date().toISOString()
+      }))
+    } catch {}
+    updateFileStatus()
   }
 
   // ブラウザ内への自動保存（SAVE_DELAY ms の遅延書き込み）。タブを閉じる・隠す時は flushPersist で即時書き込み。
@@ -370,24 +468,29 @@
     else app.saveTimer = setTimeout(saveNow, SAVE_DELAY)
   }
 
+  // タブを閉じる・隠す時：進行中のドラッグ等を先に終わらせ、その結果も含めて即時に書き込む
   function flushPersist() {
+    app.activeDrag?.finish();
     if (!app.saveTimer) return;
     clearTimeout(app.saveTimer);
     saveNow()
   }
 
-  function mutate(fn) {
+  function mutate(fn, options) {
     const before = snapshot();
     fn();
     commitHistory(before);
     persist();
-    render()
+    render(options)
   }
 
-  function render() {
+  // inspector:false はインスペクター自身の文字入力から呼ぶ。入力欄を作り直さないので、Tab やクリックで次の欄へ移るフォーカスが失われない。
+  function render({
+    inspector = true
+  } = {}) {
     renderSidebar();
     renderWorld();
-    renderInspector();
+    if (inspector) renderInspector();
     $("#flow-title").value = flow().name;
     $("#view-caption").textContent = flow().timeline.enabled ? "時系列キャンバス" : "自由配置キャンバス";
     $("#timeline-toggle").classList.toggle("active", flow().timeline.enabled);
@@ -420,21 +523,22 @@
     $$('[data-jump]').forEach(b => b.onclick = () => jumpToCard(b.dataset.jump))
   }
 
-  function timelineRowIndexForCard(c) {
+  // metrics（timelineMetrics の結果）を渡すと表の寸法を計算し直さない（描画で全カードを回すとき用）
+  function timelineRowIndexForCard(c, metrics = null) {
     const t = flow().timeline;
     if (!t.enabled) return -1;
-    const m = timelineMetrics(),
+    const m = metrics || timelineMetrics(),
       center = c.y + cardHeight(c) / 2;
     return t.rows.findIndex((_, i) => center >= t.y + m.rowY[i] && center < t.y + m.rowY[i + 1])
   }
 
-  function timelineRowColorForCard(c) {
-    const index = timelineRowIndexForCard(c);
+  function timelineRowColorForCard(c, metrics = null) {
+    const index = timelineRowIndexForCard(c, metrics);
     return index >= 0 ? flow().timeline.rowColors[index] : null
   }
 
-  function cardVisualColor(c) {
-    return group(c.groupId)?.color || timelineRowColorForCard(c) || COLORS[0]
+  function cardVisualColor(c, metrics = null) {
+    return group(c.groupId)?.color || timelineRowColorForCard(c, metrics) || COLORS[0]
   }
 
   function nextTimelineRowColor(colors, index) {
@@ -468,49 +572,132 @@
     if (hit) $(`[data-group="${hit.id}"]`)?.classList.add("group-hovered")
   }
 
+  // 子要素を id ごとの HTML で差分更新する。HTML が前回と同じ要素は作り直さずに残し（イベントの割り当ても残る）、
+  // 変わった・増えた要素だけを作る。cache は id → { el, html }。after は先頭の要素の直前に置かれた固定の要素。
+  // 戻り値の created は新しく作った要素（イベントを割り当てる対象）。
+  function patchChildren(parent, items, cache, {
+    svg = false,
+    after = null
+  } = {}) {
+    const ids = new Set(items.map(x => x.id));
+    cache.forEach((entry, id) => {
+      if (!ids.has(id)) cache.delete(id)
+    });
+    const changed = items.filter(x => cache.get(x.id)?.html !== x.html),
+      holder = svg ? document.createElementNS("http://www.w3.org/2000/svg", "svg") : document.createElement("template");
+    holder.innerHTML = changed.map(x => x.html).join("");
+    const fresh = [...(svg ? holder.children : holder.content.children)];
+    changed.forEach((x, i) => cache.set(x.id, {
+      el: fresh[i],
+      html: x.html
+    }));
+    // 全部が新しいとき（初回表示・フロー切替）は、要素を1つずつ入れ替えずにまとめて置き換える
+    if (changed.length === items.length) {
+      parent.replaceChildren(...(after ? [after] : []), ...fresh);
+      return {
+        created: changed.map((x, i) => ({
+          id: x.id,
+          el: fresh[i]
+        }))
+      }
+    }
+    // 今の要素以外（消えた要素・作り直す前の要素）を取り除いてから、並び順を合わせる
+    const live = new Set(items.map(x => cache.get(x.id).el));
+    [...parent.children].forEach(el => {
+      if (el !== after && !live.has(el) && !el.classList.contains("draft-edge")) el.remove()
+    });
+    let prev = after;
+    items.forEach(x => {
+      const el = cache.get(x.id).el,
+        next = prev ? prev.nextSibling : parent.firstChild;
+      if (el !== next) parent.insertBefore(el, next);
+      prev = el
+    });
+    return {
+      created: changed.map(x => ({
+        id: x.id,
+        el: cache.get(x.id).el
+      }))
+    }
+  }
+
+  // ワールドの描画。カード・領域・線は要素ごとに前回の HTML と比べ、変わったものだけ作り直す。
+  // 選択・タグ絞り込みの表示は HTML に含めず、最後に applyWorldClasses で今の状態に合わせる。
   function renderWorld() {
-    const f = flow();
+    const f = flow(),
+      metrics = f.timeline.enabled ? timelineMetrics() : null;
     renderTimeline();
-    $("#group-layer").innerHTML = f.groups.map(g => `<div class="group-box ${g.locked?"locked":""} ${sel("group",g.id)}" data-group="${g.id}" style="left:${g.x}px;top:${g.y}px;width:${g.w}px;height:${g.h}px;--group-color:${g.color}"><div class="group-label">${esc(g.name)}</div>${groupLockButton(g)}<span class="group-resize" title="ドラッグしてサイズ変更"></span></div>`).join("");
-    $("#card-layer").innerHTML = f.cards.map(c => {
+    const groups = patchChildren($("#group-layer"), f.groups.map(g => ({
+      id: g.id,
+      html: `<div class="group-box ${g.locked?"locked":""}" data-group="${g.id}" style="left:${g.x}px;top:${g.y}px;width:${g.w}px;height:${g.h}px;--group-color:${g.color}"><div class="group-label">${esc(g.name)}</div>${groupLockButton(g)}<span class="group-resize" title="ドラッグしてサイズ変更"></span></div>`
+    })), app.worldCache.groups);
+    const cards = patchChildren($("#card-layer"), f.cards.map(c => {
       const parent = group(c.groupId),
-        color = cardVisualColor(c),
+        color = cardVisualColor(c, metrics),
         locked = parent?.locked;
-      return `<article class="flow-card ${locked?"locked":""} ${c.collapsed?"collapsed":""} ${sel("card",c.id)} ${filtered(c)?"":"dim"}" data-card="${c.id}" style="left:${c.x}px;top:${c.y}px;width:${cardWidth(c)}px;height:${cardHeight(c)}px;--card-color:${color}"><button class="card-toggle" title="メモを開閉">${c.collapsed?"＋":"−"}</button><div class="card-title">${esc(c.title)}</div><div class="card-body">${esc(c.body)}</div>${c.tags.length?`<div class="card-tags">${c.tags.map(t=>`<span class="mini-tag">#${esc(t)}</span>`).join("")}</div>`:""}<span class="port" title="右クリックドラッグで接続"></span><span class="card-resize" title="ドラッグして高さ変更"></span><span class="card-resize-x" title="ドラッグして期間・横幅を変更"></span></article>`
-    }).join("");
+      return {
+        id: c.id,
+        html: `<article class="flow-card ${locked?"locked":""} ${c.collapsed?"collapsed":""}" data-card="${c.id}" style="left:${c.x}px;top:${c.y}px;width:${cardWidth(c)}px;height:${cardHeight(c)}px;--card-color:${color}"><button class="card-toggle" title="メモを開閉">${c.collapsed?"＋":"−"}</button><div class="card-title">${esc(c.title)}</div><div class="card-body">${esc(c.body)}</div>${c.tags.length?`<div class="card-tags">${c.tags.map(t=>`<span class="mini-tag">#${esc(t)}</span>`).join("")}</div>`:""}<span class="port" title="右クリックドラッグで接続"></span><span class="card-resize" title="ドラッグして高さ変更"></span><span class="card-resize-x" title="ドラッグして期間・横幅を変更"></span></article>`
+      }
+    }), app.worldCache.cards);
     renderEdges();
-    bindEntities()
+    groups.created.forEach(x => bindGroup(x.el));
+    cards.created.forEach(x => bindCard(x.el));
+    applyWorldClasses()
+  }
+
+  // 選択・タグ絞り込みの表示を付け替える（差分描画で残した要素も、描画のたびに今の状態へ合わせる）
+  function applyWorldClasses() {
+    const cardsById = new Map(flow().cards.map(c => [c.id, c]));
+    app.worldCache.cards.forEach((x, id) => {
+      x.el.classList.toggle("selected", !!sel("card", id));
+      x.el.classList.toggle("dim", !filtered(cardsById.get(id)))
+    });
+    app.worldCache.groups.forEach((x, id) => x.el.classList.toggle("selected", !!sel("group", id)));
+    app.edgeNodes.forEach((x, id) => x.el.classList.toggle("selected", !!sel("edge", id)))
   }
 
   function renderEdges() {
     const svg = $("#edge-layer"),
-      defs = `<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="context-stroke"/></marker></defs>`;
-    svg.innerHTML = defs + flow().edges.map(e => {
-      const a = card(e.from),
-        b = card(e.to);
-      if (!a || !b) return "";
+      cardsById = new Map(flow().cards.map(c => [c.id, c]));
+    if (!$("defs", svg)) {
+      const holder = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      holder.innerHTML = `<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="context-stroke"/></marker></defs>`;
+      svg.prepend(holder.firstElementChild)
+    }
+    const items = flow().edges.map(e => {
+      const a = cardsById.get(e.from),
+        b = cardsById.get(e.to);
+      if (!a || !b) return null;
       const g = edgeGeometry(e, a, b),
         label = e.label || "";
-      return `<g class="edge ${e.kind||"normal"} ${sel("edge",e.id)}" data-edge="${e.id}" style="--edge-color:${e.color||COLORS[0]}"><path class="edge-hit" d="${g.d}"/><path class="edge-main" d="${g.d}" marker-end="url(#arrow)"/>${label?edgeLabel(g,label):""}</g>`
-    }).join("");
-    // 線ごとの要素参照をキャッシュしておき、ドラッグ中の再配置で DOM 検索をしない
-    app.edgeNodes.clear();
-    $$('[data-edge]', svg).forEach(n => {
-      const label = $(".edge-label", n),
+      return {
+        id: e.id,
+        html: `<g class="edge ${e.kind||"normal"}" data-edge="${e.id}" style="--edge-color:${e.color||COLORS[0]}"><path class="edge-hit" d="${g.d}"/><path class="edge-main" d="${g.d}" marker-end="url(#arrow)"/>${label?edgeLabel(g,label):""}</g>`
+      }
+    }).filter(Boolean);
+    // app.edgeNodes は線の差分描画の記録を兼ね、要素参照を持っておく（ドラッグ中の再配置で DOM 検索をしない）
+    patchChildren(svg, items, app.edgeNodes, {
+      svg: true,
+      after: $("defs", svg)
+    }).created.forEach(({
+      id,
+      el
+    }) => {
+      const label = $(".edge-label", el),
         rect = label && $("rect", label);
-      app.edgeNodes.set(n.dataset.edge, {
-        node: n,
-        paths: $$(".edge-hit,.edge-main", n),
+      Object.assign(app.edgeNodes.get(id), {
+        paths: $$(".edge-hit,.edge-main", el),
         label,
         w: rect ? Number(rect.getAttribute("width")) || 52 : 0
       });
-      n.onpointerdown = e => {
+      el.onpointerdown = e => {
         e.stopPropagation();
         app.multiSelected.clear();
         app.multiGroups.clear();
         app.selected = {
           type: "edge",
-          id: n.dataset.edge
+          id
         };
         updateSelectionView()
       }
@@ -570,11 +757,22 @@
     })
   }
 
+  // 線のラベルの幅と表示する文字（画面と PNG で同じにする）
+  function edgeLabelBox(text) {
+    return {
+      w: Math.min(220, Math.max(52, text.length * 11 + 18)),
+      shown: text.length > 18 ? text.slice(0, 18) + "…" : text
+    }
+  }
+
   function edgeLabel(g, text) {
     const x = g.lx,
       y = g.ly,
-      w = Math.min(220, Math.max(52, text.length * 11 + 18));
-    return `<g class="edge-label" transform="translate(${x-w/2} ${y-14})"><rect width="${w}" height="28" rx="8"/><text x="${w/2}" y="18" text-anchor="middle">${esc(text.length>18?text.slice(0,18)+"…":text)}</text></g>`
+      {
+        w,
+        shown
+      } = edgeLabelBox(text);
+    return `<g class="edge-label" transform="translate(${x-w/2} ${y-14})"><rect width="${w}" height="28" rx="8"/><text x="${w/2}" y="18" text-anchor="middle">${esc(shown)}</text></g>`
   }
 
   function cardWidth(c) {
@@ -655,51 +853,51 @@
     }
   }
 
-  function bindEntities() {
-    $$('.flow-card').forEach(n => {
-      n.oncontextmenu = e => e.preventDefault();
-      n.onpointerdown = e => {
-        if (e.button === 2) {
-          startEdge(e, n.dataset.card);
-          return
-        }
-        if (e.target.closest("button,.port,.card-resize,.card-resize-x")) return;
-        e.stopPropagation();
-        selectAndDrag(e, "card", n.dataset.card, n)
-      };
-      n.ondblclick = e => {
-        if (!e.target.closest(".port,.card-resize,.card-resize-x")) {
-          const c = card(n.dataset.card);
-          mutate(() => c.collapsed = !c.collapsed)
-        }
-      };
-      $(".card-toggle", n).onclick = e => {
-        e.stopPropagation();
+  // カード・領域の要素にイベントを割り当てる（新しく作った要素だけに呼ぶ。処理はすべて data-* の id から今の状態を引く）
+  function bindCard(n) {
+    n.oncontextmenu = e => e.preventDefault();
+    n.onpointerdown = e => {
+      if (e.button === 2) {
+        startEdge(e, n.dataset.card);
+        return
+      }
+      if (e.target.closest("button,.port,.card-resize,.card-resize-x")) return;
+      e.stopPropagation();
+      selectAndDrag(e, "card", n.dataset.card, n)
+    };
+    n.ondblclick = e => {
+      if (!e.target.closest(".port,.card-resize,.card-resize-x")) {
         const c = card(n.dataset.card);
         mutate(() => c.collapsed = !c.collapsed)
-      };
-      $(".card-resize", n).onpointerdown = e => resizeCard(e, n.dataset.card);
-      $(".card-resize-x", n).onpointerdown = e => resizeCardWidth(e, n.dataset.card)
-    });
-    $$('.group-box').forEach(n => {
-      n.onpointerdown = e => {
-        if (e.target.closest(".group-resize,.group-lock-toggle")) return;
-        e.stopPropagation();
-        if (group(n.dataset.group)?.locked) return selectLockedGroupAndPan(e, n.dataset.group);
-        selectAndDrag(e, "group", n.dataset.group, n)
-      };
-      const lock = $(".group-lock-toggle", n);
-      lock.onpointerdown = e => e.stopPropagation();
-      lock.onclick = e => {
-        e.stopPropagation();
-        const focused = document.activeElement === lock;
-        toggleGroupLock(n.dataset.group);
-        if (focused) $(`[data-group="${n.dataset.group}"] .group-lock-toggle`)?.focus({
-          preventScroll: true
-        })
-      };
-      $(".group-resize", n).onpointerdown = e => resizeGroup(e, n.dataset.group)
-    })
+      }
+    };
+    $(".card-toggle", n).onclick = e => {
+      e.stopPropagation();
+      const c = card(n.dataset.card);
+      mutate(() => c.collapsed = !c.collapsed)
+    };
+    $(".card-resize", n).onpointerdown = e => resizeCard(e, n.dataset.card);
+    $(".card-resize-x", n).onpointerdown = e => resizeCardWidth(e, n.dataset.card)
+  }
+
+  function bindGroup(n) {
+    n.onpointerdown = e => {
+      if (e.target.closest(".group-resize,.group-lock-toggle")) return;
+      e.stopPropagation();
+      if (group(n.dataset.group)?.locked) return selectLockedGroupAndPan(e, n.dataset.group);
+      selectAndDrag(e, "group", n.dataset.group, n)
+    };
+    const lock = $(".group-lock-toggle", n);
+    lock.onpointerdown = e => e.stopPropagation();
+    lock.onclick = e => {
+      e.stopPropagation();
+      const focused = document.activeElement === lock;
+      toggleGroupLock(n.dataset.group);
+      if (focused) $(`[data-group="${n.dataset.group}"] .group-lock-toggle`)?.focus({
+        preventScroll: true
+      })
+    };
+    $(".group-resize", n).onpointerdown = e => resizeGroup(e, n.dataset.group)
   }
   const grid25 = value => Math.round(Number(value) / 25) * 25;
 
@@ -764,17 +962,32 @@
     document.body.classList.toggle("is-interacting", on)
   }
 
-  function selectAndDrag(e, type, id, node) {
+  // Shift＋クリックで選択に加える／外す。外したときは、残っている要素（無ければ選択なし）を選択中にする
+  function toggleShiftSelection(type, id) {
     const own = type === "card" ? app.multiSelected : app.multiGroups;
-    if (e.shiftKey) {
-      own.has(id) ? own.delete(id) : own.add(id);
-      app.selected = app.multiSelected.size || app.multiGroups.size ? {
+    if (own.has(id)) {
+      own.delete(id);
+      const rest = [...[...app.multiSelected].map(x => ({
+        type: "card",
+        id: x
+      })), ...[...app.multiGroups].map(x => ({
+        type: "group",
+        id: x
+      }))];
+      app.selected = rest.at(-1) || null
+    } else {
+      own.add(id);
+      app.selected = {
         type,
         id
-      } : null;
-      updateSelectionView();
-      return
+      }
     }
+    updateSelectionView()
+  }
+
+  function selectAndDrag(e, type, id, node) {
+    const own = type === "card" ? app.multiSelected : app.multiGroups;
+    if (e.shiftKey) return toggleShiftSelection(type, id);
     if (!own.has(id)) {
       app.multiSelected.clear();
       app.multiGroups.clear();
@@ -785,6 +998,8 @@
       id
     };
     updateSelectionView();
+    // インスペクターの入力確定で再描画された場合に備え、ドラッグ対象の要素を取り直す
+    node = $(`[data-${type}="${id}"]`) || node;
     const item = type === "card" ? card(id) : group(id);
     if (item.locked) {
       toast("ロックされているため移動できません");
@@ -849,7 +1064,7 @@
       onEnd: () => {
         setInteracting(false);
         if (!start.moved) return;
-        movingCards.filter(ch => !groupIds.has(ch.card.groupId)).forEach(ch => assignCardToGroup(ch.card));
+        movingCards.filter(ch => !groupIds.has(ch.card.groupId)).forEach(ch => assignCardToGroup(ch.card, ch));
         commitHistory(start.snap);
         persist();
         render()
@@ -857,14 +1072,35 @@
     })
   }
 
-  function assignCardToGroup(c) {
-    const cx = c.x + cardWidth(c) / 2,
-      cy = c.y + cardHeight(c) / 2,
-      candidates = flow().groups.filter(g => cx >= g.x && cx <= g.x + g.w && cy >= g.y && cy <= g.y + g.h);
-    c.groupId = candidates.at(-1)?.id || ""
+  // カードの中心が領域（x, y, w, h を持つもの）の内側か。x, y を渡すとその位置にあるものとして判定する。
+  function cardInRect(c, r, x = c.x, y = c.y) {
+    const cx = x + cardWidth(c) / 2,
+      cy = y + cardHeight(c) / 2;
+    return cx >= r.x && cx <= r.x + r.w && cy >= r.y && cy <= r.y + r.h
   }
 
-  // カードの高さ／横幅、領域のサイズ変更。25px刻みで即時反映し、終了時に所属グループを再判定して履歴に積む。
+  // 移動したカードの所属を決める。中心が入った領域（重なる場合は手前）の子にする。
+  // どの領域にも入らないとき、移動前に親の領域内にあった（領域の外へ出した）場合だけ所属を外し、
+  // 元から領域外にあった親（インスペクターで明示した親）は保つ。from は移動前の位置 { x, y }。
+  function assignCardToGroup(c, from = null) {
+    const hit = flow().groups.filter(g => cardInRect(c, g)).at(-1);
+    if (hit) {
+      c.groupId = hit.id;
+      return
+    }
+    const parent = group(c.groupId);
+    if (!parent || !from || cardInRect(c, parent, from.x, from.y)) c.groupId = ""
+  }
+
+  // サイズ変更の終了処理。変化が無ければ（クリックだけなら）履歴・保存・再描画をしない。
+  function commitResize(snap) {
+    if (snapshot() === snap) return;
+    pushHistory(snap);
+    persist();
+    render()
+  }
+
+  // カードの高さ／横幅、領域のサイズ変更。25px刻みで即時反映し、終了時に履歴に積む（カードのサイズ変更では所属を変えない）。
   function resizeCard(e, id) {
     if (e.button !== 0) return;
     e.preventDefault();
@@ -885,10 +1121,7 @@
       },
       onEnd: () => {
         setInteracting(false);
-        assignCardToGroup(c);
-        commitHistory(snap);
-        persist();
-        render()
+        commitResize(snap)
       }
     })
   }
@@ -912,10 +1145,7 @@
       },
       onEnd: () => {
         setInteracting(false);
-        assignCardToGroup(c);
-        commitHistory(snap);
-        persist();
-        render()
+        commitResize(snap)
       }
     })
   }
@@ -930,6 +1160,12 @@
       startY = e.clientY,
       startW = g.w,
       startH = g.h,
+      before = {
+        x: g.x,
+        y: g.y,
+        w: g.w,
+        h: g.h
+      },
       snap = snapshot();
     trackPointer(e, {
       capture: e.currentTarget,
@@ -944,21 +1180,19 @@
       },
       onEnd: () => {
         setInteracting(false);
-        assignContainedCards(g);
-        commitHistory(snap);
-        persist();
-        render()
+        assignContainedCards(g, before);
+        commitResize(snap)
       }
     })
   }
 
-  function assignContainedCards(g) {
+  // 領域のリサイズ後の所属。新たに内側へ入った未所属カードを子にし、リサイズで外れた子は所属を外す。
+  // 他の領域の子や、元から領域外にあった子（インスペクターで明示した子）はそのまま。before はリサイズ前の範囲。
+  function assignContainedCards(g, before) {
     flow().cards.forEach(c => {
-      const cx = c.x + cardWidth(c) / 2,
-        cy = c.y + cardHeight(c) / 2,
-        inside = cx >= g.x && cx <= g.x + g.w && cy >= g.y && cy <= g.y + g.h;
-      if (inside) c.groupId = g.id;
-      else if (c.groupId === g.id) c.groupId = ""
+      const inside = cardInRect(c, g);
+      if (inside && !group(c.groupId)) c.groupId = g.id;
+      else if (!inside && c.groupId === g.id && cardInRect(c, before)) c.groupId = ""
     })
   }
 
@@ -1073,16 +1307,25 @@
       const x = edge(id);
       if (!x) return clearSelection();
       const kind = x.kind || "normal",
+        // 自己ループには接続先が無いので、ほかの種類へは変えられない（別のカードへの線は作り直してもらう）
+        fixed = kind === "self" ? "disabled" : "",
         arc = kind !== "normal" ? `<label class="field"><span>円弧の高さ（px）</span><input id="i-arc-height" type="number" min="75" step="25" value="${Number(x.arcHeight)||100}"></label>` : "";
-      el.innerHTML = `<h2>接続線の詳細</h2><label class="field"><span>線の種類</span><select id="i-edge-kind"><option value="normal" ${kind==="normal"?"selected":""}>通常フロー</option><option value="loopTop" ${kind==="loopTop"?"selected":""}>1：上側の戻りループ</option><option value="loopBottom" ${kind==="loopBottom"?"selected":""}>2：下側の差し戻し</option><option value="self" ${kind==="self"?"selected":""}>3：自己ループ</option></select></label>${arc}<label class="field"><span>条件・説明</span><textarea id="i-label" placeholder="○○だったら">${esc(x.label)}</textarea></label><label class="field"><span>線の色</span><select id="i-color">${COLORS.map(c=>`<option value="${c}" ${x.color===c?"selected":""}>${c}</option>`).join("")}</select></label><div class="inspector-actions"><button id="i-reverse" ${kind==="self"?"disabled":""}>向きを反転</button><button id="i-delete" class="danger">削除</button></div>`;
+      el.innerHTML = `<h2>接続線の詳細</h2><label class="field"><span>線の種類</span><select id="i-edge-kind"><option value="normal" ${kind==="normal"?"selected":""} ${fixed}>通常フロー</option><option value="loopTop" ${kind==="loopTop"?"selected":""} ${fixed}>1：上側の戻りループ</option><option value="loopBottom" ${kind==="loopBottom"?"selected":""} ${fixed}>2：下側の差し戻し</option><option value="self" ${kind==="self"?"selected":""}>3：自己ループ（接続先は外れます）</option></select></label>${fixed?'<p class="hint">自己ループはほかの種類に変えられません。別のカードへの線にするときは作り直してください。</p>':""}${arc}<label class="field"><span>条件・説明</span><textarea id="i-label" placeholder="○○だったら">${esc(x.label)}</textarea></label><label class="field"><span>線の色</span><select id="i-color">${COLORS.map(c=>`<option value="${c}" ${x.color===c?"selected":""}>${c}</option>`).join("")}</select></label><div class="inspector-actions"><button id="i-reverse" ${kind==="self"?"disabled":""}>向きを反転</button><button id="i-delete" class="danger">削除</button></div>`;
       bindInput("#i-label", v => x.label = v);
       $("#i-edge-kind").onchange = e => mutate(() => {
+        // 色は、今の種類の既定色のままなら新しい種類の既定色にし、利用者が選んだ色は保つ
+        const wasDefault = x.color === defaultEdgeColor(x.from, x.to, kind);
         x.kind = e.target.value;
         if (x.kind === "self") x.to = x.from;
         x.arcHeight = x.kind === "loopTop" ? 150 : 100;
-        x.color = x.kind === "loopTop" ? "#ff7da8" : x.kind === "loopBottom" ? "#ffd36b" : x.kind === "self" ? "#b196ff" : COLORS[0]
+        if (wasDefault) x.color = defaultEdgeColor(x.from, x.to, x.kind)
       });
-      if ($("#i-arc-height")) $("#i-arc-height").onchange = e => mutate(() => x.arcHeight = Math.max(75, grid25(Number(e.target.value) || 100)));
+      if ($("#i-arc-height")) $("#i-arc-height").onchange = e => {
+        mutate(() => x.arcHeight = Math.max(75, grid25(Number(e.target.value) || 100)), {
+          inspector: false
+        });
+        e.target.value = x.arcHeight
+      };
       $("#i-color").onchange = e => mutate(() => x.color = e.target.value);
       $("#i-reverse").onclick = () => mutate(() => [x.from, x.to] = [x.to, x.from]);
       $("#i-delete").onclick = () => deleteEntity("edge", id)
@@ -1090,11 +1333,13 @@
       const g = group(id);
       if (!g) return clearSelection();
       const count = flow().cards.filter(c => c.groupId === id).length;
-      el.innerHTML = `<h2>グループ領域</h2><label class="field"><span>名前</span><input id="i-name" value="${attr(g.name)}"></label><label class="field"><span>色（子カードにも反映）</span><select id="i-color">${COLORS.map(c=>`<option value="${c}" ${g.color===c?"selected":""}>${c}</option>`).join("")}</select></label><p class="hint">子カード ${count}件。カードを領域内へ移動すると所属し、領域と一緒に移動します。</p><div class="inspector-actions"><button id="i-lock">${g.locked?"ロック解除":"領域をロック"}</button><button id="i-fit">子カードに合わせる</button><button id="i-delete" class="danger">削除</button></div>`;
+      el.innerHTML = `<h2>グループ領域</h2><label class="field"><span>名前</span><input id="i-name" value="${attr(g.name)}"></label><label class="field"><span>色（子カードにも反映）</span><select id="i-color">${COLORS.map(c=>`<option value="${c}" ${g.color===c?"selected":""}>${c}</option>`).join("")}</select></label><p class="hint">子カード ${count}件。カードを領域内へ移動すると所属し、領域と一緒に移動します。</p><div class="inspector-actions"><button id="i-lock">${g.locked?"ロック解除":"領域をロック"}</button><button id="i-fit" ${g.locked?'disabled title="ロック中は領域の位置・サイズを変えられません"':""}>子カードに合わせる</button><button id="i-delete" class="danger">削除</button></div>`;
       bindInput("#i-name", v => g.name = v);
       $("#i-color").onchange = e => mutate(() => g.color = e.target.value);
       $("#i-lock").onclick = () => mutate(() => g.locked = !g.locked);
-      $("#i-fit").onclick = () => mutate(() => fitGroup(g));
+      $("#i-fit").onclick = () => {
+        if (!g.locked) mutate(() => fitGroup(g))
+      };
       $("#i-delete").onclick = () => deleteEntity("group", id)
     }
   }
@@ -1191,21 +1436,49 @@
       control.onkeydown = e => e.stopPropagation();
       control.onchange = () => {
         if (control.disabled) return;
-        mutate(() => cards.forEach(c => spec.set(c, control.value)))
+        const typed = spec.type !== "select";
+        mutate(() => cards.forEach(c => spec.set(c, control.value)), {
+          inspector: !typed
+        });
+        // 数値欄は作り直さないので、25px 単位に揃えた値を表示へ戻す
+        if (spec.type === "number" && batchSame(cards, spec.get)) control.value = String(spec.get(cards[0]))
       }
     });
     $("#batch-delete").onclick = () => deleteItems({
       cardIds: new Set(cards.map(c => c.id))
     })
   }
-  // インスペクターの入口：複数選択なら一括編集（カードのみ）か件数表示、単独なら各要素の詳細
+  // インスペクターを作り直す。作り直す前に入力中の欄を確定し（blur で change を発生させる）、
+  // 同じ対象を描き直すときはフォーカスとスクロール位置を戻す（フォーカスが body に落ちると Delete がカード削除になるため）。
   function renderInspector() {
+    const el = $("#inspector"),
+      active = el.contains(document.activeElement) ? document.activeElement : null,
+      focusId = active?.id || "",
+      prevKey = el.dataset.key || "",
+      scroll = el.scrollTop;
+    if (active && /INPUT|TEXTAREA/.test(active.tagName)) active.blur();
+    renderInspectorContent(el);
+    el.dataset.key = inspectorKey();
+    if (el.dataset.key !== prevKey) return;
+    el.scrollTop = scroll;
+    if (focusId) $("#" + focusId, el)?.focus({
+      preventScroll: true
+    })
+  }
+
+  function inspectorKey() {
+    const ids = [...app.multiSelected, ...app.multiGroups];
+    return ids.length > 1 ? "multi:" + ids.sort().join(",") : app.selected ? `${app.selected.type}:${app.selected.id}` : ""
+  }
+
+  // インスペクターの中身：複数選択なら一括編集（カードのみ）か件数表示、単独なら各要素の詳細
+  function renderInspectorContent(el) {
     const cards = flow().cards.filter(c => app.multiSelected.has(c.id)),
       groups = flow().groups.filter(g => app.multiGroups.has(g.id)),
       total = cards.length + groups.length;
     if (total > 1) {
-      if (!groups.length) return renderMultiCardInspector(cards, $("#inspector"));
-      $("#inspector").innerHTML = `<h2>${total}件を選択中</h2><p class="hint">カード ${cards.length}件・グループ ${groups.length}件。選択中の要素をまとめて移動できます。</p>`;
+      if (!groups.length) return renderMultiCardInspector(cards, el);
+      el.innerHTML = `<h2>${total}件を選択中</h2><p class="hint">カード ${cards.length}件・グループ ${groups.length}件。選択中の要素をまとめて移動できます。</p>`;
       return
     }
     if (cards.length === 1) app.selected = {
@@ -1221,7 +1494,9 @@
 
   function bindInput(s, set) {
     const n = $(s);
-    n.onchange = () => mutate(() => set(n.value));
+    n.onchange = () => mutate(() => set(n.value), {
+      inspector: false
+    });
     n.onkeydown = e => e.stopPropagation()
   }
 
@@ -1231,24 +1506,32 @@
   }
 
   // カード・領域をまとめて削除。カードに付く線は一緒に削除し、領域の子カードは所属なしにする。
-  function deleteItems({
+  function deleteItems(items) {
+    const {
+      cardIds = new Set(),
+      groupIds = new Set(),
+      edgeIds = new Set()
+    } = items;
+    if (!cardIds.size && !groupIds.size && !edgeIds.size) return;
+    mutate(() => removeItems(items))
+  }
+
+  // deleteItems と行・列の削除で共用（mutate の中で呼ぶ）。選択も解除する。
+  function removeItems({
     cardIds = new Set(),
     groupIds = new Set(),
     edgeIds = new Set()
   }) {
-    if (!cardIds.size && !groupIds.size && !edgeIds.size) return;
-    mutate(() => {
-      const f = flow();
-      f.cards = f.cards.filter(c => !cardIds.has(c.id));
-      f.edges = f.edges.filter(e => !edgeIds.has(e.id) && !cardIds.has(e.from) && !cardIds.has(e.to));
-      f.groups = f.groups.filter(g => !groupIds.has(g.id));
-      f.cards.forEach(c => {
-        if (groupIds.has(c.groupId)) c.groupId = ""
-      });
-      app.selected = null;
-      app.multiSelected.clear();
-      app.multiGroups.clear()
-    })
+    const f = flow();
+    f.cards = f.cards.filter(c => !cardIds.has(c.id));
+    f.edges = f.edges.filter(e => !edgeIds.has(e.id) && !cardIds.has(e.from) && !cardIds.has(e.to));
+    f.groups = f.groups.filter(g => !groupIds.has(g.id));
+    f.cards.forEach(c => {
+      if (groupIds.has(c.groupId)) c.groupId = ""
+    });
+    app.selected = null;
+    app.multiSelected.clear();
+    app.multiGroups.clear()
   }
 
   function deleteEntity(type, id) {
@@ -1304,16 +1587,17 @@
     return t.colLabels?.[index] || monthLabel(t.startMonth, index)
   }
 
-  function renderTimeline() {
+  // 時系列表の描画。表の HTML が前回と同じなら作り直さない（force は見出しの直接編集のように DOM を書き換えた後に使う）。
+  function renderTimeline(force = false) {
     const layer = $("#timeline-layer"),
       t = flow().timeline;
     if (!t.enabled) {
+      app.timelineHtml = "";
       layer.innerHTML = "";
       layer.className = "";
       return
     }
     const m = timelineMetrics();
-    layer.className = "timeline-grid";
     layer.style.left = t.x + "px";
     layer.style.top = t.y + "px";
     layer.style.width = m.width + "px";
@@ -1333,6 +1617,9 @@
     });
     for (let i = 1; i < t.rows.length; i++) html += `<button class="axis-control axis-insert-row" data-insert-row="${i}" data-boundary-y="${m.rowY[i]}" style="top:${m.rowY[i]-14}px;left:${m.labelW/2-14}px" title="ここに項目を差し込む">＋</button>`;
     html += `<button class="axis-control axis-add-col" data-add-axis="col" title="右に列を追加">＋</button><button class="axis-control axis-add-row" data-add-axis="row" style="left:${m.labelW/2-14}px" title="下に項目を追加">＋</button><div class="timeline-row-drop-guide" aria-hidden="true"></div>`;
+    if (!force && html === app.timelineHtml && layer.classList.contains("timeline-grid")) return;
+    app.timelineHtml = html;
+    layer.className = "timeline-grid";
     layer.innerHTML = html;
     $('[data-timeline-move]', layer).onpointerdown = moveTimeline;
     $$('[data-row-index]', layer).forEach(n => {
@@ -1361,6 +1648,8 @@
     })
   }
 
+  // 行の並べ替え。各行にあるカード・領域（中心の位置で判定）を行と一緒に移動する。
+  // 移動する領域の子カードは、自分の位置に関わらず領域と同じだけ動かす（親子が離れないように）。
   function reorderTimelineRow(from, insertIndex) {
     const f = flow(),
       t = f.timeline,
@@ -1368,15 +1657,17 @@
       destination = insertIndex > from ? insertIndex - 1 : insertIndex;
     if (from < 0 || from >= count || destination < 0 || destination >= count || destination === from) return;
     const before = timelineMetrics(),
-      members = f.cards.map(c => {
-        const center = c.y + cardHeight(c) / 2,
-          index = t.rows.findIndex((_, i) => center >= t.y + before.rowY[i] && center < t.y + before.rowY[i + 1]);
+      member = (item, center) => {
+        const index = t.rows.findIndex((_, i) => center >= t.y + before.rowY[i] && center < t.y + before.rowY[i + 1]);
         return index < 0 ? null : {
-          card: c,
+          item,
           index,
-          offset: c.y - (t.y + before.rowY[index])
+          offset: item.y - (t.y + before.rowY[index])
         }
-      }).filter(Boolean),
+      },
+      groups = f.groups.map(g => member(g, g.y + g.h / 2)).filter(Boolean),
+      movingGroupIds = new Set(groups.map(m => m.item.id)),
+      cards = f.cards.filter(c => !movingGroupIds.has(c.groupId)).map(c => member(c, c.y + cardHeight(c) / 2)).filter(Boolean),
       order = Array.from({
         length: count
       }, (_, i) => i);
@@ -1390,10 +1681,16 @@
       move(t.rowHeights, destination);
       const [original] = order.splice(from, 1);
       order.splice(destination, 0, original);
-      const after = timelineMetrics();
-      members.forEach(item => {
-        const next = order.indexOf(item.index);
-        item.card.y = grid25(t.y + after.rowY[next] + item.offset)
+      const after = timelineMetrics(),
+        place = m => m.item.y = grid25(t.y + after.rowY[order.indexOf(m.index)] + m.offset);
+      cards.forEach(place);
+      groups.forEach(m => {
+        const oldY = m.item.y;
+        place(m);
+        const dy = m.item.y - oldY;
+        if (dy) f.cards.forEach(c => {
+          if (c.groupId === m.item.id) c.y = grid25(c.y + dy)
+        })
       })
     })
   }
@@ -1618,7 +1915,9 @@
       onEnd: () => {
         if (!start.moved) return;
         commitHistory(start.snap);
-        persist()
+        persist();
+        // 表が動くとカードのある行が変わり、行の色（カードの色）も変わるので描き直す
+        render()
       }
     })
   }
@@ -1649,7 +1948,7 @@
         else t.colLabels[index] = value;
         persist()
       }
-      renderTimeline()
+      renderTimeline(true)
     };
     editor.onkeydown = ev => {
       ev.stopPropagation();
@@ -1720,29 +2019,51 @@
       });
       return
     }
-    // 削除：削除した列・行より後ろのカード・領域は、削除した幅・高さの分だけ前へ詰める
-    if (type === "col") {
-      if (t.monthCount <= 1) return toast("最後の列は削除できません");
-      const width = t.colWidths[index],
-        boundary = t.x + m.colX[index + 1];
-      mutate(() => {
+    // 削除：表の範囲内でその列・行に入っているカード（中心で判定）と、そこに収まる領域は、確認のうえ一緒に削除する。
+    // 削除した列・行より後ろのカード・領域は、削除した幅・高さの分だけ前へ詰める。
+    const col = type === "col";
+    if (col && t.monthCount <= 1) return toast("最後の列は削除できません");
+    if (!col && t.rows.length <= 1) return toast("最後の項目は削除できません");
+    const f = flow(),
+      size = col ? t.colWidths[index] : t.rowHeights[index],
+      start = col ? t.x + m.colX[index] : t.y + m.rowY[index],
+      boundary = start + size,
+      crossStart = col ? t.y : t.x,
+      crossEnd = crossStart + (col ? m.height : m.width),
+      inside = (along, across) => along >= start && along < boundary && across >= crossStart && across < crossEnd,
+      cardIds = new Set(f.cards.filter(c => {
+        const cx = c.x + cardWidth(c) / 2,
+          cy = c.y + cardHeight(c) / 2;
+        return col ? inside(cx, cy) : inside(cy, cx)
+      }).map(c => c.id)),
+      groupIds = new Set(f.groups.filter(g => {
+        const from = col ? g.x : g.y,
+          length = col ? g.w : g.h,
+          across = col ? g.y + g.h / 2 : g.x + g.w / 2;
+        return from >= start && from + length <= boundary && across >= crossStart && across < crossEnd
+      }).map(g => g.id));
+    if (cardIds.size || groupIds.size) {
+      const name = String(col ? timelineColumnLabel(index) : t.rows[index]).replace(/\s+/g, " "),
+        what = [cardIds.size ? `カード${cardIds.size}枚` : "", groupIds.size ? `領域${groupIds.size}件` : ""].filter(Boolean).join("と");
+      if (!confirm(`「${name}」の${col?"列":"行"}にある${what}も一緒に削除します。よろしいですか？\n（「元に戻す」で戻せます）`)) return
+    }
+    mutate(() => {
+      if (col) {
         t.colWidths.splice(index, 1);
         t.colLabels.splice(index, 1);
         t.monthCount--;
-        if (index === 0) t.startMonth = shiftMonth(t.startMonth, 1);
-        shiftAfterBoundary("col", boundary, -width)
-      })
-    } else {
-      if (t.rows.length <= 1) return toast("最後の項目は削除できません");
-      const height = t.rowHeights[index],
-        boundary = t.y + m.rowY[index + 1];
-      mutate(() => {
+        if (index === 0) t.startMonth = shiftMonth(t.startMonth, 1)
+      } else {
         t.rows.splice(index, 1);
         t.rowColors.splice(index, 1);
-        t.rowHeights.splice(index, 1);
-        shiftAfterBoundary("row", boundary, -height)
-      })
-    }
+        t.rowHeights.splice(index, 1)
+      }
+      if (cardIds.size || groupIds.size) removeItems({
+        cardIds,
+        groupIds
+      });
+      shiftAfterBoundary(type, boundary, -size)
+    })
   }
 
   function toggleTimeline() {
@@ -1764,7 +2085,8 @@
         w: 250,
         h: 100,
         x: grid25(center.x - 125),
-        y: grid25(center.y - 50)
+        y: grid25(center.y - 50),
+        groupId: ""
       };
       flow().cards.push(c)
     })
@@ -1776,6 +2098,7 @@
       id: uid("group"),
       name: "新しい領域",
       color: COLORS[flow().groups.length % COLORS.length],
+      locked: false,
       x: grid25(center.x - 200),
       y: grid25(center.y - 120),
       w: 400,
@@ -1796,40 +2119,33 @@
     g.h = Math.max(125, grid25(maxY - g.y + 50))
   }
 
+  // 選択中のカード・領域をコピーする。領域は子カードと内部の線も含め、複数の領域や、カードと領域が混ざった選択もそのまま扱う。
   function copySelected() {
     if (!app.selected || app.selected.type === "edge") return;
-    const {
-      type,
-      id
-    } = app.selected;
-    if (type === "card") {
-      let cards = flow().cards.filter(c => app.multiSelected.has(c.id));
-      if (!cards.length && card(id)) cards = [card(id)];
-      const ids = new Set(cards.map(c => c.id));
-      app.clipboard = {
-        type: "cards",
-        cards: structuredClone(cards),
-        groups: [],
-        edges: structuredClone(flow().edges.filter(e => ids.has(e.from) && ids.has(e.to)))
-      };
-      toast(`${cards.length}件のカードをコピーしました`)
-    } else {
-      const g = group(id),
-        cards = flow().cards.filter(c => c.groupId === id),
-        ids = new Set(cards.map(c => c.id));
-      app.clipboard = {
+    const f = flow(),
+      {
         type,
-        groups: [structuredClone(g)],
-        cards: structuredClone(cards),
-        edges: structuredClone(flow().edges.filter(e => ids.has(e.from) && ids.has(e.to)))
-      };
-      toast("領域と子カードをコピーしました")
-    }
+        id
+      } = app.selected,
+      groupIds = new Set(app.multiGroups.size ? app.multiGroups : type === "group" ? [id] : []),
+      cardIds = new Set(app.multiSelected.size ? app.multiSelected : type === "card" ? [id] : []),
+      groups = f.groups.filter(g => groupIds.has(g.id)),
+      cards = f.cards.filter(c => cardIds.has(c.id) || groupIds.has(c.groupId)),
+      ids = new Set(cards.map(c => c.id));
+    if (!groups.length && !cards.length) return;
+    app.clipboard = {
+      groups: structuredClone(groups),
+      cards: structuredClone(cards),
+      edges: structuredClone(f.edges.filter(e => ids.has(e.from) && ids.has(e.to)))
+    };
+    toast(groups.length ? `領域${groups.length}件と子カードを含むカード${cards.length}件をコピーしました` : `${cards.length}件のカードをコピーしました`)
   }
 
+  // 貼り付け。ID を振り直し、親子と線の参照を付け替える。一緒にコピーしていない親領域は、
+  // 貼り付け先のフローにあればその領域のまま、無ければ貼り付けた位置で所属を決める。
   function pasteSelected() {
     const clip = structuredClone(app.clipboard);
-    if (!clip) return;
+    if (!clip || !clip.cards.length && !clip.groups.length) return;
     history();
     const idMap = new Map(),
       groupMap = new Map();
@@ -1851,7 +2167,8 @@
       c.y = grid25(c.y + 25);
       c.w = Math.max(150, grid25(c.w || cardWidth(c)));
       c.h = Math.max(75, grid25(c.h || cardHeight(c)));
-      c.groupId = groupMap.get(c.groupId) || "";
+      c.groupId = groupMap.get(c.groupId) || (group(c.groupId) ? c.groupId : "");
+      if (!c.groupId) assignCardToGroup(c);
       idMap.set(old, c.id);
       flow().cards.push(c)
     });
@@ -1865,21 +2182,24 @@
         to
       })
     });
+    // 選択は貼り付けた要素だけにする（元の要素が選択に残ると、直後の Delete で元のほうが消える）
+    // 領域の子カードは領域と一緒に動くので、選択には領域と、領域に属さないカードだけを入れる
+    const pastedGroups = [...groupMap.values()],
+      looseCards = clip.cards.filter(c => !pastedGroups.includes(c.groupId)).map(c => c.id);
     app.multiSelected.clear();
-    if (clip.type === "group") app.selected = {
+    app.multiGroups.clear();
+    pastedGroups.forEach(id => app.multiGroups.add(id));
+    looseCards.forEach(id => app.multiSelected.add(id));
+    app.selected = pastedGroups.length ? {
       type: "group",
-      id: [...groupMap.values()][0]
+      id: pastedGroups[0]
+    } : {
+      type: "card",
+      id: looseCards[0]
     };
-    else {
-      [...idMap.values()].forEach(id => app.multiSelected.add(id));
-      app.selected = {
-        type: "card",
-        id: [...idMap.values()][0]
-      }
-    }
     persist();
     render();
-    toast(`${clip.cards.length}件のカードを貼り付けました`)
+    toast(pastedGroups.length ? `領域${pastedGroups.length}件とカード${clip.cards.length}件を貼り付けました` : `${clip.cards.length}件のカードを貼り付けました`)
   }
 
   function jumpToCard(id) {
@@ -1923,6 +2243,30 @@
       w: cardWidth(c),
       h: cardHeight(c)
     }));
+    // 線（大きいループ・自己ループを含む）とラベル。ベジェ曲線は制御点を囲む矩形に必ず収まるので、その矩形を含める
+    f.edges.forEach(e => {
+      const a = card(e.from),
+        b = card(e.to);
+      if (!a || !b) return;
+      const g = edgeGeometry(e, a, b),
+        n = g.d.match(/-?\d+(?:\.\d+)?(?:e[-+]?\d+)?/gi).map(Number),
+        xs = n.filter((_, i) => i % 2 === 0),
+        ys = n.filter((_, i) => i % 2 === 1),
+        x = Math.min(...xs),
+        y = Math.min(...ys);
+      boxes.push({
+        x,
+        y,
+        w: Math.max(...xs) - x,
+        h: Math.max(...ys) - y
+      });
+      if (e.label) boxes.push({
+        x: g.lx - 110,
+        y: g.ly - 14,
+        w: 220,
+        h: 28
+      })
+    });
     if (!boxes.length) return {
       x: -80,
       y: -80,
@@ -2082,7 +2426,10 @@
       ctx.closePath();
       ctx.fill();
       if (e.label) {
-        const w = Math.min(220, Math.max(60, ctx.measureText(e.label).width + 22));
+        const {
+          w,
+          shown
+        } = edgeLabelBox(e.label);
         ctx.fillStyle = "#0d1420";
         ctx.strokeStyle = "rgba(185,209,239,.35)";
         pngRound(ctx, g.lx - w / 2, g.ly - 14, w, 28, 8);
@@ -2092,7 +2439,7 @@
         ctx.font = "12px 'Yu Gothic UI',Meiryo,sans-serif";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText(e.label.length > 22 ? e.label.slice(0, 22) + "…" : e.label, g.lx, g.ly)
+        ctx.fillText(shown, g.lx, g.ly)
       }
     })
   }
@@ -2182,12 +2529,13 @@
   }
 
   async function exportPng() {
+    const name = `${safeFileName(flow().name)}-全体.png`;
     try {
       const {
         blob,
         bounds
       } = await createFlowPngBlob();
-      downloadBlob(blob, `${safeFileName(flow().name)}-全体.png`);
+      downloadBlob(blob, name);
       toast(`PNGを書き出しました（${bounds.w}×${bounds.h}px）`)
     } catch (e) {
       toast(e.message || "PNG作成に失敗しました")
@@ -2230,12 +2578,14 @@
       cardIds = new Map(cards.map((c, i) => [c.id, `C${String(i+1).padStart(2,"0")}`])),
       groupIds = new Map(groups.map((g, i) => [g.id, `G${String(i+1).padStart(2,"0")}`])),
       incoming = new Map(cards.map(c => [c.id, 0])),
-      outgoing = new Map(cards.map(c => [c.id, 0]));
-    f.edges.forEach(e => {
-      if (incoming.has(e.to)) incoming.set(e.to, incoming.get(e.to) + 1);
-      if (outgoing.has(e.from)) outgoing.set(e.from, outgoing.get(e.from) + 1)
+      outgoing = new Map(cards.map(c => [c.id, 0])),
+      // 存在しないカードを指す線は、件数・一覧・図のどれにも含めない
+      edges = f.edges.filter(e => cardIds.has(e.from) && cardIds.has(e.to));
+    edges.forEach(e => {
+      incoming.set(e.to, incoming.get(e.to) + 1);
+      outgoing.set(e.from, outgoing.get(e.from) + 1)
     });
-    const lines = [`# ${mdText(f.name)}`, "", "> Flow FragmentsからAI相談用に書き出した文脈です。構造化された接続情報を主に読み、FLOW.pngで位置関係と領域の広がりを補完してください。", "", `- 書き出し日時: ${new Date().toLocaleString("ja-JP")}`, `- カード: ${cards.length}件`, `- 接続: ${f.edges.length}件`, `- グループ: ${groups.length}件`, ""];
+    const lines = [`# ${mdText(f.name)}`, "", "> Flow FragmentsからAI相談用に書き出した文脈です。構造化された接続情報を主に読み、FLOW.pngで位置関係と領域の広がりを補完してください。", "", `- 書き出し日時: ${new Date().toLocaleString("ja-JP")}`, `- カード: ${cards.length}件`, `- 接続: ${edges.length}件`, `- グループ: ${groups.length}件`, ""];
     if (f.timeline.enabled) {
       lines.push("## 軸の意味", "", `- 横軸: ${Array.from({length:f.timeline.monthCount},(_,i)=>timelineColumnLabel(i)).map(mdText).join("／")}`, `- 縦軸: ${f.timeline.rows.map(mdText).join("／")}`, `- 行の色: ${f.timeline.rows.map((row,i)=>`${mdText(row)}=${f.timeline.rowColors[i]||COLORS[i%COLORS.length]}`).join("／")}`, "- カードが複数の期間・項目にまたがる場合は、該当範囲をすべて記載しています。", "")
     } else lines.push("## 配置の意味", "", "- 自由配置キャンバスです。カードの左右関係を大まかな進行順として記載しています。", "");
@@ -2251,17 +2601,16 @@
       lines.push(`### ${cardIds.get(c.id)}: ${mdText(c.title)}`, `- 位置: ${aiCardPosition(c)}`, `- グループ: ${parent?`${groupIds.get(parent.id)} ${mdText(parent.name)}`:"なし"}`, `- 表示色: ${cardVisualColor(c)}`, `- タグ: ${c.tags.length?c.tags.map(t=>`#${mdText(t)}`).join("、"):"なし"}`, `- メモ: ${c.body?mdText(c.body):"なし"}`, `- 入ってくる接続: ${incoming.get(c.id)||0}本`, `- 出ていく接続: ${outgoing.get(c.id)||0}本`, "")
     });
     lines.push("## 接続関係", "");
-    if (!f.edges.length) lines.push("- 接続なし", "");
+    if (!edges.length) lines.push("- 接続なし", "");
     const kindNames = {
       normal: "通常フロー",
       loopTop: "上側の戻りループ",
       loopBottom: "下側の差し戻し",
       self: "自己ループ"
     };
-    f.edges.forEach((e, i) => {
+    edges.forEach((e, i) => {
       const from = cardIds.get(e.from),
         to = cardIds.get(e.to);
-      if (!from || !to) return;
       lines.push(`${i+1}. ${from}「${mdText(card(e.from)?.title)}」 → ${to}「${mdText(card(e.to)?.title)}」`, `   - 種類: ${kindNames[e.kind||"normal"]||e.kind}`, `   - 条件・説明: ${e.label?mdText(e.label):"記載なし"}`)
     });
     const starts = cards.filter(c => !incoming.get(c.id)),
@@ -2269,14 +2618,13 @@
       branches = cards.filter(c => outgoing.get(c.id) > 1),
       merges = cards.filter(c => incoming.get(c.id) > 1),
       isolated = cards.filter(c => !incoming.get(c.id) && !outgoing.get(c.id)),
-      loops = f.edges.filter(e => (e.kind || "normal") !== "normal");
+      loops = edges.filter(e => (e.kind || "normal") !== "normal");
     lines.push("", "## 構造上の特徴", "", `- 開始候補: ${starts.length?starts.map(c=>`${cardIds.get(c.id)}「${mdText(c.title)}」`).join("、"):"なし"}`, `- 終了候補: ${ends.length?ends.map(c=>`${cardIds.get(c.id)}「${mdText(c.title)}」`).join("、"):"なし"}`, `- 分岐元: ${branches.length?branches.map(c=>`${cardIds.get(c.id)}（${outgoing.get(c.id)}経路）`).join("、"):"なし"}`, `- 合流先: ${merges.length?merges.map(c=>`${cardIds.get(c.id)}（${incoming.get(c.id)}経路）`).join("、"):"なし"}`, `- ループ接続: ${loops.length}本`, `- 孤立カード: ${isolated.length?isolated.map(c=>cardIds.get(c.id)).join("、"):"なし"}`, "", "## Mermaid形式の接続図", "", "> 以下は接続構造を機械的に確認するための図です。実際の空間配置はFLOW.pngを参照してください。", "", "```mermaid", "flowchart LR");
     cards.forEach(c => lines.push(`  ${cardIds.get(c.id)}["${mermaidText(c.title)}"]`));
-    f.edges.forEach(e => {
+    edges.forEach(e => {
       const from = cardIds.get(e.from),
-        to = cardIds.get(e.to);
-      if (!from || !to) return;
-      const loop = (e.kind || "normal") !== "normal",
+        to = cardIds.get(e.to),
+        loop = (e.kind || "normal") !== "normal",
         label = mermaidText(e.label || (loop ? kindNames[e.kind] : ""));
       lines.push(`  ${from} ${loop?"-.->":"-->"}${label?`|"${label}"|`:""} ${to}`)
     });
@@ -2392,9 +2740,11 @@
     button.disabled = true;
     button.textContent = "作成中…";
     try {
+      // Markdown・JSON・ファイル名は PNG を作る待ち時間より前に確定させ、3つを同じ時点の内容にそろえる
       const markdown = buildAiContext(),
-        png = (await createFlowPngBlob()).blob,
         json = buildAiJson(),
+        name = `${safeFileName(flow().name)}-AI文脈.zip`,
+        png = (await createFlowPngBlob()).blob,
         zip = await createZip([{
           name: "AI_CONTEXT.md",
           data: markdown
@@ -2405,7 +2755,7 @@
           name: "FLOW_DATA.json",
           data: json
         }]);
-      downloadBlob(zip, `${safeFileName(flow().name)}-AI文脈.zip`);
+      downloadBlob(zip, name);
       toast("AI用の文脈一式を書き出しました")
     } catch (e) {
       toast(e.message || "文脈の書き出しに失敗しました")
@@ -2521,12 +2871,16 @@
     } catch {}
   }
 
+  // 現在の保存先を一覧から探す（id がまだ無いときは同じハンドルの項目で対応付ける）
   function renderRecentFiles() {
-    const select = $("#recent-file-select");
+    const select = $("#recent-file-select"),
+      current = app.recentFiles.find(x => x.id === app.currentFileId) || app.recentFiles.find(x => x.handle && x.handle === app.currentFileHandle);
+    if (current) app.currentFileId = current.id;
     select.innerHTML = '<option value="">最近のファイル</option>' + app.recentFiles.map(x => `<option value="${attr(x.id)}">${esc(x.name)}</option>`).join("");
-    select.value = app.recentFiles.some(x => x.id === app.currentFileId) ? app.currentFileId : "";
+    select.value = current?.id || "";
     $("#forget-file").disabled = !select.value
   }
+  // 最近のファイルへ登録する。保存先（currentFileHandle）の切替は呼び出し側が await の前に済ませ、ここでは一覧の id だけを対応付ける。
   async function rememberFile(handle) {
     let entry = null;
     for (const item of app.recentFiles) {
@@ -2546,13 +2900,14 @@
     entry.name = handle.name;
     entry.handle = handle;
     entry.updatedAt = Date.now();
-    app.currentFileId = entry.id;
-    app.currentFileHandle = handle;
+    if (app.currentFileHandle === handle) app.currentFileId = entry.id;
     app.recentFiles = [entry, ...app.recentFiles.filter(x => x.id !== entry.id)].slice(0, 12);
     await storeRecentFile(entry);
     renderRecentFiles()
   }
   // 外部JSONの読込。検証・正規化が通った場合だけ状態を差し替える（失敗時は現在のデータをそのまま保つ）。
+  // 旧状態への操作を先に終え、保存先は await を挟まずに状態と同時に切り替える（ハンドルの無いアップロードでは保存先なし）。
+  // 読込前の状態は、保存先ごと Undo で戻せる。
   async function loadExternalState(file, handle = null) {
     let next = null;
     try {
@@ -2562,13 +2917,17 @@
       next = null
     }
     if (!next) return toast("対応していないJSONです");
-    const before = snapshot();
+    app.activeDrag?.finish();
+    pushHistory();
     app.state = next;
+    app.currentFileHandle = handle;
+    app.currentFileId = "";
     switchFlow(next.activeFlowId, {
       resetView: false
     });
-    pushHistory(before);
+    markFileSaved(file.name);
     persist();
+    renderRecentFiles();
     render();
     if (handle) {
       try {
@@ -2606,19 +2965,36 @@
     }
     $("#file-input").click()
   }
+  // 最近のファイルを開く。開けなかったときは理由を知らせ、プルダウンの表示を今開いているファイルに戻す。
   async function openRecentFile(id) {
     const entry = app.recentFiles.find(x => x.id === id);
-    if (!entry?.handle) return;
-    if (!await requestHandlePermission(entry.handle, "read")) return toast("ファイルを開く権限がありません");
-    await loadExternalState(await entry.handle.getFile(), entry.handle)
+    try {
+      if (!entry?.handle) return;
+      if (!await requestHandlePermission(entry.handle, "read")) return toast("ファイルを開く権限がありません");
+      await loadExternalState(await entry.handle.getFile(), entry.handle)
+    } catch {
+      toast("ファイルを開けませんでした（移動・削除された可能性があります）")
+    } finally {
+      renderRecentFiles()
+    }
   }
+  // 書き込む内容は保存を押した時点の状態で確定する。書き込み中に別のファイルへ切り替わった場合は、保存先を差し替えない。
   async function writeCurrentHandle(handle) {
+    const state = app.state,
+      data = JSON.stringify(state, null, 2),
+      hash = fingerprint(state);
     if (!await requestHandlePermission(handle, "readwrite")) throw Error("permission");
     const writable = await handle.createWritable();
-    await writable.write(JSON.stringify(app.state, null, 2));
+    await writable.write(data);
     await writable.close();
+    markFileSaved(handle.name, hash);
+    const same = app.state === state;
+    if (same && app.currentFileHandle !== handle) {
+      app.currentFileHandle = handle;
+      app.currentFileId = ""
+    }
     await rememberFile(handle);
-    $("#save-status").textContent = `${handle.name} に保存済み`;
+    if (same) $("#save-status").textContent = `${handle.name} に保存済み`;
     toast(`${handle.name}に上書き保存しました`)
   }
   async function saveAsExternalFile() {
@@ -2687,6 +3063,7 @@
     renderRecentFiles()
   }
 
+  // 新規ファイル。直前の内容は BACKUP_KEY に1世代退避し、履歴にも保存先ごと積むので「元に戻す」で戻せる。
   function createBlankFile() {
     app.activeDrag?.finish();
     cancelAnimationFrame(app.edgeFrame);
@@ -2694,6 +3071,11 @@
     cancelAnimationFrame(app.timelineFrame);
     app.timelineFrame = 0;
     app.edgeDirty = null;
+    const before = snapshot();
+    try {
+      localStorage.setItem(BACKUP_KEY, before)
+    } catch {}
+    pushHistory(before);
     const f = emptyFlow();
     app.state = {
       version: 1,
@@ -2708,10 +3090,6 @@
     app.multiSelected.clear();
     app.multiGroups.clear();
     app.filterTag = "";
-    app.history = {
-      undo: [],
-      redo: []
-    };
     app.clipboard = null;
     app.edgeDraft = null;
     app.edgeFrame = 0;
@@ -2732,14 +3110,14 @@
     render();
     persist(true);
     $("#quick-text").focus();
-    toast("新規ファイルを作成しました。JSONファイルへの保存は「保存」から行えます");
+    toast("新規ファイルを作成しました。前の内容は「元に戻す」で戻せます。JSONファイルへの保存は「保存」から行えます");
   }
 
   function newFile() {
     if (app.fileTransitionBusy) return;
     app.activeDrag?.finish();
     closeContextMenu();
-    modal(`<div id="new-file-dialog" class="new-file-dialog" role="dialog" aria-modal="true" aria-labelledby="new-file-heading" tabindex="-1"><h2 id="new-file-heading">新規ファイルを作成</h2><p>現在開いている全フローを保存しますか？</p><p class="hint">新規作成すると、カード・線・グループのない空のフローに切り替わります。保存済みのJSONファイルは削除しません。</p><p class="hint">新しい内容はブラウザ内に自動保存され、次回も続きから開けます。JSONファイルには「保存」を押すまで保存されません。</p><p id="new-file-status" class="hint" role="status" aria-live="polite"></p><div class="modal-actions"><button id="cancel-new-file" data-close>キャンセル</button><button id="discard-new-file">保存せず新規作成</button><button id="save-new-file" class="primary">保存して新規作成</button></div></div>`);
+    modal(`<div id="new-file-dialog" class="new-file-dialog" role="dialog" aria-modal="true" aria-labelledby="new-file-heading" tabindex="-1"><h2 id="new-file-heading">新規ファイルを作成</h2><p>現在開いている全フローを保存しますか？</p><p class="hint">新規作成すると、カード・線・グループのない空のフローに切り替わります。保存済みのJSONファイルは削除しません。保存せずに新規作成しても、「元に戻す」で今の内容に戻せます。</p><p class="hint">新しい内容はブラウザ内に自動保存され、次回も続きから開けます。JSONファイルには「保存」を押すまで保存されません。</p><p id="new-file-status" class="hint" role="status" aria-live="polite"></p><div class="modal-actions"><button id="cancel-new-file" data-close>キャンセル</button><button id="discard-new-file">保存せず新規作成</button><button id="save-new-file" class="primary">保存して新規作成</button></div></div>`);
     const dialog = $("#new-file-dialog"),
       save = $("#save-new-file"),
       status = $("#new-file-status");
@@ -2801,6 +3179,7 @@
     a.download = `${safeFileName(flow().name)}.json`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    markFileSaved(a.download);
     toast("JSONを書き出しました")
   }
   function newFlow() {
@@ -2864,6 +3243,8 @@
     // パン（空白ドラッグ）は installStablePan() で割り当てる
     vp.onwheel = e => {
       e.preventDefault();
+      // ドラッグ中は倍率を変えない（移動量の換算がずれて、つかんだ要素が跳ぶため）
+      if (app.activeDrag) return;
       const before = screenWorld(e.clientX, e.clientY),
         rect = vp.getBoundingClientRect(),
         z = Math.max(.3, Math.min(2.2, app.view.zoom * (e.deltaY > 0 ? .9 : 1.1)));
@@ -2919,15 +3300,7 @@
   // ロック中の領域はドラッグしても動かさず、選択だけして視点移動にする
   function selectLockedGroupAndPan(e, id) {
     if (e.button !== 0) return;
-    if (e.shiftKey) {
-      app.multiGroups.has(id) ? app.multiGroups.delete(id) : app.multiGroups.add(id);
-      app.selected = app.multiSelected.size || app.multiGroups.size ? {
-        type: "group",
-        id
-      } : null;
-      updateSelectionView();
-      return
-    }
+    if (e.shiftKey) return toggleShiftSelection("group", id);
     if (!app.multiGroups.has(id)) {
       app.multiSelected.clear();
       app.multiGroups.clear();
@@ -3164,6 +3537,81 @@
     return esc(v)
   }
 
+  // 壊れた保存データを退避できなかったときの案内。元データは KEY に残したまま自動保存を止めている。
+  // 「元データを書き出す」を押した後でだけ再開できる（再開すると KEY は現在の内容で上書きされる）。
+  function showRecoveryFailure() {
+    $("#save-status").textContent = BLOCKED_STATUS.recovery;
+    modal(`<h2>ブラウザ内の保存データを読めませんでした</h2><p>保存データが壊れていて、退避用の場所（${esc(RECOVERY_KEY)}）にも保存できませんでした。元データを守るため、ブラウザ内の自動保存を止めています。</p><p class="hint">「元データを書き出す」でファイルに保存してから、自動保存を再開してください。再開すると、ブラウザ内の元データは現在の内容で上書きされます。閉じた場合も、JSONファイルへの「保存」は使えます。</p><div class="modal-actions"><button data-close>停止したまま閉じる</button><button id="download-broken">元データを書き出す</button><button id="resume-persist" class="primary" disabled>自動保存を再開</button></div>`);
+    $("#download-broken").onclick = () => {
+      downloadBlob(new Blob([app.recovery.raw], {
+        type: "text/plain;charset=utf-8"
+      }), "flow-fragments-読めなかった保存データ.txt");
+      $("#resume-persist").disabled = false
+    };
+    $("#resume-persist").onclick = () => {
+      app.persistBlocked = "";
+      app.recovery = null;
+      closeModal();
+      persist(true);
+      toast("ブラウザ内の自動保存を再開しました")
+    }
+  }
+
+  // 別のタブ（ウィンドウ）が同じ保存データを書き換えたとき。このタブが自動保存を続けると相手の変更を消すので、
+  // 自動保存を止め、最新の内容を読み込むか、このタブの内容で保存し直すかを選んでもらう（選ぶまでは編集のたびに案内する）。
+  function bindOtherTabWatch() {
+    window.addEventListener("storage", e => {
+      if (e.storageArea !== localStorage) return;
+      if (e.key === FILE_KEY) return updateFileStatus();
+      if (e.key !== KEY || e.newValue == null) return;
+      clearTimeout(app.saveTimer);
+      app.saveTimer = 0;
+      app.persistBlocked = "otherTab";
+      $("#save-status").textContent = BLOCKED_STATUS.otherTab;
+      if (!$("#other-tab-dialog")) showOtherTabDialog()
+    })
+  }
+
+  function showOtherTabDialog() {
+    modal(`<div id="other-tab-dialog"><h2>別のタブで内容が更新されました</h2><p>このツールが別のタブ（またはウィンドウ）でも開かれていて、そちらの変更がブラウザ内に保存されました。このタブで自動保存を続けるとそちらの変更を上書きしてしまうため、このタブの自動保存を止めています。</p><p class="hint">「最新の内容を読み込む」を選ぶと、別のタブで保存された内容に切り替わります。このタブの内容は「元に戻す」で戻せます。上書き保存先のJSONファイルの指定は解除されます。</p><p class="hint">「このタブの内容を保存」を選ぶと、別のタブで行った変更はブラウザ内の保存から消えます。</p><div class="modal-actions"><button id="keep-this-tab">このタブの内容を保存</button><button id="load-other-tab" class="primary">最新の内容を読み込む</button></div></div>`);
+    $("#keep-this-tab").onclick = () => {
+      app.persistBlocked = "";
+      closeModal();
+      persist(true);
+      toast("このタブの内容をブラウザ内に保存しました")
+    };
+    $("#load-other-tab").onclick = () => {
+      closeModal();
+      adoptStoredState()
+    }
+  }
+
+  // 別のタブが保存した内容に切り替える。ファイルを開くときと同じく、切替前の内容は「元に戻す」で戻せる。
+  // 相手のタブの内容をこのタブのファイルへ上書きしないよう、上書き保存先は解除する。
+  function adoptStoredState() {
+    let next = null;
+    try {
+      next = sanitizeState(JSON.parse(localStorage.getItem(KEY)))
+    } catch {}
+    if (!next) return toast("最新の内容を読み込めませんでした");
+    app.activeDrag?.finish();
+    pushHistory();
+    app.state = next;
+    app.currentFileHandle = null;
+    app.currentFileId = "";
+    app.persistBlocked = "";
+    clearTimeout(app.saveTimer);
+    app.saveTimer = 0;
+    switchFlow(next.activeFlowId, {
+      resetView: false
+    });
+    renderRecentFiles();
+    render();
+    updateFileStatus();
+    $("#save-status").textContent = "別のタブで保存された内容を読み込みました";
+    toast("最新の内容を読み込みました")
+  }
+
   function modal(html) {
     $("#modal-root").innerHTML = `<div class="modal-backdrop"><div class="modal">${html}</div></div>`;
     setTimeout(() => $("#modal-root input")?.focus())
@@ -3195,9 +3643,9 @@
     if (document.hidden) flushPersist()
   });
   render();
+  updateFileStatus();
+  bindOtherTabWatch();
   initFileControls();
-  if (app.recoveredFromBroken) {
-    toast(`ブラウザ内の保存データが読めなかったため、サンプルから開始しました（元データは ${RECOVERY_KEY} に退避）`);
-    app.recoveredFromBroken = false
-  }
+  if (app.recovery?.saved) toast(`ブラウザ内の保存データが読めなかったため、サンプルから開始しました（元データは ${RECOVERY_KEY} に退避）`);
+  else if (app.recovery) showRecoveryFailure();
 })();
