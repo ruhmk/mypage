@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#07090f">
   <title>Flow Fragments</title>
-  <link rel="stylesheet" href="styles.css?v=20261030-1">
+  <link rel="stylesheet" href="styles.css?v=20261030-2">
 </head>
 <body>
   <main id="app">
@@ -42,7 +42,7 @@
               </div>
             </div>
           </div>
-          <div id="view-caption" class="crumb">自由配置キャンバス</div>
+          <div class="crumb-row"><button id="flow-back" class="flow-back" hidden></button><div id="view-caption" class="crumb">自由配置キャンバス</div></div>
         </div>
         <nav class="toolbar" aria-label="キャンバスと保存">
           <button id="undo" title="元に戻す">↶</button><button id="redo" title="やり直す">↷</button>
@@ -83,7 +83,8 @@
         <div class="viewport-help">
           <span>空白・表内ドラッグ：視点移動　／　表の左上ドラッグ：表を移動　／　項目名ダブルクリック：文字変更・改行</span>
           <span>項目名列の右端ドラッグ：列幅変更　／　軸境界ドラッグ：幅・高さ変更　／　Ctrl＋軸境界ドラッグ：後続カードも移動</span>
-          <span>ホイール：拡大縮小　／　Shift＋クリック：カード・グループを複数選択</span>
+          <span>ホイール：拡大縮小　／　Shift＋クリック：カード・グループを複数選択　／　Shift＋空白ドラッグ：範囲選択</span>
+          <span>矢印：選択中を移動（Shift で大きく）　／　Ctrl＋D：複製　／　Ctrl＋A：全選択　／　Ctrl＋Enter：右隣に次のカード　／　Esc：選択解除</span>
           <span><b>右ドラッグ</b>：通常線　／　<b>Shift＋右ドラッグ</b>：① 上側ループ　／　<b>Alt＋右ドラッグ</b>：② 下側ループ　／　<b>Ctrl＋右ドラッグ</b>：③ 自己ループ</span>
         </div>
       </div>
@@ -91,6 +92,6 @@
     </section>
   </main>
   <div id="modal-root"></div><div id="toast-root"></div>
-  <script src="app.js?v=20261030-4"></script>
+  <script src="app.js?v=20261030-5"></script>
 </body>
 </html>

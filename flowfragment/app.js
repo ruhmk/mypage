@@ -1,4 +1,5 @@
-// Flow Fragments app.js（2026-10-19 整理版／2026-10-28 データ保護の修正／2026-10-30 親子・表操作の修正、複数タブ・保存状態の表示、差分描画、細部の不整合）
+// Flow Fragments app.js（2026-10-19 整理版／2026-10-28 データ保護の修正／2026-10-30 親子・表操作の修正、複数タブ・保存状態の表示、差分描画、細部の不整合、
+//   キーボード操作・範囲選択・次のカード作成・メモのURLリンク・詳細フローへのリンクを追加）
 // 構成：状態と保存（load / sanitizeState / persist / 履歴）→ 描画（render / renderWorld / renderEdges / renderInspector。カード・領域・線は patchChildren で差分更新）
 //      → 操作（trackPointer を土台にしたドラッグ・リサイズ・接続・パン）→ 時系列表 → 書き出し（PNG / AI用ZIP）→ ファイル入出力 → 初期化
 (() => {
@@ -66,6 +67,10 @@
     suppressContextMenuUntil: 0,
     saveTimer: 0,
     clipboard: null,
+    // 詳細フローを開いた経路（{ from, to, cardId, view } の並び）。上部の「←」で元のフローへ戻るのに使う
+    flowTrail: [],
+    // 矢印キーで続けて動かしている間の記録（履歴を1件にまとめる判定用）
+    nudge: null,
     recentFiles: [],
     currentFileId: "",
     currentFileHandle: null,
@@ -275,6 +280,11 @@
         if (e.arcHeight != null) e.arcHeight = Math.max(75, grid25(num(e.arcHeight, 100)))
       })
     });
+    // カードの詳細フロー（linkFlowId）は任意項目。無いフロー・自分のフローを指すものだけ外す（結び付けていないカードには足さない）
+    const allFlowIds = new Set(flows.map(f => f.id));
+    flows.forEach(f => f.cards.forEach(c => {
+      if (c.linkFlowId != null && !(typeof c.linkFlowId === "string" && allFlowIds.has(c.linkFlowId) && c.linkFlowId !== f.id)) delete c.linkFlowId
+    }));
     state.activeFlowId = flows.some(f => f.id === data.activeFlowId) ? data.activeFlowId : flows[0].id;
     return state
   }
@@ -297,10 +307,13 @@
     return remap
   }
   // 表示フローの切替。進行中の操作を終了し、選択・複数選択・タグ絞り込み・ビューをリセットする（全経路共通）。
+  // 詳細フローの行き来（keepTrail）以外で切り替えたときは、「←」で戻る経路を消す。
   function switchFlow(id, {
-    resetView = true
+    resetView = true,
+    keepTrail = false
   } = {}) {
     app.activeDrag?.finish();
+    if (!keepTrail) app.flowTrail = [];
     app.activeFlowId = id;
     app.state.activeFlowId = id;
     app.selected = null;
@@ -493,6 +506,7 @@
     if (inspector) renderInspector();
     $("#flow-title").value = flow().name;
     $("#view-caption").textContent = flow().timeline.enabled ? "時系列キャンバス" : "自由配置キャンバス";
+    renderFlowBack();
     $("#timeline-toggle").classList.toggle("active", flow().timeline.enabled);
     updateTransform();
     updateHistory()
@@ -634,10 +648,13 @@
     const cards = patchChildren($("#card-layer"), f.cards.map(c => {
       const parent = group(c.groupId),
         color = cardVisualColor(c, metrics),
-        locked = parent?.locked;
+        locked = parent?.locked,
+        linked = linkedFlow(c),
+        // 詳細フローへのボタンはタグと同じ行に置く（カードの高さの計算は .card-tags の有無で決まるため）
+        chips = linked || c.tags.length ? `<div class="card-tags">${linked?`<button type="button" class="flow-link" title="詳細フロー「${attr(linked.name)}」を開く">↗ ${esc(linked.name)}</button>`:""}${c.tags.map(t=>`<span class="mini-tag">#${esc(t)}</span>`).join("")}</div>` : "";
       return {
         id: c.id,
-        html: `<article class="flow-card ${locked?"locked":""} ${c.collapsed?"collapsed":""}" data-card="${c.id}" style="left:${c.x}px;top:${c.y}px;width:${cardWidth(c)}px;height:${cardHeight(c)}px;--card-color:${color}"><button class="card-toggle" title="メモを開閉">${c.collapsed?"＋":"−"}</button><div class="card-title">${esc(c.title)}</div><div class="card-body">${esc(c.body)}</div>${c.tags.length?`<div class="card-tags">${c.tags.map(t=>`<span class="mini-tag">#${esc(t)}</span>`).join("")}</div>`:""}<span class="port" title="右クリックドラッグで接続"></span><span class="card-resize" title="ドラッグして高さ変更"></span><span class="card-resize-x" title="ドラッグして期間・横幅を変更"></span></article>`
+        html: `<article class="flow-card ${locked?"locked":""} ${c.collapsed?"collapsed":""}" data-card="${c.id}" style="left:${c.x}px;top:${c.y}px;width:${cardWidth(c)}px;height:${cardHeight(c)}px;--card-color:${color}"><button class="card-toggle" title="メモを開閉">${c.collapsed?"＋":"−"}</button><div class="card-title">${esc(c.title)}</div><div class="card-body">${linkify(c.body)}</div>${chips}<span class="port" title="右クリックドラッグで接続"></span><span class="card-resize" title="ドラッグして高さ変更"></span><span class="card-resize-x" title="ドラッグして期間・横幅を変更"></span></article>`
       }
     }), app.worldCache.cards);
     renderEdges();
@@ -862,11 +879,23 @@
         return
       }
       if (e.target.closest("button,.port,.card-resize,.card-resize-x")) return;
+      // メモのURLは Ctrl（Mac は ⌘）＋クリックで開く。ドラッグを始めると pointer capture でリンクの click が届かないため、押した時点で開く
+      const link = e.target.closest("a.memo-link");
+      if (link && e.button === 0 && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        e.stopPropagation();
+        window.open(link.href, "_blank", "noopener");
+        return
+      }
       e.stopPropagation();
       selectAndDrag(e, "card", n.dataset.card, n)
     };
+    // リンクの既定の動作（ページ移動）は止める。普通のクリックはカードの選択・移動のまま
+    n.onclick = e => {
+      if (e.target.closest("a.memo-link")) e.preventDefault()
+    };
     n.ondblclick = e => {
-      if (!e.target.closest(".port,.card-resize,.card-resize-x")) {
+      if (!e.target.closest(".port,.card-resize,.card-resize-x,.flow-link,a.memo-link")) {
         const c = card(n.dataset.card);
         mutate(() => c.collapsed = !c.collapsed)
       }
@@ -875,6 +904,11 @@
       e.stopPropagation();
       const c = card(n.dataset.card);
       mutate(() => c.collapsed = !c.collapsed)
+    };
+    const flowLink = $(".flow-link", n);
+    if (flowLink) flowLink.onclick = e => {
+      e.stopPropagation();
+      openLinkedFlow(n.dataset.card)
     };
     $(".card-resize", n).onpointerdown = e => resizeCard(e, n.dataset.card);
     $(".card-resize-x", n).onpointerdown = e => resizeCardWidth(e, n.dataset.card)
@@ -1294,10 +1328,34 @@
     if (type === "card") {
       const c = card(id);
       if (!c) return clearSelection();
-      const groupField = `<label class="field"><span>親グループ</span><select id="i-parent-group"><option value="">なし（位置から自動判定）</option>${flow().groups.map(g=>`<option value="${g.id}" ${c.groupId===g.id?"selected":""}>${esc(g.name)}</option>`).join("")}</select></label>`;
-      el.innerHTML = `<h2>カードの詳細</h2><label class="field"><span>タイトル</span><input id="i-title" value="${attr(c.title)}"></label><label class="field"><span>展開メモ</span><textarea id="i-body">${esc(c.body)}</textarea></label><label class="field"><span>タグ（カンマ区切り）</span><input id="i-tags" value="${attr(c.tags.join(", "))}"></label>${groupField}<p class="hint">サイズ ${cardWidth(c)} × ${cardHeight(c)}px。右端で期間、下端で高さを変更できます。</p><div class="inspector-actions"><button id="i-connect">接続先を選択</button><button id="i-collapse">${c.collapsed?"メモを展開":"メモを閉じる"}</button><button id="i-delete" class="danger">削除</button></div><p class="hint">キャンバス上では、カードを右クリックしたまま接続先へドラッグします。</p>`;
+      const groupField = `<label class="field"><span>親グループ</span><select id="i-parent-group"><option value="">なし（位置から自動判定）</option>${flow().groups.map(g=>`<option value="${g.id}" ${c.groupId===g.id?"selected":""}>${esc(g.name)}</option>`).join("")}</select></label>`,
+        linked = linkedFlow(c),
+        // 「＋」で始まる値はフローの id になり得ない（SAFE_ID に含まれない文字）ので、新規作成の印に使う
+        linkField = `<label class="field"><span>詳細フロー</span><select id="i-link-flow"><option value="">なし</option>${app.state.flows.filter(f=>f.id!==app.activeFlowId).map(f=>`<option value="${f.id}" ${linked?.id===f.id?"selected":""}>${esc(f.name)}</option>`).join("")}<option value="+new">＋ 新しいフローを作って結び付ける</option></select></label>${linked?'<div class="inspector-actions"><button id="i-open-link">詳細フローを開く</button></div>':""}`;
+      el.innerHTML = `<h2>カードの詳細</h2><label class="field"><span>タイトル</span><input id="i-title" value="${attr(c.title)}"></label><label class="field"><span>展開メモ</span><textarea id="i-body">${esc(c.body)}</textarea></label><label class="field"><span>タグ（カンマ区切り）</span><input id="i-tags" value="${attr(c.tags.join(", "))}"></label>${groupField}${linkField}<p class="hint">サイズ ${cardWidth(c)} × ${cardHeight(c)}px。右端で期間、下端で高さを変更できます。</p><div class="inspector-actions"><button id="i-connect">接続先を選択</button><button id="i-collapse">${c.collapsed?"メモを展開":"メモを閉じる"}</button><button id="i-delete" class="danger">削除</button></div><p class="hint">キャンバス上では、カードを右クリックしたまま接続先へドラッグします。Ctrl＋Enter で、右隣に次のカードを作ってつなぎます。</p>`;
       bindInput("#i-title", v => c.title = v);
       bindInput("#i-body", v => c.body = v);
+      // タイトル・メモの入力中に Ctrl＋Enter を押すと、入力を確定してから続けて次のカードを作る
+      ["#i-title", "#i-body"].forEach(s => $(s).addEventListener("keydown", e => {
+        if (!((e.ctrlKey || e.metaKey) && e.key === "Enter")) return;
+        e.preventDefault();
+        e.target.onchange();
+        createNextCard()
+      }));
+      $("#i-link-flow").onchange = e => {
+        const v = e.target.value;
+        if (v !== "+new") return mutate(() => {
+          if (v) c.linkFlowId = v;
+          else delete c.linkFlowId
+        });
+        const f = emptyFlow(c.title.trim() || "詳細フロー");
+        mutate(() => {
+          app.state.flows.push(f);
+          c.linkFlowId = f.id
+        });
+        toast(`フロー「${f.name}」を作って結び付けました。カードの「↗」から開けます`)
+      };
+      if ($("#i-open-link")) $("#i-open-link").onclick = () => openLinkedFlow(id);
       bindInput("#i-tags", v => c.tags = [...new Set(v.split(",").map(x => x.trim().replace(/^#/, "")).filter(Boolean))]);
       $("#i-parent-group").onchange = e => mutate(() => c.groupId = e.target.value);
       $("#i-collapse").onclick = () => mutate(() => c.collapsed = !c.collapsed);
@@ -2119,9 +2177,10 @@
     g.h = Math.max(125, grid25(maxY - g.y + 50))
   }
 
-  // 選択中のカード・領域をコピーする。領域は子カードと内部の線も含め、複数の領域や、カードと領域が混ざった選択もそのまま扱う。
-  function copySelected() {
-    if (!app.selected || app.selected.type === "edge") return;
+  // 選択中のカード・領域をコピー用の形にまとめる。領域は子カードと内部の線も含め、複数の領域や、カードと領域が混ざった選択もそのまま扱う。
+  // コピー（Ctrl+C）と複製（Ctrl+D）で共用。
+  function selectionClip() {
+    if (!app.selected || app.selected.type === "edge") return null;
     const f = flow(),
       {
         type,
@@ -2132,19 +2191,35 @@
       groups = f.groups.filter(g => groupIds.has(g.id)),
       cards = f.cards.filter(c => cardIds.has(c.id) || groupIds.has(c.groupId)),
       ids = new Set(cards.map(c => c.id));
-    if (!groups.length && !cards.length) return;
-    app.clipboard = {
+    if (!groups.length && !cards.length) return null;
+    return {
       groups: structuredClone(groups),
       cards: structuredClone(cards),
       edges: structuredClone(f.edges.filter(e => ids.has(e.from) && ids.has(e.to)))
-    };
-    toast(groups.length ? `領域${groups.length}件と子カードを含むカード${cards.length}件をコピーしました` : `${cards.length}件のカードをコピーしました`)
+    }
+  }
+
+  function copySelected() {
+    const clip = selectionClip();
+    if (!clip) return;
+    app.clipboard = clip;
+    toast(clip.groups.length ? `領域${clip.groups.length}件と子カードを含むカード${clip.cards.length}件をコピーしました` : `${clip.cards.length}件のカードをコピーしました`)
+  }
+
+  function pasteSelected() {
+    pasteClip(app.clipboard, "貼り付けました")
+  }
+
+  // Ctrl+D：選択中のカード・領域をその場で複製する（コピー済みの内容は置き換えない）
+  function duplicateSelected() {
+    const clip = selectionClip();
+    if (clip) pasteClip(clip, "複製しました")
   }
 
   // 貼り付け。ID を振り直し、親子と線の参照を付け替える。一緒にコピーしていない親領域は、
   // 貼り付け先のフローにあればその領域のまま、無ければ貼り付けた位置で所属を決める。
-  function pasteSelected() {
-    const clip = structuredClone(app.clipboard);
+  function pasteClip(source, done) {
+    const clip = structuredClone(source);
     if (!clip || !clip.cards.length && !clip.groups.length) return;
     history();
     const idMap = new Map(),
@@ -2169,6 +2244,8 @@
       c.h = Math.max(75, grid25(c.h || cardHeight(c)));
       c.groupId = groupMap.get(c.groupId) || (group(c.groupId) ? c.groupId : "");
       if (!c.groupId) assignCardToGroup(c);
+      // 貼り付け先のフロー自身や、もう無いフローを指す詳細フローは外す
+      if (c.linkFlowId != null && (c.linkFlowId === app.activeFlowId || !app.state.flows.some(f => f.id === c.linkFlowId))) delete c.linkFlowId;
       idMap.set(old, c.id);
       flow().cards.push(c)
     });
@@ -2199,7 +2276,7 @@
     };
     persist();
     render();
-    toast(pastedGroups.length ? `領域${pastedGroups.length}件とカード${clip.cards.length}件を貼り付けました` : `${clip.cards.length}件のカードを貼り付けました`)
+    toast(pastedGroups.length ? `領域${pastedGroups.length}件とカード${clip.cards.length}件を${done}` : `${clip.cards.length}件のカードを${done}`)
   }
 
   function jumpToCard(id) {
@@ -2217,6 +2294,200 @@
     };
     updateTransform();
     updateSelectionView()
+  }
+
+  // カードが画面の外（右カラム・上部バー・下の操作説明に隠れる所を含む）にあれば、見える位置まで視点をずらす
+  function revealCard(c) {
+    const vp = $("#viewport").getBoundingClientRect(),
+      right = 2 * canvasCenterScreen().x - vp.left,
+      help = $(".viewport-help"),
+      bottom = help?.offsetParent ? Math.min(vp.bottom, help.getBoundingClientRect().top) : vp.bottom,
+      z = app.view.zoom,
+      m = 40,
+      left = vp.left + app.view.x + c.x * z,
+      top = vp.top + app.view.y + c.y * z,
+      w = cardWidth(c) * z,
+      h = cardHeight(c) * z;
+    let dx = 0,
+      dy = 0;
+    if (left + w > right - m) dx = right - m - (left + w);
+    if (left + dx < vp.left + m) dx = vp.left + m - left;
+    if (top + h > bottom - m) dy = bottom - m - (top + h);
+    if (top + dy < vp.top + 90) dy = vp.top + 90 - top;
+    if (!dx && !dy) return;
+    app.view.x += dx;
+    app.view.y += dy;
+    updateTransform()
+  }
+
+  // Ctrl＋A：表示中のフローのカードと領域をすべて選択する（タグで絞り込み中は、絞り込みに合うカードだけ）
+  function selectAll() {
+    const cards = flow().cards.filter(filtered),
+      groups = app.filterTag ? [] : flow().groups;
+    app.multiSelected.clear();
+    app.multiGroups.clear();
+    cards.forEach(c => app.multiSelected.add(c.id));
+    groups.forEach(g => app.multiGroups.add(g.id));
+    app.selected = groups.length ? {
+      type: "group",
+      id: groups.at(-1).id
+    } : cards.length ? {
+      type: "card",
+      id: cards.at(-1).id
+    } : null;
+    updateSelectionView()
+  }
+
+  // 矢印キーで選択中のカード・領域を動かす（ドラッグと同じく、領域は子カードごと動かし、ロック中の領域は動かさない）。
+  // 同じ選択のまま続けて押している間（1秒以内）は履歴を1件にまとめ、Undo 1回で押し始める前に戻るようにする。
+  function nudgeSelection(dx, dy) {
+    const f = flow(),
+      groupIds = new Set(app.multiGroups),
+      cardIds = new Set(app.multiSelected);
+    if (app.selected?.type === "group") groupIds.add(app.selected.id);
+    if (app.selected?.type === "card") cardIds.add(app.selected.id);
+    const groups = f.groups.filter(g => groupIds.has(g.id) && !g.locked),
+      moving = new Set(groups.map(g => g.id)),
+      cards = f.cards.filter(c => cardIds.has(c.id) || moving.has(c.groupId));
+    if (!groups.length && !cards.length) {
+      if (groupIds.size) toast("ロックされているため移動できません");
+      return
+    }
+    const key = inspectorKey(),
+      now = performance.now(),
+      last = app.nudge,
+      continuing = last && last.key === key && now - last.at < 1000 && app.history.undo.at(-1) === last.entry,
+      before = snapshot();
+    groups.forEach(g => {
+      g.x += dx;
+      g.y += dy
+    });
+    cards.forEach(c => {
+      const from = {
+        x: c.x,
+        y: c.y
+      };
+      c.x += dx;
+      c.y += dy;
+      if (!moving.has(c.groupId)) assignCardToGroup(c, from)
+    });
+    if (!continuing) pushHistory(before);
+    app.nudge = {
+      key,
+      at: now,
+      entry: app.history.undo.at(-1)
+    };
+    persist();
+    render()
+  }
+
+  // Ctrl＋Enter：選択中のカードの右隣に新しいカードを作って線でつなぎ、タイトルを入力できる状態にする。
+  // 右隣がふさがっていれば、空くところまで下へずらす（同じカードで続けて押すと分岐になる）。
+  function createNextCard() {
+    const from = app.selected?.type === "card" && app.multiSelected.size <= 1 && !app.multiGroups.size ? card(app.selected.id) : null;
+    if (!from) return toast("カードを1枚選んでから Ctrl＋Enter を押してください");
+    const w = 250,
+      h = 100,
+      x = grid25(from.x + cardWidth(from) + 100),
+      taken = y => flow().cards.some(o => o.x < x + w + 25 && o.x + cardWidth(o) + 25 > x && o.y < y + h + 25 && o.y + cardHeight(o) + 25 > y);
+    let y = from.y;
+    for (let i = 0; i < 40 && taken(y); i++) y += 125;
+    const c = {
+      id: uid("card"),
+      title: "新しいカード",
+      body: "",
+      tags: [],
+      collapsed: false,
+      w,
+      h,
+      x,
+      y,
+      groupId: ""
+    };
+    mutate(() => {
+      const f = flow();
+      f.cards.push(c);
+      assignCardToGroup(c);
+      f.edges.push({
+        id: uid("edge"),
+        from: from.id,
+        to: c.id,
+        kind: "normal",
+        label: "",
+        color: defaultEdgeColor(from.id, c.id),
+        arcHeight: 100
+      });
+      app.multiSelected.clear();
+      app.multiGroups.clear();
+      app.multiSelected.add(c.id);
+      app.selected = {
+        type: "card",
+        id: c.id
+      }
+    });
+    revealCard(c);
+    const title = $("#i-title");
+    if (title) {
+      title.focus();
+      title.select()
+    }
+  }
+
+  // カードに結び付けた詳細フロー。無いフローや表示中のフロー自身を指すときは null
+  function linkedFlow(c) {
+    return c.linkFlowId && c.linkFlowId !== app.activeFlowId ? app.state.flows.find(f => f.id === c.linkFlowId) || null : null
+  }
+
+  // 詳細フローを開く。戻り先（元のフロー・カード・視点）を記録し、上部の「←」で戻れるようにする（何段でも戻れる）
+  function openLinkedFlow(id) {
+    const c = card(id),
+      target = c && linkedFlow(c);
+    if (!target) return;
+    const trail = {
+      from: app.activeFlowId,
+      to: target.id,
+      cardId: id,
+      view: {
+        ...app.view
+      }
+    };
+    switchFlow(target.id, {
+      keepTrail: true
+    });
+    app.flowTrail.push(trail);
+    persist();
+    render()
+  }
+
+  function backToParentFlow() {
+    const t = app.flowTrail.at(-1);
+    if (!t || t.to !== app.activeFlowId || !app.state.flows.some(f => f.id === t.from)) return;
+    app.flowTrail.pop();
+    switchFlow(t.from, {
+      resetView: false,
+      keepTrail: true
+    });
+    app.view = t.view;
+    if (card(t.cardId)) {
+      app.multiSelected.add(t.cardId);
+      app.selected = {
+        type: "card",
+        id: t.cardId
+      }
+    }
+    persist();
+    render()
+  }
+
+  // 上部の「← 元のフロー」。詳細フローを開いてきたときだけ出す（元に戻す等で表示中のフローが変わっていれば出さない）
+  function renderFlowBack() {
+    const t = app.flowTrail.at(-1),
+      parent = t?.to === app.activeFlowId ? app.state.flows.find(f => f.id === t.from) : null,
+      button = $("#flow-back");
+    button.hidden = !parent;
+    if (!parent) return;
+    button.textContent = `← ${parent.name}`;
+    button.title = `「${parent.name}」へ戻る`
   }
 
   function exportBounds() {
@@ -2597,8 +2868,9 @@
     });
     lines.push("## カード", "");
     cards.forEach(c => {
-      const parent = group(c.groupId);
-      lines.push(`### ${cardIds.get(c.id)}: ${mdText(c.title)}`, `- 位置: ${aiCardPosition(c)}`, `- グループ: ${parent?`${groupIds.get(parent.id)} ${mdText(parent.name)}`:"なし"}`, `- 表示色: ${cardVisualColor(c)}`, `- タグ: ${c.tags.length?c.tags.map(t=>`#${mdText(t)}`).join("、"):"なし"}`, `- メモ: ${c.body?mdText(c.body):"なし"}`, `- 入ってくる接続: ${incoming.get(c.id)||0}本`, `- 出ていく接続: ${outgoing.get(c.id)||0}本`, "")
+      const parent = group(c.groupId),
+        linked = linkedFlow(c);
+      lines.push(`### ${cardIds.get(c.id)}: ${mdText(c.title)}`, `- 位置: ${aiCardPosition(c)}`, `- グループ: ${parent?`${groupIds.get(parent.id)} ${mdText(parent.name)}`:"なし"}`, ...(linked ? [`- 詳細フロー: ${mdText(linked.name)}（同じファイル内の別のフロー）`] : []), `- 表示色: ${cardVisualColor(c)}`, `- タグ: ${c.tags.length?c.tags.map(t=>`#${mdText(t)}`).join("、"):"なし"}`, `- メモ: ${c.body?mdText(c.body):"なし"}`, `- 入ってくる接続: ${incoming.get(c.id)||0}本`, `- 出ていく接続: ${outgoing.get(c.id)||0}本`, "")
     });
     lines.push("## 接続関係", "");
     if (!edges.length) lines.push("- 接続なし", "");
@@ -3199,7 +3471,12 @@
     if (app.state.flows.length === 1) return toast("最後のフローは削除できません");
     if (!confirm(`「${flow().name}」を削除しますか？`)) return;
     mutate(() => {
-      app.state.flows = app.state.flows.filter(f => f.id !== app.activeFlowId);
+      const removed = app.activeFlowId;
+      app.state.flows = app.state.flows.filter(f => f.id !== removed);
+      // 削除したフローを詳細フローにしていたカードは、結び付けを外す
+      app.state.flows.forEach(f => f.cards.forEach(c => {
+        if (c.linkFlowId === removed) delete c.linkFlowId
+      }));
       switchFlow(app.state.flows[0].id)
     })
   }
@@ -3268,17 +3545,48 @@
     $("#timeline-toggle").onclick = toggleTimeline;
     $("#undo").onclick = undo;
     $("#redo").onclick = redo;
+    $("#flow-back").onclick = backToParentFlow;
     // ファイル系（保存・開く・file-input）のハンドラは initFileControls で割り当てる
     $("#flow-title").onchange = e => mutate(() => flow().name = e.target.value.trim() || "名称未設定");
     window.onkeydown = e => {
       // ドラッグ中のショートカットは無視（再描画でドラッグ中の要素が差し替わるのを防ぐ）
       if (app.activeDrag) return;
+      // ダイアログを開いている間は、キャンバスへのショートカットを使わない
+      if ($("#modal-root .modal-backdrop")) return;
       // 入力欄にフォーカスがある間は、Ctrl+Z 等をブラウザ標準の編集操作に任せる
       const editing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || "");
       if (editing) return;
       const mod = e.ctrlKey || e.metaKey,
-        key = e.key.toLowerCase();
-      if (mod && key === "z") {
+        key = e.key.toLowerCase(),
+        arrow = {
+          ArrowLeft: [-1, 0],
+          ArrowRight: [1, 0],
+          ArrowUp: [0, -1],
+          ArrowDown: [0, 1]
+        } [e.key],
+        anySelected = !!(app.selected || app.multiSelected.size || app.multiGroups.size);
+      if (arrow && !mod && !e.altKey) {
+        // 矢印：25px（Shift 併用で 100px）ずつ移動
+        if (!anySelected || app.selected?.type === "edge") return;
+        e.preventDefault();
+        const step = e.shiftKey ? 100 : 25;
+        nudgeSelection(arrow[0] * step, arrow[1] * step)
+      } else if (mod && e.key === "Enter") {
+        e.preventDefault();
+        createNextCard()
+      } else if (mod && key === "d") {
+        e.preventDefault();
+        duplicateSelected()
+      } else if (mod && key === "a") {
+        e.preventDefault();
+        selectAll()
+      } else if (e.key === "Escape") {
+        if (!anySelected) return;
+        app.selected = null;
+        app.multiSelected.clear();
+        app.multiGroups.clear();
+        updateSelectionView()
+      } else if (mod && key === "z") {
         e.preventDefault();
         e.shiftKey ? redo() : undo()
       } else if (mod && key === "y") {
@@ -3357,6 +3665,62 @@
     })
   }
 
+  // Shift＋空白ドラッグの範囲選択。囲みに完全に入ったカード・領域を今の選択に加える（タグで絞り込み中は、絞り込みに合うカードだけ）
+  function startMarquee(e) {
+    e.preventDefault();
+    window.getSelection()?.removeAllRanges();
+    const vp = $("#viewport"),
+      r = vp.getBoundingClientRect(),
+      box = document.createElement("div"),
+      start = {
+        x: e.clientX,
+        y: e.clientY
+      };
+    let end = start;
+    const draw = () => {
+      box.style.left = Math.min(start.x, end.x) - r.left + "px";
+      box.style.top = Math.min(start.y, end.y) - r.top + "px";
+      box.style.width = Math.abs(end.x - start.x) + "px";
+      box.style.height = Math.abs(end.y - start.y) + "px"
+    };
+    box.className = "marquee";
+    draw();
+    vp.appendChild(box);
+    setInteracting(true);
+    trackPointer(e, {
+      capture: vp,
+      onMove: ev => {
+        end = {
+          x: ev.clientX,
+          y: ev.clientY
+        };
+        draw()
+      },
+      onEnd: () => {
+        box.remove();
+        setInteracting(false);
+        // ほとんど動かしていなければ（Shift＋クリック）、選択は変えない
+        if (Math.abs(end.x - start.x) < 4 && Math.abs(end.y - start.y) < 4) return;
+        const a = screenWorld(Math.min(start.x, end.x), Math.min(start.y, end.y)),
+          b = screenWorld(Math.max(start.x, end.x), Math.max(start.y, end.y)),
+          inside = (x, y, w, h) => x >= a.x && y >= a.y && x + w <= b.x && y + h <= b.y,
+          cards = flow().cards.filter(c => filtered(c) && inside(c.x, c.y, cardWidth(c), cardHeight(c))),
+          groups = app.filterTag ? [] : flow().groups.filter(g => inside(g.x, g.y, g.w, g.h));
+        if (!cards.length && !groups.length) return;
+        cards.forEach(c => app.multiSelected.add(c.id));
+        groups.forEach(g => app.multiGroups.add(g.id));
+        app.selected = groups.length ? {
+          type: "group",
+          id: groups.at(-1).id
+        } : {
+          type: "card",
+          id: cards.at(-1).id
+        };
+        updateSelectionView()
+      }
+    })
+  }
+
   // ホバー表示（領域の南京錠、表の＋ボタン）はフレームごとに1回だけ評価し、操作中は止める
   function scheduleHover(e) {
     app.hoverEvent = e;
@@ -3391,7 +3755,7 @@
     const vp = $("#viewport");
     vp.onpointerdown = e => {
       if (e.button !== 0 || e.target.closest(".flow-card,.group-box,[data-edge],button,input,textarea,select,.timeline-month,.timeline-row-label,.timeline-corner,.axis-resize")) return;
-      if (e.target === vp || e.target === $("#world") || e.target.closest("#world")) startStablePan(e, true)
+      if (e.target === vp || e.target === $("#world") || e.target.closest("#world")) e.shiftKey ? startMarquee(e) : startStablePan(e, true)
     };
     // 右ドラッグ接続の直後だけ、空白上のブラウザ右クリックメニューを出さない
     vp.oncontextmenu = e => {
@@ -3535,6 +3899,24 @@
 
   function attr(v = "") {
     return esc(v)
+  }
+
+  // メモ中の http(s) のURLをリンクにして HTML を返す（それ以外の文字は esc する）。URLは半角の文字だけを拾い、
+  // 直後に続く日本語や、末尾の句読点・対になっていない閉じかっこは含めない。開き方は bindCard（Ctrl＋クリック）。
+  const URL_PATTERN = /https?:\/\/[\w\-.~:/?#[\]@!$&'()*+,;=%]+/g;
+
+  function linkify(text = "") {
+    if (!text.includes("http")) return esc(text);
+    let html = "",
+      last = 0;
+    for (const m of text.matchAll(URL_PATTERN)) {
+      let url = m[0];
+      while (/[.,;:!?'*]$/.test(url) || url.endsWith(")") && (url.match(/\(/g) || []).length < (url.match(/\)/g) || []).length) url = url.slice(0, -1);
+      if (!/^https?:\/\/[^/]/.test(url)) continue;
+      html += esc(text.slice(last, m.index)) + `<a class="memo-link" href="${attr(url)}" target="_blank" rel="noopener noreferrer" title="Ctrl＋クリックで開く">${esc(url)}</a>`;
+      last = m.index + url.length
+    }
+    return html + esc(text.slice(last))
   }
 
   // 壊れた保存データを退避できなかったときの案内。元データは KEY に残したまま自動保存を止めている。
