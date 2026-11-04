@@ -1,14 +1,5 @@
-window.FAMILY_CALENDAR_UPDATED_AT = "2026-11-03T00:40:26.558Z";
+window.FAMILY_CALENDAR_UPDATED_AT = "2026-11-04T00:40:26.083Z";
 window.FAMILY_CALENDAR_EVENTS = [
-  {
-    "id": "personal-8EExkDfFrzTiYVgHb1",
-    "title": "皮膚科",
-    "start": "2026-10-03T02:00:00.000Z",
-    "end": "2026-10-03T03:00:00.000Z",
-    "source": "personal",
-    "note": "",
-    "allDay": false
-  },
   {
     "id": "work-RVB0LVg-ZLuCttFwcU",
     "title": "【北河】全休",
@@ -2437,6 +2428,17 @@ window.FAMILY_CALENDAR_EVENTS = [
     "source": "holiday",
     "note": "",
     "allDay": true
+  },
+  {
+    "id": "work-I0UhPS4vh7enmvuLxr",
+    "title": "【北河】全休",
+    "start": "2027-01-03T15:00:00.000Z",
+    "end": "2027-01-29T15:00:00.000Z",
+    "source": "work",
+    "note": "",
+    "allDay": true,
+    "manualAllDay": true,
+    "workDayOff": true
   },
   {
     "id": "holiday-hBCFIeRPt2nEApy38o",
