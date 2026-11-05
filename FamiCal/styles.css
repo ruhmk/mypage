@@ -322,7 +322,12 @@ a.secondary-button {
 .day-chip.holiday,
 .timeline-event.holiday,
 .next-event-source.holiday,
-.day-source-count.holiday {
+.day-source-count.holiday,
+.event-card.dayoff,
+.day-chip.dayoff,
+.timeline-event.dayoff,
+.next-event-source.dayoff,
+.day-source-count.dayoff {
   --source: var(--holiday);
   --source-soft: var(--holiday-soft);
   --source-line: var(--holiday-line);
@@ -677,7 +682,10 @@ a.secondary-button {
 
 .event-card.holiday,
 .timeline-event.holiday,
-.day-chip.holiday {
+.day-chip.holiday,
+.event-card.dayoff,
+.timeline-event.dayoff,
+.day-chip.dayoff {
   border-color: var(--holiday-line);
   background: var(--holiday-soft);
 }

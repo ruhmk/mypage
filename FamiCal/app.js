@@ -1,6 +1,7 @@
 const SOURCE_LABELS = {
   family: "家族",
   holiday: "祝日",
+  dayoff: "休み",
   school: "学校",
   personal: "個人",
   work: "仕事"
@@ -132,7 +133,7 @@ function renderCalendarGrid() {
       isSameDay(date, new Date()) ? "today" : "",
       isSameDay(date, state.selectedDate) ? "selected" : "",
       events.length >= 5 ? "busy" : "",
-      dayKinds.has("holiday") ? "has-holiday" : "",
+      dayKinds.has("holiday") || dayKinds.has("dayoff") ? "has-holiday" : "",
       dayKinds.has("school") ? "has-school" : "",
       dayKinds.has("family") ? "has-family-event" : ""
     ].filter(Boolean).join(" ");
@@ -206,6 +207,7 @@ function createDaySummary(events) {
     ["personal", "個"],
     ["family", "家"],
     ["school", "学"],
+    ["dayoff", "休"],
     ["holiday", "祝"]
   ];
   labels.forEach(([source, label]) => {
@@ -398,12 +400,12 @@ function updateTimelineNowLine() {
 
   const now = new Date();
   const minute = now.getHours() * 60 + now.getMinutes();
-  // 赤い線は平日（祝日を除く）の10:00〜19:00だけ出し、30分単位で動かす。
+  // 赤い線は平日（祝日・全休を除く）の10:00〜19:00だけ出し、30分単位で動かす。
   const lineMinute = Math.floor(minute / NOW_LINE_STEP_MINUTES) * NOW_LINE_STEP_MINUTES;
   let line = timeline.stage.querySelector(".timeline-now");
   const visible = (
     isSameDay(timeline.date, now) &&
-    isWeekday(now) &&
+    isWorkday(now) &&
     minute >= NOW_LINE_START_MINUTE &&
     minute < NOW_LINE_END_MINUTE &&
     lineMinute >= timeline.range.startHour * 60 &&
@@ -425,7 +427,7 @@ function updateTimelineNowLine() {
   line.title = `現在 ${formatTime(now)}`;
 }
 
-function isWeekday(date) {
+function isWorkday(date) {
   const day = date.getDay();
   if (day === 0 || day === 6) {
     return false;
@@ -434,7 +436,7 @@ function isWeekday(date) {
   const dayStart = stripTime(date);
   const dayEnd = addDays(dayStart, 1);
   return !state.remoteEvents.some((event) => (
-    event.source === "holiday" &&
+    (event.source === "holiday" || event.workDayOff) &&
     new Date(event.start) < dayEnd &&
     new Date(event.end) > dayStart
   ));
@@ -682,7 +684,11 @@ function formatCurrentEventTime(event) {
 function getEventVisualSource(event) {
   const source = event && event.source ? event.source : "family";
   const title = String(event && event.title ? event.title : "").normalize("NFKC");
-  if ((event && event.workDayOff) || source === "holiday" || title.indexOf("祝日") >= 0 || title.indexOf("の日") >= 0) {
+  // 【北河】全休（有休）は祝日と同じ色の「休み」として出す。
+  if (event && event.workDayOff) {
+    return "dayoff";
+  }
+  if (source === "holiday" || title.indexOf("祝日") >= 0 || title.indexOf("の日") >= 0) {
     return "holiday";
   }
   if (source === "school" || isSchoolTitle(title)) {
