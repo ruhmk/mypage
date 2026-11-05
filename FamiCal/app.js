@@ -16,7 +16,7 @@ const state = {
   selectedDate: stripTime(new Date()),
   remoteEvents: [],
   updatedAt: "",
-  visibleSources: new Set(["family", "holiday", "school", "personal", "work"]),
+  visibleSources: new Set(["family", "holiday", "school", "personal"]),
   // 選択日のタイムライン。「今」の線を時間に合わせて動かすために覚えておく。
   timeline: null
 };
@@ -55,12 +55,17 @@ document.querySelector("#todayButton").addEventListener("click", () => {
 
 document.querySelectorAll(".source-toggle input").forEach((input) => {
   input.addEventListener("change", () => {
-    state.visibleSources = new Set(
-      ["family", "holiday", "school", ...Array.from(document.querySelectorAll(".source-toggle input:checked")).map((item) => item.value)]
-    );
+    state.visibleSources = readVisibleSources();
     render();
   });
 });
+
+// 表示する種類は、画面の「個人」「仕事」のチェックに合わせる（最初は index.html で仕事を外している）。
+function readVisibleSources() {
+  return new Set(
+    ["family", "holiday", "school", ...Array.from(document.querySelectorAll(".source-toggle input:checked")).map((item) => item.value)]
+  );
+}
 
 bootstrap();
 
@@ -73,6 +78,7 @@ function bootstrap() {
     : [];
   state.remoteEvents = normalizeEvents([...calendarEvents, ...fixedEvents]);
   state.updatedAt = window.FAMILY_CALENDAR_UPDATED_AT || "";
+  state.visibleSources = readVisibleSources();
 
   render();
   startClock();

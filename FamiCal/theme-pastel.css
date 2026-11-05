@@ -606,3 +606,21 @@ h1,
     border-radius: 12px;
   }
 }
+
+/* スマホ縦向きはカレンダーの枠を外して見出しを上に残すので（styles.css）、枠の見た目を見出しと表に分けて付ける */
+@media (max-width: 720px) and (orientation: portrait) {
+  .calendar-fixed-head {
+    border: 1.5px solid #f6e4ea;
+    border-bottom: 0;
+    border-radius: 14px 14px 0 0;
+    box-shadow: 0 6px 14px rgba(214, 128, 158, 0.12);
+  }
+
+  .calendar-scroll {
+    border: 1.5px solid #f6e4ea;
+    border-top: 0;
+    border-radius: 0 0 18px 18px;
+    background: rgba(255, 255, 255, 0.94);
+    box-shadow: var(--shadow);
+  }
+}

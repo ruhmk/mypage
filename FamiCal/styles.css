@@ -903,6 +903,8 @@ a.secondary-button {
   body {
     max-width: 100%;
     overflow-x: hidden;
+    /* hidden だと body がスクロールの入れ物になり、上の帯や見出しの貼り付け（sticky）が効かない。clip なら効く */
+    overflow-x: clip;
   }
 
   .app-shell {
@@ -966,7 +968,8 @@ a.secondary-button {
 
   .calendar-fixed-head {
     position: sticky;
-    top: calc(max(8px, env(safe-area-inset-top)) + 47px);
+    /* 上の帯の高さ（上余白 + ボタン34px + 下余白6px + 線1px）のすぐ下に貼り付ける */
+    top: calc(max(8px, env(safe-area-inset-top)) + 41px);
     z-index: 5;
     overflow: hidden;
     background: rgba(255, 253, 248, 0.98);
@@ -1178,6 +1181,11 @@ a.secondary-button {
     gap: 4px;
   }
 
+  /* ボタンが32pxになるぶん、上の帯が2px低くなる */
+  .calendar-fixed-head {
+    top: calc(max(8px, env(safe-area-inset-top)) + 39px);
+  }
+
   .icon-button,
   .text-button {
     min-height: 32px;
@@ -1250,5 +1258,39 @@ a.secondary-button {
 
   .day-panel {
     max-height: 170px;
+  }
+}
+
+/*
+  スマホ縦向き: 月の見出しと「個人」「仕事」の切り替えを、下の予定欄までスクロールしても上に残す。
+  貼り付く範囲がカレンダーの枠の中だけにならないよう、枠（.calendar-main）を外し、
+  見出し・カレンダー・予定欄を同じ入れ物（.calendar-layout）に並べる。枠の見た目は見出しと表に分けて付ける。
+*/
+@media (max-width: 720px) and (orientation: portrait) {
+  .calendar-layout {
+    display: block;
+  }
+
+  .calendar-main {
+    display: contents;
+  }
+
+  .calendar-fixed-head {
+    border: 1px solid var(--line);
+    border-bottom: 0;
+    border-radius: 8px 8px 0 0;
+    box-shadow: 0 6px 14px rgba(31, 35, 40, 0.08);
+  }
+
+  .calendar-scroll {
+    border: 1px solid var(--line);
+    border-top: 0;
+    border-radius: 0 0 8px 8px;
+    background: rgba(255, 253, 248, 0.92);
+    box-shadow: var(--shadow);
+  }
+
+  .side-panel {
+    margin: 12px auto 0;
   }
 }
