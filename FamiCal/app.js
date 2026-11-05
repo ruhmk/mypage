@@ -669,6 +669,15 @@ function isKitagawaFullDayOffTitle(title) {
   );
 }
 
+// 在宅・休みが分かる【北河】の終日予定（リモート、午前リモ午後出社などを含む、全休・午前休・午後休）。
+function isKitagawaStatusEvent(event) {
+  if (!event || event.source !== "work" || !event.allDay || !isKitagawaAllDayTitle(event.title)) {
+    return false;
+  }
+  const text = String(event.title).normalize("NFKC");
+  return ["リモ", "全休", "午前休", "午後休"].some((word) => text.indexOf(word) >= 0);
+}
+
 // 今の予定。時刻のある予定を優先し、なければ終日予定（【北河】リモートなど）を返す。
 function getCurrentEvents(now) {
   const current = getVisibleEvents()
@@ -734,7 +743,11 @@ function countEventsByVisualSource(events) {
 function getVisibleEvents() {
   return state.remoteEvents
     .filter((item) => !isExcludedWorkEvent(item))
-    .filter((item) => state.visibleSources.has(item.source))
+    // 仕事を隠して個人だけにしても、在宅・休みの予定は残す。
+    .filter((item) => (
+      state.visibleSources.has(item.source) ||
+      (state.visibleSources.has("personal") && isKitagawaStatusEvent(item))
+    ))
     .filter((item) => !isSuppressedWorkEvent(item))
     .sort(sortByStart);
 }

@@ -40,8 +40,10 @@
   --shadow: 0 12px 32px rgba(214, 128, 158, 0.14);
   --shadow-soft: 0 3px 10px rgba(214, 128, 158, 0.12);
   --radius-panel: 22px 26px 24px 28px / 26px 22px 28px 24px;
-  --font-round: "Zen Maru Gothic", "Hiragino Maru Gothic ProN", "BIZ UDPGothic", "Yu Gothic UI", Meiryo, sans-serif;
-  /* 丸ゴシックは文字幅が約26%広いので、狭いマスの中の予定だけ元のフォントにする */
+  /* 全体はやわらかい丸ゴシック、タイトルや数字はぽってりしたポップ体（どちらもGoogleフォント） */
+  --font-round: "Kiwi Maru", "Hiragino Maru Gothic ProN", "BIZ UDPGothic", "Yu Gothic UI", Meiryo, sans-serif;
+  --font-pop: "Mochiy Pop One", "Kiwi Maru", "Hiragino Maru Gothic ProN", "Yu Gothic UI", sans-serif;
+  /* 丸ゴシックは文字幅が広いので、狭いマスの中の予定だけ元のフォントにする */
   --font-dense: "Segoe UI", "Yu Gothic UI", "Hiragino Sans", Meiryo, sans-serif;
 
   /* 手書き風アイコン（線を少し揺らしたSVG） */
@@ -65,6 +67,8 @@ body {
     radial-gradient(rgba(240, 190, 205, 0.32) 1.2px, transparent 1.7px) 0 0 / 22px 22px,
     var(--bg);
   font-family: var(--font-round);
+  /* Kiwi Maru は太さが500までなので、太字をにじませて作らず500のまま表示する */
+  font-synthesis: none;
 }
 
 /* 色の種類ごとに、文字用の濃い色と、個人予定の淡い色を足す */
@@ -462,7 +466,7 @@ h1::before {
 
 .timeline-event-title,
 .event-title {
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .timeline-now {
@@ -496,6 +500,21 @@ h1::before {
   width: 40px;
   height: 32px;
   background: var(--icon-cloud) center / contain no-repeat;
+}
+
+/* タイトル・月・日付の数字・曜日などは、ぽってりしたポップ体にする（太さは1種類なので400で指定） */
+h1,
+.eyebrow,
+.panel-kicker,
+.month-kicker,
+#monthLabel,
+.text-button,
+.weekday-row span,
+.day-number,
+#selectedDateLabel,
+.next-event-item.now .next-event-kicker {
+  font-family: var(--font-pop);
+  font-weight: 400;
 }
 
 @media (max-width: 720px) {
