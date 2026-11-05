@@ -224,6 +224,7 @@ a.secondary-button {
   color: var(--muted);
   font-size: 0.74rem;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .next-event-source {
@@ -246,6 +247,18 @@ a.secondary-button {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.next-event-item {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: inherit;
+  min-width: 0;
+}
+
+.next-event-item.now .next-event-kicker {
+  color: var(--holiday);
 }
 
 .source-toggle {
@@ -614,6 +627,26 @@ a.secondary-button {
   border-top: 1px solid rgba(216, 209, 196, 0.85);
 }
 
+.timeline-now {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  border-top: 2px solid var(--holiday);
+  pointer-events: none;
+}
+
+.timeline-now::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  left: -6px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--holiday);
+}
+
 .timeline-event {
   position: absolute;
   z-index: 1;
@@ -827,6 +860,24 @@ a.secondary-button {
   color: var(--muted);
   font-weight: 700;
   line-height: 1.6;
+}
+
+.admin-token {
+  margin: -8px 0 16px;
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+.admin-token.warning {
+  margin-top: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--holiday-line);
+  border-radius: 8px;
+  background: var(--holiday-soft);
+  color: var(--holiday);
+  font-weight: 900;
 }
 
 @media (max-width: 980px) {

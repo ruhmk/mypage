@@ -1,4 +1,5 @@
 const GOOGLE_SYNC_TIMEOUT_MS = 15000;
+const TOKEN_WARNING_DAYS = 14;
 const appConfig = window.FAMILY_CALENDAR_CONFIG || {};
 
 const fetchGoogleButton = document.querySelector("#fetchGoogleButton");
@@ -6,6 +7,7 @@ const publishGitHubButton = document.querySelector("#publishGitHubButton");
 const downloadEventsButton = document.querySelector("#downloadEventsButton");
 const directPublishLink = document.querySelector("#directPublishLink");
 const adminStatus = document.querySelector("#adminStatus");
+const adminTokenStatus = document.querySelector("#adminTokenStatus");
 const adminPreview = document.querySelector("#adminPreview");
 
 let latestEvents = [];
@@ -97,6 +99,7 @@ function fetchGoogleEvents() {
       : "";
     const version = payload && payload.scriptVersion ? ` / ${payload.scriptVersion}` : "";
     adminStatus.textContent = `取得しました。${latestEvents.length}件 ${diagnostics}${source}${version}`;
+    renderTokenStatus(payload && payload.githubToken);
     publishGitHubButton.disabled = false;
   };
 
@@ -174,6 +177,7 @@ function publishGitHubEvents() {
       : "";
     const version = payload && payload.scriptVersion ? ` / ${payload.scriptVersion}` : "";
     adminStatus.textContent = `${publishText} ${latestEvents.length}件 ${diagnostics}${mergeText}${source}${version}`;
+    renderTokenStatus(payload && payload.githubToken);
   };
 
   script.src = url.toString();
@@ -185,6 +189,46 @@ function publishGitHubEvents() {
     adminStatus.textContent = "GitHubへの反映に失敗しました。";
   };
   document.body.append(script);
+}
+
+function renderTokenStatus(status) {
+  if (!adminTokenStatus) {
+    return;
+  }
+
+  adminTokenStatus.hidden = !status;
+  adminTokenStatus.classList.remove("warning");
+  if (!status) {
+    return;
+  }
+
+  if (!status.checked) {
+    adminTokenStatus.textContent = `GitHubトークンの期限を確認できませんでした。${status.error || ""}`;
+    adminTokenStatus.classList.add("warning");
+    return;
+  }
+
+  if (!status.expiresAt) {
+    adminTokenStatus.textContent = "GitHubトークンの期限: なし";
+    return;
+  }
+
+  const dateText = new Intl.DateTimeFormat("ja-JP", {
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    timeZone: "Asia/Tokyo"
+  }).format(new Date(status.expiresAt));
+  const renewText = "新しいトークンを作り、Apps Scriptのスクリプトプロパティ GITHUB_TOKEN を入れ替えてください。";
+  if (status.daysLeft < 0) {
+    adminTokenStatus.textContent = `GitHubトークンの期限が切れています（${dateText}）。${renewText}`;
+    adminTokenStatus.classList.add("warning");
+  } else if (status.daysLeft <= TOKEN_WARNING_DAYS) {
+    adminTokenStatus.textContent = `GitHubトークンの期限が近づいています: ${dateText}（あと${status.daysLeft}日）。${renewText}`;
+    adminTokenStatus.classList.add("warning");
+  } else {
+    adminTokenStatus.textContent = `GitHubトークンの期限: ${dateText}（あと${status.daysLeft}日）`;
+  }
 }
 
 function renderPreview(events) {

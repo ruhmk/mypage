@@ -6,12 +6,18 @@ const SOURCE_LABELS = {
   work: "仕事"
 };
 
+const NOW_LINE_START_MINUTE = 10 * 60;
+const NOW_LINE_END_MINUTE = 19 * 60;
+const NOW_LINE_STEP_MINUTES = 30;
+
 const state = {
   viewDate: startOfMonth(new Date()),
   selectedDate: stripTime(new Date()),
   remoteEvents: [],
   updatedAt: "",
-  visibleSources: new Set(["family", "holiday", "school", "personal", "work"])
+  visibleSources: new Set(["family", "holiday", "school", "personal", "work"]),
+  // 選択日のタイムライン。「今」の線を時間に合わせて動かすために覚えておく。
+  timeline: null
 };
 
 const calendarGrid = document.querySelector("#calendarGrid");
@@ -68,6 +74,30 @@ function bootstrap() {
   state.updatedAt = window.FAMILY_CALENDAR_UPDATED_AT || "";
 
   render();
+  startClock();
+}
+
+function startClock() {
+  let currentDay = stripTime(new Date()).getTime();
+  const tick = () => {
+    const today = stripTime(new Date()).getTime();
+    if (today !== currentDay) {
+      // 日付が変わったら、今日の印も含めて描き直す。
+      currentDay = today;
+      render();
+      return;
+    }
+    renderCurrentEvent();
+    updateTimelineNowLine();
+  };
+
+  window.setInterval(tick, 60 * 1000);
+  // スマホで画面に戻ったときは、止まっていた時計をすぐ進める。
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      tick();
+    }
+  });
 }
 
 function render() {
@@ -78,7 +108,7 @@ function render() {
   selectedDateLabel.textContent = formatDateHeading(state.selectedDate);
 
   renderCalendarGrid();
-  renderNextEvent();
+  renderCurrentEvent();
   renderSelectedEvents();
   renderImportStatus();
 }
@@ -204,36 +234,50 @@ function renderSelectedEvents() {
   renderDayTimeline(selectedEventList, events, state.selectedDate);
 }
 
-function renderNextEvent() {
+// 上部のバーには今の予定だけを出す（「次の予定」はユーザーの希望で出さない）。
+function renderCurrentEvent() {
   if (!nextEventBar) {
     return;
   }
 
   nextEventBar.replaceChildren();
-  const next = getNextEvent();
+  const current = getCurrentEvents(new Date());
+  const first = current[0] || null;
+  const more = current.length > 1 ? ` ほか${current.length - 1}件` : "";
+  nextEventBar.append(createCurrentEventItem(
+    first,
+    first ? `${formatCurrentEventTime(first)} ${first.title}${more}` : "予定なし"
+  ));
+}
+
+function createCurrentEventItem(event, text) {
+  const item = document.createElement("span");
+  item.className = "next-event-item now";
+
   const label = document.createElement("span");
   label.className = "next-event-kicker";
-  label.textContent = "次の予定";
-  nextEventBar.append(label);
+  label.textContent = "今";
+  item.append(label);
 
-  if (!next) {
+  if (!event) {
     const empty = document.createElement("span");
     empty.className = "next-event-empty";
-    empty.textContent = "今後の予定はありません";
-    nextEventBar.append(empty);
-    return;
+    empty.textContent = text;
+    item.append(empty);
+    return item;
   }
 
-  const source = getEventVisualSource(next);
+  const source = getEventVisualSource(event);
   const pill = document.createElement("span");
   pill.className = `next-event-source ${source}`;
-  pill.textContent = SOURCE_LABELS[source] || SOURCE_LABELS[next.source] || next.source;
+  pill.textContent = SOURCE_LABELS[source] || SOURCE_LABELS[event.source] || event.source;
 
-  const text = document.createElement("span");
-  text.className = "next-event-text";
-  text.textContent = `${formatNextEventTime(next)} ${next.title}`;
+  const body = document.createElement("span");
+  body.className = "next-event-text";
+  body.textContent = text;
 
-  nextEventBar.append(pill, text);
+  item.append(pill, body);
+  return item;
 }
 
 function renderEventList(target, events, emptyText) {
@@ -281,6 +325,7 @@ function renderEventList(target, events, emptyText) {
 
 function renderDayTimeline(target, events, date) {
   target.replaceChildren();
+  state.timeline = null;
 
   if (events.length === 0) {
     const empty = document.createElement("div");
@@ -340,6 +385,59 @@ function renderDayTimeline(target, events, date) {
     hourBands = measuredBands.hourBands;
     renderTimelineLayout(hours, stage, range, hourBands, laidOutEvents);
   }
+
+  state.timeline = { stage, range, hourBands, date };
+  updateTimelineNowLine();
+}
+
+function updateTimelineNowLine() {
+  const timeline = state.timeline;
+  if (!timeline) {
+    return;
+  }
+
+  const now = new Date();
+  const minute = now.getHours() * 60 + now.getMinutes();
+  // 赤い線は平日（祝日を除く）の10:00〜19:00だけ出し、30分単位で動かす。
+  const lineMinute = Math.floor(minute / NOW_LINE_STEP_MINUTES) * NOW_LINE_STEP_MINUTES;
+  let line = timeline.stage.querySelector(".timeline-now");
+  const visible = (
+    isSameDay(timeline.date, now) &&
+    isWeekday(now) &&
+    minute >= NOW_LINE_START_MINUTE &&
+    minute < NOW_LINE_END_MINUTE &&
+    lineMinute >= timeline.range.startHour * 60 &&
+    lineMinute < timeline.range.endHour * 60
+  );
+  if (!visible) {
+    if (line) {
+      line.remove();
+    }
+    return;
+  }
+
+  if (!line) {
+    line = document.createElement("div");
+    line.className = "timeline-now";
+    timeline.stage.append(line);
+  }
+  line.style.top = `${getTimelineY(lineMinute, timeline.range, timeline.hourBands)}px`;
+  line.title = `現在 ${formatTime(now)}`;
+}
+
+function isWeekday(date) {
+  const day = date.getDay();
+  if (day === 0 || day === 6) {
+    return false;
+  }
+
+  const dayStart = stripTime(date);
+  const dayEnd = addDays(dayStart, 1);
+  return !state.remoteEvents.some((event) => (
+    event.source === "holiday" &&
+    new Date(event.start) < dayEnd &&
+    new Date(event.end) > dayStart
+  ));
 }
 
 function createCompactEventCard(event) {
@@ -569,11 +667,16 @@ function isKitagawaFullDayOffTitle(title) {
   );
 }
 
-function getNextEvent() {
-  const now = new Date();
-  return getVisibleEvents()
-    .filter((event) => new Date(event.end) > now)
-    .sort((left, right) => new Date(left.start) - new Date(right.start))[0] || null;
+// 今の予定。時刻のある予定を優先し、なければ終日予定（【北河】リモートなど）を返す。
+function getCurrentEvents(now) {
+  const current = getVisibleEvents()
+    .filter((event) => new Date(event.start) <= now && new Date(event.end) > now);
+  const timed = current.filter((event) => !event.allDay);
+  return timed.length > 0 ? timed : current;
+}
+
+function formatCurrentEventTime(event) {
+  return event.allDay ? "終日" : `${formatTime(event.start)}-${formatTime(event.end)}`;
 }
 
 function getEventVisualSource(event) {
@@ -689,15 +792,6 @@ function formatEventRange(event) {
   return `${formatShortDate(event.start)} ${formatTime(event.start)}-${formatTime(event.end)}`;
 }
 
-function formatNextEventTime(event) {
-  const start = new Date(event.start);
-  if (event.allDay) {
-    return isSameDay(start, new Date()) ? "今日 終日" : `${formatShortDate(event.start)} 終日`;
-  }
-  return isSameDay(start, new Date())
-    ? `今日 ${formatTime(event.start)}`
-    : `${formatShortDate(event.start)} ${formatTime(event.start)}`;
-}
 
 function isExcludedWorkEvent(event) {
   return Boolean(event && event.source === "work" && event.allDay && !event.manualAllDay);
