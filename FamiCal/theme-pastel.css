@@ -1,0 +1,589 @@
+/*
+  家族のページ（index.html）だけのパステル調の見た目。
+  styles.css の後に読み込んで上書きする。admin.html は読み込まないので影響しない。
+  元の見た目に戻すときは、index.html からこのファイルとフォントの読み込み行を外す。
+*/
+
+:root {
+  --bg: #fff7f2;
+  --ink: #3a3340;
+  --muted: #6f6577;
+  --line: #f1dfe5;
+  --surface: #fffdfb;
+  --surface-strong: #ffffff;
+  --accent: #e86f93;
+  --accent-strong: #c2416a;
+  --accent-soft: #ffe4ec;
+  --family: #e9a91c;
+  --family-soft: #fff6d9;
+  --family-line: #f5dc8f;
+  --family-ink: #8a5d00;
+  --holiday: #e6789a;
+  --holiday-soft: #ffeaf0;
+  --holiday-line: #f8c3d3;
+  --holiday-ink: #b03a60;
+  --school: #5dbb94;
+  --school-soft: #e4f7ee;
+  --school-line: #b4e5cf;
+  --school-ink: #25745a;
+  --personal: #a084dc;
+  --personal-soft: #f3eeff;
+  --personal-line: #dcd0fa;
+  --personal-ink: #6346b0;
+  --work: #6aaee6;
+  --work-soft: #e8f4ff;
+  --work-line: #c3e1fa;
+  --work-ink: #2c6aa3;
+  --now-line: #e2557f;
+  --dash: #f3d6df;
+  --cell-line: #f3e6ea;
+  --shadow: 0 12px 32px rgba(214, 128, 158, 0.14);
+  --shadow-soft: 0 3px 10px rgba(214, 128, 158, 0.12);
+  --radius-panel: 22px 26px 24px 28px / 26px 22px 28px 24px;
+  --font-round: "Zen Maru Gothic", "Hiragino Maru Gothic ProN", "BIZ UDPGothic", "Yu Gothic UI", Meiryo, sans-serif;
+  /* 丸ゴシックは文字幅が約26%広いので、狭いマスの中の予定だけ元のフォントにする */
+  --font-dense: "Segoe UI", "Yu Gothic UI", "Hiragino Sans", Meiryo, sans-serif;
+
+  /* 手書き風アイコン（線を少し揺らしたSVG） */
+  --icon-calendar: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' fill='none' stroke-linecap='round' stroke-linejoin='round' stroke-width='2'><path d='M5.6 9.1c6.6-.9 13.6-.9 20.6-.2.9 5.7.8 11.6-.1 17.6-6.7.8-13.6.8-20.3.1-.9-5.9-1-11.8-.2-17.5z' fill='%23fff3f7' stroke='%23e86f93'/><path d='M6 14.2c6.6-.5 13.3-.4 19.9.1' stroke='%23e86f93'/><path d='M11.2 5.6v5.2M20.9 5.4v5.4' stroke='%23e86f93'/><path d='M16 24.3s-4.3-2.5-4.3-5.4c0-1.5 1.1-2.6 2.5-2.6.8 0 1.5.4 1.8 1.1.4-.7 1-1.1 1.8-1.1 1.4 0 2.5 1.1 2.5 2.6 0 2.9-4.3 5.4-4.3 5.4z' fill='%23ffc3d3' stroke='%23e86f93' stroke-width='1.6'/></svg>");
+  --icon-left: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236f6577' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><path d='M14.8 5.2c-2.4 2.2-4.6 4.4-7.2 6.9 2.5 2.3 4.8 4.4 7.1 6.8'/></svg>");
+  --icon-right: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236f6577' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><path d='M9.2 5.2c2.4 2.2 4.6 4.4 7.2 6.9-2.5 2.3-4.8 4.4-7.1 6.8'/></svg>");
+  --icon-clock: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23d9577f' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'><path d='M12.1 3.4c4.9-.1 8.6 3.7 8.5 8.6-.1 4.8-3.8 8.5-8.7 8.6-4.8 0-8.5-3.8-8.4-8.7.1-4.7 3.8-8.4 8.6-8.5z' fill='%23fff4d1'/><path d='M12 7.3v5l3.2 2'/></svg>");
+  --icon-heart: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a6bd1' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'><path d='M12 19.6s-7.2-4.3-7.2-9.3c0-2.5 1.9-4.4 4.2-4.4 1.4 0 2.5.7 3.1 1.9.6-1.2 1.7-1.9 3.1-1.9 2.3 0 4.2 1.9 4.2 4.4-.1 5-7.4 9.3-7.4 9.3z' fill='%23efe7ff'/></svg>");
+  --icon-bag: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234a8cc9' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'><path d='M4.3 8.8c5.1-.5 10.3-.5 15.4 0 .6 3.5.5 7.1-.1 10.7-5.1.5-10.2.5-15.2 0-.6-3.6-.7-7.2-.1-10.7z' fill='%23e3f1ff'/><path d='M9 8.5c-.1-2 .9-3.1 3-3.1s3.1 1.1 3 3.1'/><path d='M4.6 12.9c4.9 1 9.9 1 14.8 0'/></svg>");
+  --icon-star: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke-linecap='round' stroke-linejoin='round'><path d='M11.4 3.3c.7 3.9 2.1 5.5 6.1 6.3-3.9.9-5.4 2.5-6.1 6.5-.8-4-2.3-5.6-6.2-6.5 4-.8 5.5-2.4 6.2-6.3z' fill='%23fff1b0' stroke='%23e0a62a' stroke-width='1.8'/><path d='M18.6 15.4c.3 1.4.8 2 2.2 2.3-1.4.3-1.9.9-2.2 2.3-.3-1.4-.9-2-2.3-2.3 1.4-.3 2-.9 2.3-2.3z' fill='%23ffe0ea' stroke='%23e86f93' stroke-width='1.4'/></svg>");
+  --icon-cloud: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 32' fill='none' stroke-linecap='round' stroke-linejoin='round'><path d='M11 25.5c-3.9 0-6.4-2.6-6.4-5.8 0-3 2.4-5.5 5.5-5.6.6-4.2 4.1-7.2 8.3-7.2 3.9 0 7 2.6 8 6.2 3.6.1 6.1 2.9 6.1 6.2 0 3.6-2.8 6.3-6.6 6.3H11z' fill='%23f1f8ff' stroke='%238fb4da' stroke-width='2'/><ellipse cx='12.9' cy='20.9' rx='1.7' ry='1' fill='%23ffc9d8'/><ellipse cx='27.1' cy='20.9' rx='1.7' ry='1' fill='%23ffc9d8'/><path d='M15.6 18.2h.01M24.4 18.2h.01' stroke='%23596a7d' stroke-width='2.6'/><path d='M18 21c1.2 1 2.8 1 4 0' stroke='%23596a7d' stroke-width='1.6'/></svg>");
+  --icon-sun: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23e3a92b' stroke-width='2' stroke-linecap='round'><circle cx='12' cy='12' r='4.3' fill='%23ffe3a3'/><path d='M12 3v2.4M12 18.6V21M3 12h2.4M18.6 12H21M5.7 5.7l1.7 1.7M16.6 16.6l1.7 1.7M5.7 18.3l1.7-1.7M16.6 7.4l1.7-1.7'/></svg>");
+  --wave: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 8' preserveAspectRatio='none'><path d='M2 5.2c7.6-4.1 13.4 2.6 21.4-.6s13.6-3.2 21.6.2 13.6 2.4 21.4-.7 13.8-3 21.6.3 13.4 2.4 20-.4' fill='none' stroke='%23f6a8bf' stroke-width='2.4' stroke-linecap='round' vector-effect='non-scaling-stroke'/></svg>");
+}
+
+body {
+  background:
+    radial-gradient(circle at 10% 6%, rgba(255, 214, 228, 0.6), transparent 30%),
+    radial-gradient(circle at 92% 12%, rgba(214, 234, 255, 0.65), transparent 28%),
+    radial-gradient(circle at 70% 96%, rgba(232, 222, 255, 0.55), transparent 32%),
+    radial-gradient(rgba(240, 190, 205, 0.32) 1.2px, transparent 1.7px) 0 0 / 22px 22px,
+    var(--bg);
+  font-family: var(--font-round);
+}
+
+/* 色の種類ごとに、文字用の濃い色と、個人予定の淡い色を足す */
+.source-dot.family,
+.event-card.family,
+.day-chip.family,
+.timeline-event.family,
+.next-event-source.family,
+.day-source-count.family {
+  --source-ink: var(--family-ink);
+}
+
+.source-dot.holiday,
+.event-card.holiday,
+.day-chip.holiday,
+.timeline-event.holiday,
+.next-event-source.holiday,
+.day-source-count.holiday,
+.event-card.dayoff,
+.day-chip.dayoff,
+.timeline-event.dayoff,
+.next-event-source.dayoff,
+.day-source-count.dayoff {
+  --source-ink: var(--holiday-ink);
+}
+
+.source-dot.school,
+.event-card.school,
+.day-chip.school,
+.timeline-event.school,
+.next-event-source.school,
+.day-source-count.school {
+  --source-ink: var(--school-ink);
+}
+
+.source-dot.personal,
+.event-card.personal,
+.day-chip.personal,
+.timeline-event.personal,
+.next-event-source.personal,
+.day-source-count.personal {
+  --source-soft: var(--personal-soft);
+  --source-line: var(--personal-line);
+  --source-ink: var(--personal-ink);
+}
+
+.source-dot.work,
+.event-card.work,
+.day-chip.work,
+.timeline-event.work,
+.next-event-source.work,
+.day-source-count.work {
+  --source-ink: var(--work-ink);
+}
+
+/* 見出し */
+.eyebrow,
+.month-kicker,
+.panel-kicker {
+  color: var(--accent-strong);
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+
+h1 {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+  font-weight: 900;
+}
+
+h1::before {
+  content: "";
+  flex-shrink: 0;
+  width: 1.25em;
+  height: 1.25em;
+  background: var(--icon-calendar) center / contain no-repeat;
+}
+
+/* 月の切り替えボタン */
+.icon-button,
+.text-button {
+  border: 1.5px solid #f2d3dd;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 2px 0 #f6e3e9;
+  transition: background-color 0.15s ease, transform 0.1s ease;
+}
+
+.icon-button:hover,
+.text-button:hover {
+  border-color: #eab4c5;
+  background: #fff3f6;
+}
+
+.icon-button:active,
+.text-button:active {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+
+.text-button {
+  color: var(--accent-strong);
+  font-weight: 900;
+}
+
+/* 「<」「>」を手書き風の矢印に置き換える（ボタンには「前の月」「次の月」の名前が付いている） */
+.icon-button span {
+  display: none;
+}
+
+.icon-button::before {
+  content: "";
+  width: 20px;
+  height: 20px;
+  background: center / contain no-repeat;
+}
+
+#prevMonth::before {
+  background-image: var(--icon-left);
+}
+
+#nextMonth::before {
+  background-image: var(--icon-right);
+}
+
+/* 大きな枠 */
+.calendar-main,
+.side-panel section {
+  border: 1.5px solid #f6e4ea;
+  border-radius: var(--radius-panel);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: var(--shadow);
+}
+
+/* 上の「今」のバー */
+.next-event-bar {
+  border-bottom: 1.5px dashed var(--dash);
+  background: linear-gradient(90deg, #fff1f5, #f4f0ff 55%, #eef7ff);
+}
+
+.next-event-item.now .next-event-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--holiday-ink);
+  font-size: 0.8rem;
+}
+
+.next-event-item.now .next-event-kicker::before {
+  content: "";
+  width: 18px;
+  height: 18px;
+  background: var(--icon-clock) center / contain no-repeat;
+}
+
+.next-event-source,
+.day-source-count {
+  border-width: 1.5px;
+  color: var(--source-ink, var(--source));
+}
+
+/* 月の見出しと表示切り替え */
+.month-strip {
+  flex-wrap: wrap;
+  border-bottom: 1.5px dashed var(--dash);
+}
+
+#monthLabel {
+  display: inline-block;
+  padding-bottom: 5px;
+  background: var(--wave) left bottom / 100% 7px no-repeat;
+  font-weight: 900;
+}
+
+.source-toggle {
+  border: 1.5px solid #ecdfe4;
+  background: #fff;
+  transition: background-color 0.15s ease, opacity 0.15s ease;
+}
+
+.source-toggle .source-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 0;
+  background: center / contain no-repeat;
+}
+
+.source-toggle .source-dot.personal {
+  background-image: var(--icon-heart);
+}
+
+.source-toggle .source-dot.work {
+  background-image: var(--icon-bag);
+}
+
+.source-toggle:has(input[value="personal"]:checked) {
+  border-color: var(--personal-line);
+  background: var(--personal-soft);
+}
+
+.source-toggle:has(input[value="work"]:checked) {
+  border-color: var(--work-line);
+  background: var(--work-soft);
+}
+
+.source-toggle:not(:has(input:checked)) {
+  opacity: 0.6;
+}
+
+.source-toggle:not(:has(input:checked)) .source-dot {
+  filter: grayscale(1);
+}
+
+.source-toggle:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* 曜日（日曜はピンク、土曜は水色） */
+.weekday-row {
+  gap: 5px;
+  padding: 0 6px;
+  border-bottom: 0;
+  background: transparent;
+}
+
+.weekday-row span {
+  font-weight: 900;
+}
+
+.weekday-row span:first-child {
+  color: var(--holiday-ink);
+}
+
+.weekday-row span:last-child {
+  color: var(--work-ink);
+}
+
+/* 日付のマス（角丸のタイル） */
+/* すき間を空けたぶん、マスの余白を詰めて予定の文字幅を元と同じにする */
+.calendar-grid {
+  gap: 5px;
+  padding: 2px 6px 8px;
+}
+
+.day-cell,
+.day-cell:nth-child(7n) {
+  padding: 9px 4px;
+  border: 1px solid var(--cell-line);
+  border-radius: 14px;
+  background: #fff;
+  transition: box-shadow 0.15s ease;
+}
+
+.day-cell:hover {
+  box-shadow: var(--shadow-soft);
+}
+
+.day-cell:focus-visible {
+  outline: 3px solid #f6cf6a;
+  outline-offset: 1px;
+}
+
+.day-cell.outside {
+  background: #fcf8f9;
+  color: #9b8f9b;
+}
+
+.day-cell.has-holiday {
+  background: linear-gradient(180deg, #ffeef3, #fff 72%);
+}
+
+.day-cell.has-school {
+  background: linear-gradient(180deg, #e8f8f0, #fff 72%);
+}
+
+.day-cell.has-family-event {
+  background: linear-gradient(180deg, #fff6dc, #fff 72%);
+}
+
+.day-cell.selected,
+.day-cell.has-holiday.selected,
+.day-cell.has-school.selected,
+.day-cell.has-family-event.selected {
+  background: #fff6dc;
+  box-shadow: inset 0 0 0 2px #f6cf6a;
+}
+
+.day-cell.today {
+  outline: 0;
+  border: 2px dashed #f0a1b8;
+}
+
+.day-number {
+  font-weight: 900;
+}
+
+.day-cell:nth-child(7n + 1) .day-number,
+.day-cell.has-holiday .day-number {
+  color: var(--holiday-ink);
+}
+
+.day-cell:nth-child(7n) .day-number {
+  color: var(--work-ink);
+}
+
+.day-cell.outside .day-number {
+  color: inherit;
+}
+
+.day-cell.today .day-number {
+  background: var(--accent-soft);
+  color: #a8325a;
+  box-shadow: inset 0 0 0 1.5px #f4b5c8;
+}
+
+.day-count {
+  background: #f7eef1;
+  color: var(--muted);
+}
+
+.day-cell.busy .day-count {
+  background: #ffe0b8;
+  color: #7a4510;
+}
+
+.day-source-count.dayoff::before {
+  content: "";
+  width: 11px;
+  height: 11px;
+  margin-right: 2px;
+  background: var(--icon-sun) center / contain no-repeat;
+}
+
+/* マスの中の予定（丸い札と色の点） */
+.day-chip {
+  grid-template-columns: 6px minmax(0, 1fr);
+  padding-left: 4px;
+  border: 1px solid var(--source-line, #efe6ea);
+  border-radius: 999px;
+  background: var(--source-soft, #fff);
+  font-family: var(--font-dense);
+}
+
+.day-chip::before {
+  height: 6px;
+  border-radius: 50%;
+}
+
+.day-chip span {
+  padding: 0 6px 0 5px;
+}
+
+/* 選んだ日の欄 */
+#selectedDateLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+}
+
+#selectedDateLabel::before {
+  content: "";
+  flex-shrink: 0;
+  width: 1.15em;
+  height: 1.15em;
+  background: var(--icon-star) center / contain no-repeat;
+}
+
+.timeline-all-day-label {
+  color: var(--holiday-ink);
+}
+
+.timeline-stage {
+  border-left: 1.5px dashed #f0d9e1;
+  border-radius: 0 14px 14px 0;
+  background: linear-gradient(90deg, rgba(255, 240, 245, 0.55), transparent 60%), #fff;
+}
+
+.timeline-line {
+  border-top: 1px dashed #f1e2e7;
+}
+
+.timeline-event {
+  border: 1px solid var(--source-line, #efe6ea);
+  border-left: 5px solid var(--source);
+  border-radius: 12px;
+  background: var(--source-soft, #fff);
+  box-shadow: var(--shadow-soft);
+}
+
+.timeline-event-time {
+  color: var(--source-ink, var(--muted));
+}
+
+.timeline-event-title,
+.event-title {
+  font-weight: 700;
+}
+
+.timeline-now {
+  border-top-color: var(--now-line);
+}
+
+.timeline-now::before {
+  background: var(--now-line);
+  box-shadow: 0 0 0 3px #ffe0ea;
+}
+
+.event-card {
+  border: 1px solid var(--source-line, var(--line));
+  border-left: 5px solid var(--source);
+  border-radius: 14px;
+  background: var(--source-soft, #fff);
+  box-shadow: var(--shadow-soft);
+}
+
+/* 予定なし（雲のアイコン付き） */
+.empty-state {
+  gap: 4px;
+  padding: 12px;
+  border: 2px dashed var(--dash);
+  border-radius: 18px;
+  background: #fffafc;
+}
+
+.empty-state::before {
+  content: "";
+  width: 40px;
+  height: 32px;
+  background: var(--icon-cloud) center / contain no-repeat;
+}
+
+@media (max-width: 720px) {
+  /* 上の帯の高さは styles.css の固定位置（47px）に合わせたまま変えない */
+  .topbar {
+    border-bottom: 1px dashed var(--dash);
+    background: rgba(255, 247, 242, 0.96);
+  }
+
+  .calendar-main,
+  .side-panel section {
+    border-radius: 18px;
+  }
+
+  .calendar-fixed-head {
+    border-radius: 18px 18px 0 0;
+    background: rgba(255, 255, 255, 0.98);
+  }
+
+  .month-strip {
+    background: rgba(255, 255, 255, 0.98);
+  }
+
+  .next-event-item.now .next-event-kicker {
+    font-size: 0.7rem;
+  }
+
+  .next-event-item.now .next-event-kicker::before {
+    width: 16px;
+    height: 16px;
+  }
+
+  .source-toggle .source-dot {
+    width: 16px;
+    height: 16px;
+  }
+
+  /* すき間のぶん横幅を760pxから広げて、マスの中の文字幅を元と同じにする（横スクロールは元のまま） */
+  .weekday-row,
+  .calendar-grid {
+    min-width: 790px;
+  }
+
+  .weekday-row {
+    gap: 3px;
+    padding: 0 4px;
+  }
+
+  .calendar-grid {
+    gap: 3px;
+    padding: 2px 4px 6px;
+  }
+
+  .day-cell,
+  .day-cell:nth-child(7n) {
+    padding: 6px 4px;
+    border-radius: 12px;
+  }
+
+  .day-cell.today {
+    border-width: 2px;
+  }
+
+  /* スマホでも「休」「祝」の印だけは出す */
+  .day-source-count.dayoff,
+  .day-source-count.holiday {
+    display: inline-flex;
+  }
+
+  .day-chip {
+    grid-template-columns: 5px minmax(0, 1fr);
+    padding-left: 3px;
+  }
+
+  .day-chip::before {
+    height: 5px;
+  }
+
+  .day-chip span {
+    padding: 0 3px;
+  }
+
+  .timeline-event {
+    border-left-width: 4px;
+    border-radius: 10px;
+  }
+
+  .event-card {
+    border-radius: 12px;
+  }
+}
