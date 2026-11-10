@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>海外株 購入可能株数計算</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #18212f;
+      --muted: #657184;
+      --line: #dbe2ea;
+      --surface: #ffffff;
+      --background: #f4f7fb;
+      --accent: #1769e0;
+      --accent-soft: #eaf2ff;
+      --success: #087b55;
+      --shadow: 0 18px 50px rgba(28, 45, 73, 0.12);
+    }
+
+    * { box-sizing: border-box; }
+
+    html { background: #e9eef5; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      justify-content: center;
+      padding: 0;
+      background:
+        radial-gradient(circle at 10% 10%, #e7f0ff 0, transparent 35%),
+        var(--background);
+      color: var(--ink);
+      font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans JP", sans-serif;
+    }
+
+    main {
+      width: min(100%, 480px);
+      min-height: 100vh;
+      min-height: 100dvh;
+      background: var(--surface);
+      border-left: 1px solid rgba(219, 226, 234, 0.8);
+      border-right: 1px solid rgba(219, 226, 234, 0.8);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    header {
+      padding: calc(22px + env(safe-area-inset-top)) 20px 18px;
+      border-bottom: 1px solid var(--line);
+    }
+    h1 { margin: 0 0 6px; font-size: 1.45rem; }
+    header p, .note { margin: 0; color: var(--muted); line-height: 1.7; }
+    header p { font-size: .86rem; }
+    .content { padding: 20px 18px calc(28px + env(safe-area-inset-bottom)); }
+    .form-grid { display: grid; grid-template-columns: 1fr; gap: 18px; }
+    .field { display: grid; gap: 8px; }
+    .field.full { grid-column: auto; }
+    label, legend { font-size: 0.9rem; font-weight: 700; }
+    .input-wrap { position: relative; }
+    input[type="number"] {
+      width: 100%;
+      height: 56px;
+      padding: 0 62px 0 14px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fbfcfe;
+      color: var(--ink);
+      font: inherit;
+      font-size: 16px;
+      outline: none;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    input:focus { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(23,105,224,.12); }
+    .unit { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: var(--muted); font-weight: 700; }
+    fieldset { margin: 0; padding: 0; border: 0; }
+    .currency-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
+    .currency-switch label { position: relative; }
+    .currency-switch input { position: absolute; opacity: 0; }
+    .currency-switch span {
+      display: grid;
+      place-items: center;
+      min-height: 54px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: .2s;
+    }
+    .currency-switch input:checked + span { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+    .results {
+      margin-bottom: 22px;
+      padding: 20px;
+      border-radius: 18px;
+      background: linear-gradient(135deg, #edf4ff, #f7fbff);
+      border: 1px solid #d7e5fb;
+    }
+    .hero-result { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; padding-bottom: 16px; border-bottom: 1px solid #d7e5fb; }
+    .hero-result span { color: var(--muted); font-weight: 700; }
+    .hero-result strong { color: var(--accent); font-size: clamp(2.4rem, 12vw, 3.5rem); line-height: 1; }
+    .hero-result strong small { font-size: 1rem; margin-left: 5px; }
+    .result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 12px; padding-top: 18px; }
+    .result-item:first-child { grid-column: 1 / -1; }
+    .result-item span { display: block; color: var(--muted); font-size: .82rem; margin-bottom: 5px; }
+    .result-item strong { font-size: 1.05rem; }
+    .status { margin: 16px 0 0; color: var(--success); font-weight: 700; }
+    .note { margin-top: 18px; font-size: .82rem; }
+
+    @media (min-width: 481px) {
+      body { padding: 20px 0; }
+      main { min-height: calc(100dvh - 40px); border-radius: 24px; border: 1px solid rgba(219, 226, 234, 0.8); }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>海外株 購入可能株数計算</h1>
+      <p>株価・購入余力・ドル円レートから、購入できる株数を概算します。</p>
+    </header>
+
+    <div class="content">
+      <section class="results" aria-live="polite">
+        <div class="hero-result">
+          <span>購入可能株数</span>
+          <strong><span id="shares">4</span><small>株</small></strong>
+        </div>
+        <div class="result-grid">
+          <div class="result-item"><span>1株の円換算</span><strong id="priceJpy">22,500円</strong></div>
+          <div class="result-item"><span>概算購入額</span><strong id="totalCost">90,000円</strong></div>
+          <div class="result-item"><span>購入後の残額</span><strong id="remaining">10,000円</strong></div>
+        </div>
+        <p class="status" id="status">この条件では4株購入できます。</p>
+      </section>
+
+      <div class="form-grid">
+        <div class="field">
+          <label for="stockPrice">1株あたりの価格</label>
+          <div class="input-wrap">
+            <input id="stockPrice" type="number" min="0" step="0.01" value="150" inputmode="decimal">
+            <span class="unit">USD</span>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="exchangeRate">現在のドル円</label>
+          <div class="input-wrap">
+            <input id="exchangeRate" type="number" min="0" step="0.01" value="150" inputmode="decimal">
+            <span class="unit">円/USD</span>
+          </div>
+        </div>
+
+        <fieldset class="field full">
+          <legend>購入余力の通貨</legend>
+          <div class="currency-switch">
+            <label><input type="radio" name="currency" value="JPY" checked><span>日本円（JPY）</span></label>
+            <label><input type="radio" name="currency" value="USD"><span>米ドル（USD）</span></label>
+          </div>
+        </fieldset>
+
+        <div class="field full">
+          <label for="buyingPower">購入余力</label>
+          <div class="input-wrap">
+            <input id="buyingPower" type="number" min="0" step="0.01" value="100000" inputmode="decimal">
+            <span class="unit" id="powerUnit">円</span>
+          </div>
+        </div>
+      </div>
+
+      <p class="note">※ 手数料、為替スプレッド、税金、価格変動は含みません。実際の注文時は、証券会社の画面で必要金額をご確認ください。</p>
+    </div>
+  </main>
+
+  <script>
+    const stockPrice = document.querySelector('#stockPrice');
+    const exchangeRate = document.querySelector('#exchangeRate');
+    const buyingPower = document.querySelector('#buyingPower');
+    const powerUnit = document.querySelector('#powerUnit');
+    const shares = document.querySelector('#shares');
+    const priceJpy = document.querySelector('#priceJpy');
+    const totalCost = document.querySelector('#totalCost');
+    const remaining = document.querySelector('#remaining');
+    const status = document.querySelector('#status');
+
+    const yen = new Intl.NumberFormat('ja-JP', { maximumFractionDigits: 0 });
+    const usd = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    function selectedCurrency() {
+      return document.querySelector('input[name="currency"]:checked').value;
+    }
+
+    function calculate() {
+      const price = Number(stockPrice.value);
+      const rate = Number(exchangeRate.value);
+      const power = Number(buyingPower.value);
+      const currency = selectedCurrency();
+      const isValid = price > 0 && rate > 0 && power >= 0;
+
+      powerUnit.textContent = currency === 'JPY' ? '円' : 'USD';
+
+      if (!isValid) {
+        shares.textContent = '—';
+        priceJpy.textContent = '—';
+        totalCost.textContent = '—';
+        remaining.textContent = '—';
+        status.textContent = '0より大きい株価とドル円レートを入力してください。';
+        return;
+      }
+
+      const availableUsd = currency === 'JPY' ? power / rate : power;
+      const count = Math.floor((availableUsd + Number.EPSILON) / price);
+      const costUsd = count * price;
+      const remainder = currency === 'JPY' ? power - costUsd * rate : power - costUsd;
+
+      shares.textContent = yen.format(count);
+      priceJpy.textContent = `${yen.format(price * rate)}円`;
+      totalCost.textContent = currency === 'JPY'
+        ? `${yen.format(costUsd * rate)}円`
+        : `$${usd.format(costUsd)}`;
+      remaining.textContent = currency === 'JPY'
+        ? `${yen.format(Math.max(0, remainder))}円`
+        : `$${usd.format(Math.max(0, remainder))}`;
+      status.textContent = count > 0
+        ? `この条件では${yen.format(count)}株購入できます。`
+        : 'この条件では1株未満のため購入できません。';
+    }
+
+    [stockPrice, exchangeRate, buyingPower].forEach(input => input.addEventListener('input', calculate));
+    document.querySelectorAll('input[name="currency"]').forEach(input => {
+      input.addEventListener('change', () => {
+        buyingPower.value = input.value === 'JPY' ? '100000' : '1000';
+        calculate();
+      });
+    });
+
+    calculate();
+  </script>
+</body>
+</html>

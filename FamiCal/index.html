@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>家族カレンダー</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kiwi+Maru:wght@400;500&family=Mochiy+Pop+One&display=swap">
+    <link rel="stylesheet" href="./styles.css?v=20261110-1">
+    <link rel="stylesheet" href="./theme-pastel.css?v=20261109-1">
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Family Calendar</p>
+          <h1>家族カレンダー</h1>
+        </div>
+        <div class="top-actions" aria-label="表示操作">
+          <button class="icon-button" id="prevMonth" type="button" aria-label="前の月" title="前の月">
+            <span aria-hidden="true">&lt;</span>
+          </button>
+          <button class="text-button" id="todayButton" type="button">今日</button>
+          <button class="icon-button" id="nextMonth" type="button" aria-label="次の月" title="次の月">
+            <span aria-hidden="true">&gt;</span>
+          </button>
+        </div>
+      </header>
+
+      <main class="calendar-layout">
+        <section class="calendar-main" aria-label="月間カレンダー">
+          <div class="calendar-fixed-head">
+            <div class="next-event-bar" id="nextEventBar" role="status"></div>
+            <div class="month-strip">
+              <div>
+                <p class="month-kicker" id="yearLabel"></p>
+                <h2 id="monthLabel"></h2>
+              </div>
+              <div class="source-toggles" aria-label="表示する予定">
+                <label class="source-toggle">
+                  <input type="checkbox" value="personal" checked autocomplete="off">
+                  <span class="source-dot personal"></span>
+                  <span>個人</span>
+                </label>
+                <label class="source-toggle">
+                  <!-- 最初は仕事を外して開く（ユーザーの希望） -->
+                  <input type="checkbox" value="work" autocomplete="off">
+                  <span class="source-dot work"></span>
+                  <span>仕事</span>
+                </label>
+              </div>
+              <p class="import-status" id="importStatus" role="status"></p>
+            </div>
+
+            <div class="weekday-scroll" id="weekdayScroll">
+              <div class="weekday-row" aria-hidden="true">
+                <span>日</span>
+                <span>月</span>
+                <span>火</span>
+                <span>水</span>
+                <span>木</span>
+                <span>金</span>
+                <span>土</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="calendar-scroll" id="calendarScroll">
+            <div class="calendar-grid" id="calendarGrid"></div>
+          </div>
+        </section>
+
+        <aside class="side-panel" aria-label="予定">
+          <section class="day-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="panel-kicker">Selected</p>
+                <h2 id="selectedDateLabel"></h2>
+              </div>
+            </div>
+            <div class="event-list" id="selectedEventList"></div>
+          </section>
+          <button class="forget-key-button" id="forgetKeyButton" type="button" hidden>この端末の合言葉を消す</button>
+        </aside>
+      </main>
+    </div>
+
+    <script>
+      document.write(`<script src="./data/events.js?v=${Date.now()}"><\/script>`);
+    </script>
+    <script src="./famical-crypto.js?v=20261110-1" defer></script>
+    <script src="./app.js?v=20261110-1" defer></script>
+  </body>
+</html>
