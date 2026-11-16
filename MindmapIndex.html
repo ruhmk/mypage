@@ -19,59 +19,27 @@
 
         <section class="panel">
           <div class="panel-heading">
-            <h2>入力</h2>
-            <button id="sampleButton" type="button">サンプル</button>
+            <h2>ファイル</h2>
+            <span id="saveStateBadge" class="save-state">変更なし</span>
           </div>
-          <textarea id="outlineInput" spellcheck="false" aria-label="Outline input"></textarea>
-          <div class="button-row">
-            <button id="importButton" type="button">反映</button>
-          </div>
-        </section>
-
-        <section class="panel">
-          <h2>マップ</h2>
-          <label class="field">
-            <span>保存済み</span>
-            <select id="mapSelect" aria-label="保存済みマップ"></select>
-          </label>
+          <p id="fileNameText" class="file-name"></p>
           <div class="button-row">
             <button id="newMapButton" type="button">新規</button>
-            <button id="saveMapButton" type="button">保存</button>
+            <button id="openMarkdownButton" type="button" title="MDファイルを開く">開く</button>
           </div>
           <div class="button-row">
-            <button id="openMarkdownButton" type="button">MDを開く</button>
-            <button id="saveMarkdownButton" type="button">MD保存</button>
+            <button id="saveMarkdownButton" type="button" title="開いているMDファイルに上書き（Ctrl + S）">保存</button>
+            <button id="saveAsMarkdownButton" type="button" title="別のMDファイルとして保存（Ctrl + Shift + S）">名前を付けて保存</button>
           </div>
+          <p class="panel-note">マップはMDファイルにだけ保存します。ブラウザには作業中の内容だけを残すので、保存前に閉じても続きから再開できます。</p>
           <input id="markdownFileInput" type="file" accept=".md,.markdown,text/markdown,text/plain" hidden />
         </section>
 
-        <section class="panel">
-          <h2>ノード詳細</h2>
-          <p class="selected-node-name" id="nodeDetailTitle">未選択</p>
-          <div class="button-row">
-            <button id="focusNodeButton" type="button">フォーカス</button>
-            <button id="jumpSourceButton" type="button">元へ</button>
-          </div>
-          <label class="field">
-            <span>種類</span>
-            <select id="nodeTypeSelect" aria-label="ノード種別">
-              <option value="idea">要点</option>
-              <option value="task">タスク</option>
-              <option value="decision">決定</option>
-              <option value="risk">注意</option>
-              <option value="question">問い</option>
-            </select>
-          </label>
-          <label class="field">
-            <span>関係線</span>
-            <select id="relationTypeSelect" aria-label="関係線タイプ">
-              <option value="normal">通常</option>
-              <option value="note">補足</option>
-              <option value="dependency">依存</option>
-              <option value="risk">注意</option>
-            </select>
-          </label>
-          <textarea id="nodeNoteInput" placeholder="このノードのメモ" aria-label="Node memo"></textarea>
+        <section id="legacyMapsPanel" class="panel" hidden>
+          <h2>ブラウザに残っている以前のマップ</h2>
+          <p class="panel-note">以前の「保存」でブラウザの中に置いていたマップです。開いて「保存」でMDファイルにしてください。すべてファイルにしたら、一覧を消せます。</p>
+          <div id="legacyMapList" class="layer-list" aria-label="以前のマップ"></div>
+          <button id="clearLegacyMapsButton" type="button">この一覧をブラウザから消す</button>
         </section>
 
         <section class="panel">
@@ -115,17 +83,16 @@
 
         <section class="panel">
           <h2>出力</h2>
+          <p class="panel-note">AIに読み込ませるときは、JSONかMarkdownを出してコピーしてください。詳細・補足も含まれます。</p>
           <div class="button-row">
             <button id="exportJsonButton" type="button">JSON</button>
             <button id="exportMarkdownButton" type="button">Markdown</button>
-            <button id="savePngButton" type="button">PNG保存</button>
+            <button id="copyExportButton" type="button">コピー</button>
           </div>
           <textarea id="exportOutput" readonly aria-label="Export output"></textarea>
-        </section>
-
-        <section class="panel">
-          <button id="summaryButton" type="button">要約</button>
-          <textarea id="summaryOutput" readonly aria-label="Summary output"></textarea>
+          <div class="button-row">
+            <button id="savePngButton" type="button">PNG保存</button>
+          </div>
         </section>
       </aside>
 
@@ -155,6 +122,12 @@
             <button id="exit3dButton" type="button">2Dへ戻る</button>
           </div>
           <button id="restoreMapButton" class="restore-map-button" type="button" hidden>戻す</button>
+          <div id="unsavedBanner" class="unsaved-banner" role="status" hidden>
+            <span id="unsavedBannerText"></span>
+            <button id="bannerSaveButton" type="button">保存</button>
+            <button id="bannerDiscardButton" type="button" hidden>保存済みの状態に戻す</button>
+            <button id="bannerCloseButton" type="button" class="banner-close" aria-label="閉じる">×</button>
+          </div>
           <div id="canvasWorld" class="canvas-world">
             <div id="canvasView" class="canvas-view">
               <div id="floorLayer" class="floor-layer" aria-hidden="true"></div>
@@ -169,9 +142,78 @@
           </div>
         </div>
       </section>
+
+      <aside class="inspector" aria-label="ノードの詳細">
+        <header class="inspector-header">
+          <p class="eyebrow">Inspector</p>
+          <h2>ノード詳細</h2>
+        </header>
+
+        <p id="inspectorEmpty" class="inspector-empty">ノードを選ぶと、ここに詳細が出ます。</p>
+
+        <div id="inspectorBody" class="inspector-body" hidden>
+          <section class="inspector-section">
+            <h3>基本</h3>
+            <label class="field">
+              <span>タイトル</span>
+              <input id="nodeTitleInput" type="text" aria-label="ノードのタイトル" />
+            </label>
+            <p id="nodeMetaText" class="inspector-meta"></p>
+            <label class="field">
+              <span>種類</span>
+              <select id="nodeTypeSelect" aria-label="ノード種別">
+                <option value="idea">要点</option>
+                <option value="task">タスク</option>
+                <option value="decision">決定</option>
+                <option value="risk">注意</option>
+                <option value="question">問い</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>関係線</span>
+              <select id="relationTypeSelect" aria-label="関係線タイプ">
+                <option value="normal">通常</option>
+                <option value="note">補足</option>
+                <option value="dependency">依存</option>
+                <option value="risk">注意</option>
+              </select>
+            </label>
+          </section>
+
+          <section class="inspector-section inspector-section-grow">
+            <h3>詳細・補足</h3>
+            <textarea id="nodeDetailInput" placeholder="このノードの詳細や補足。カードのタイトルの下に表示されます。" aria-label="詳細・補足"></textarea>
+            <div class="card-height-row">
+              <span id="cardHeightText" class="inspector-meta">縦幅: 自動（全部表示）</span>
+              <button id="resetCardHeightButton" type="button">全部表示に戻す</button>
+            </div>
+            <p class="panel-note">カードの下端の取っ手を上へドラッグすると縦幅を縮められます。入りきらない詳細は「…」で省略されます。</p>
+          </section>
+
+          <section class="inspector-section">
+            <h3>操作</h3>
+            <div class="button-row">
+              <button id="focusNodeButton" type="button">フォーカス</button>
+              <button id="jumpSourceButton" type="button">元へ</button>
+            </div>
+          </section>
+        </div>
+      </aside>
     </main>
 
     <div id="nodeContextMenu" class="context-menu" hidden></div>
+
+    <dialog id="unsavedDialog" class="app-dialog" aria-labelledby="unsavedDialogTitle">
+      <form method="dialog">
+        <h2 id="unsavedDialogTitle">保存していない変更があります</h2>
+        <p id="unsavedDialogText"></p>
+        <div class="dialog-actions">
+          <button value="save" class="primary-button">保存して続ける</button>
+          <button value="discard">保存しないで続ける</button>
+          <button value="cancel">やめる</button>
+        </div>
+      </form>
+    </dialog>
 
     <script src="./app.js"></script>
   </body>

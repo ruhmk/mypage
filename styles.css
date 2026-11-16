@@ -98,7 +98,8 @@ select:focus,
 
 .app-shell {
   display: grid;
-  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  /* 左の操作パネル | マップ | 右のインスペクター。狭い画面ではマップに場所を譲る */
+  grid-template-columns: clamp(240px, 20vw, 300px) minmax(0, 1fr) clamp(260px, 22vw, 320px);
   height: 100vh;
 }
 
@@ -167,11 +168,118 @@ h2 {
   justify-content: space-between;
 }
 
-#outlineInput {
-  min-height: 210px;
-  resize: vertical;
-  padding: 10px;
-  line-height: 1.5;
+.panel[hidden],
+.unsaved-banner[hidden] {
+  display: none;
+}
+
+.button-row > #saveAsMarkdownButton {
+  flex: 1.8;
+  white-space: nowrap;
+}
+
+.file-name {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.save-state {
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.save-state.is-dirty {
+  border-color: color-mix(in srgb, #f59e0b, var(--line) 30%);
+  background: color-mix(in srgb, #f59e0b, var(--surface) 82%);
+  color: var(--ink);
+}
+
+/* 未保存のお知らせ（マップの下側に出す） */
+.unsaved-banner {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 32px);
+  padding: 8px 8px 8px 14px;
+  border: 1px solid color-mix(in srgb, #f59e0b, var(--line) 30%);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface), #f59e0b 10%);
+  box-shadow: var(--shadow);
+  color: var(--ink);
+  font-size: 13px;
+  transform: translateX(-50%);
+}
+
+.unsaved-banner span {
+  min-width: 0;
+  line-height: 1.45;
+}
+
+.unsaved-banner button {
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+.unsaved-banner .banner-close {
+  width: 32px;
+  padding: 0;
+}
+
+/* 保存していない変更があるときの確認 */
+.app-dialog {
+  width: min(420px, calc(100vw - 32px));
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--ink);
+}
+
+.app-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.app-dialog h2 {
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+
+.app-dialog p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.dialog-actions button {
+  padding: 0 14px;
+}
+
+.primary-button {
+  border-color: var(--focus);
+  background: color-mix(in srgb, var(--focus), var(--surface) 78%);
+  font-weight: 700;
 }
 
 #exportOutput {
@@ -182,12 +290,10 @@ h2 {
   color: var(--muted);
 }
 
-#summaryOutput {
-  min-height: 220px;
-  resize: vertical;
-  padding: 10px;
-  line-height: 1.5;
+.panel-note {
   color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .button-row > button,
@@ -277,12 +383,76 @@ h2 {
   font-size: 12px;
 }
 
-#nodeNoteInput {
-  min-height: 120px;
+.inspector {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 14px;
+  border-left: 1px solid var(--line);
+  background: var(--surface);
+  overflow: auto;
+}
+
+.inspector-header {
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.inspector-empty {
+  padding: 18px 2px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.inspector-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.inspector-body[hidden] {
+  display: none;
+}
+
+.inspector-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.inspector-section-grow {
+  flex: 1 1 auto;
+  min-height: 220px;
+}
+
+.inspector-section h3 {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.inspector-meta {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+#nodeDetailInput {
+  flex: 1 1 auto;
+  min-height: 160px;
   resize: vertical;
   padding: 10px;
-  line-height: 1.5;
+  line-height: 1.6;
 }
+
 
 .field input[type="range"] {
   width: 100%;
@@ -405,6 +575,7 @@ body.map-maximized .app-shell {
 }
 
 body.map-maximized .sidebar,
+body.map-maximized .inspector,
 body.map-maximized .workspace-bar {
   display: none;
 }
@@ -589,6 +760,7 @@ body.map-maximized .canvas-viewport {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 88px;
   align-items: center;
+  align-content: center;
   gap: 8px;
   width: var(--node-width);
   min-height: 68px;
@@ -749,6 +921,146 @@ body.layer-3d .mind-node.is-layer-focused {
 .mind-node.root .node-title {
   font-size: 17px;
   font-weight: 700;
+}
+
+/* 詳細・補足: タイトルの下に、カードの幅いっぱいで少し小さく表示する */
+.node-detail {
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin-top: -2px;
+  padding-top: 6px;
+  border-top: 1px solid color-mix(in srgb, var(--branch), transparent 78%);
+  outline: none;
+  color: color-mix(in srgb, var(--ink), var(--muted) 45%);
+  cursor: text;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.mind-node.root .node-detail {
+  font-size: 13px;
+}
+
+.node-detail:empty:not(.is-editing) {
+  display: none;
+}
+
+.node-detail.is-editing:empty::before {
+  content: "詳細・補足を入力";
+  color: var(--muted);
+  opacity: 0.7;
+}
+
+/* 縦幅を縮めたカード: タイトル行は上に置き、残りの高さに入る行だけ詳細を見せて最後を「…」にする */
+.mind-node.has-fixed-height {
+  align-content: start;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.mind-node.has-fixed-height .node-detail {
+  align-self: stretch;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: var(--detail-lines, 1);
+}
+
+.mind-node.has-fixed-height .node-detail.is-cut-off:not(.is-editing) {
+  display: none;
+}
+
+/* 詳細が1行も入らないときも、隠れた詳細があると分かるよう「…」を出す */
+.mind-node.has-fixed-height:has(.node-detail.is-cut-off:not(.is-editing))::before {
+  content: "…";
+  position: absolute;
+  left: 20px;
+  bottom: 1px;
+  color: color-mix(in srgb, var(--ink), var(--muted) 45%);
+  font-size: 12px;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.mind-node.root.has-fixed-height:has(.node-detail.is-cut-off:not(.is-editing))::before {
+  left: 15px;
+}
+
+/* 縮めたカードの詳細を書いている間は、一時的に全部見せる */
+.mind-node.has-fixed-height:has(.node-detail.is-editing) {
+  height: auto !important;
+  align-content: center;
+  grid-template-rows: none;
+}
+
+.mind-node.has-fixed-height .node-detail.is-editing {
+  display: block;
+  overflow: visible;
+  -webkit-line-clamp: none;
+}
+
+/* カード下端の取っ手（縦幅の変更） */
+.node-resize-handle {
+  position: absolute;
+  left: 50%;
+  bottom: -7px;
+  width: 48px;
+  height: 14px;
+  transform: translateX(-50%);
+  cursor: ns-resize;
+  touch-action: none;
+  opacity: 0;
+  transition: opacity var(--motion-speed) var(--motion-ease);
+}
+
+.node-resize-handle::before {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  top: 5px;
+  height: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--branch), var(--ink) 35%);
+}
+
+.mind-node:hover .node-resize-handle,
+.mind-node.is-selected .node-resize-handle,
+.mind-node.is-resizing .node-resize-handle {
+  opacity: 0.9;
+}
+
+.mind-node.is-resizing {
+  transition: none;
+}
+
+.card-height-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.card-height-row button {
+  flex: 0 0 auto;
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.node-measure-layer {
+  position: fixed;
+  left: -100000px;
+  top: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.node-measure-layer .mind-node {
+  transform: none;
+  animation: none;
+  transition: none;
 }
 
 .node-actions {
@@ -1056,7 +1368,7 @@ body.layer-3d .mind-node.is-layer-focused {
 
   .app-shell {
     grid-template-columns: 1fr;
-    grid-template-rows: auto 72vh;
+    grid-template-rows: auto 72vh auto;
     min-height: 100vh;
     height: auto;
   }
@@ -1065,6 +1377,11 @@ body.layer-3d .mind-node.is-layer-focused {
     max-height: none;
     border-right: 0;
     border-bottom: 1px solid var(--line);
+  }
+
+  .inspector {
+    border-left: 0;
+    border-top: 1px solid var(--line);
   }
 
   .tool-grid {
