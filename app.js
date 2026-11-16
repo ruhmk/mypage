@@ -148,7 +148,9 @@ const els = {
   unsavedBannerText: document.getElementById("unsavedBannerText"),
   bannerDiscardButton: document.getElementById("bannerDiscardButton"),
   unsavedDialog: document.getElementById("unsavedDialog"),
+  unsavedDialogTitle: document.getElementById("unsavedDialogTitle"),
   unsavedDialogText: document.getElementById("unsavedDialogText"),
+  unsavedDialogActions: document.getElementById("unsavedDialogActions"),
   legacyMapsPanel: document.getElementById("legacyMapsPanel"),
   legacyMapList: document.getElementById("legacyMapList"),
   inspectorEmpty: document.getElementById("inspectorEmpty"),
@@ -2446,16 +2448,65 @@ async function newMap() {
   els.statusText.textContent = "新しいマップを作りました。「保存」でMDファイルにできます。";
 }
 
-async function openMapFile() {
-  if (!(await resolveUnsavedChanges("ほかのファイルを開く"))) return;
-  if (!("showOpenFilePicker" in window)) {
+// ファイル選択の画面を出せない環境（アプリの中のブラウザなど）では、選択画面の命令が画面を出さずに
+// すぐ「キャンセル」で返ってくる。人が画面を見て閉じるには時間がかかるので、すぐ返ってきたものは
+// 「出せなかった」とみなし、どのブラウザでも使える昔ながらの方法（開く=ファイル選択、保存=ダウンロード）に切り替える。
+const PICKER_INSTANT_FAIL_MS = 400;
+let filePickerUnavailable = false;
+
+function canUseFilePicker(name) {
+  return !filePickerUnavailable && typeof window[name] === "function";
+}
+
+function isPickerUnavailableError(error, startedAt) {
+  if (error?.name === "SecurityError") return true;
+  return error?.name === "AbortError" && performance.now() - startedAt < PICKER_INSTANT_FAIL_MS;
+}
+
+// 「開く」を押した流れの中で呼ぶ（ブラウザは操作の直後でないと選択画面を出さないため、未保存がなければ待たずに出す）
+function openMapFile() {
+  const run = () =>
+    startFileOpen().catch((error) => {
+      els.statusText.textContent = `ファイルを開けませんでした: ${error.message}`;
+    });
+  if (state.isDirty) {
+    resolveUnsavedChanges("ほかのファイルを開く").then(async (ok) => {
+      if (!ok) return;
+      // 保存先を選ぶ画面を挟むと「押した直後」ではなくなり、ブラウザがファイル選択の画面を出さない。
+      // そのときは、もう一度押してもらってから選択画面を出す
+      if (navigator.userActivation && !navigator.userActivation.isActive) {
+        const choice = await askChoice({
+          title: "保存しました",
+          message: "続けて、開くMDファイルを選んでください。",
+          buttons: [
+            { value: "open", label: "ファイルを選ぶ", primary: true },
+            { value: "cancel", label: "やめる" },
+          ],
+        });
+        if (choice !== "open") return;
+      }
+      run();
+    });
+    return;
+  }
+  run();
+}
+
+async function startFileOpen() {
+  if (!canUseFilePicker("showOpenFilePicker")) {
     els.markdownFileInput.click();
     return;
   }
+  const startedAt = performance.now();
   let handle;
   try {
     [handle] = await window.showOpenFilePicker({ multiple: false, types: MARKDOWN_FILE_TYPES });
   } catch (error) {
+    if (isPickerUnavailableError(error, startedAt)) {
+      filePickerUnavailable = true;
+      els.markdownFileInput.click();
+      return;
+    }
     if (error.name === "AbortError") return;
     throw error;
   }
@@ -2474,33 +2525,48 @@ async function loadMapFromFile(file, handle = null) {
 async function saveMap({ saveAs = false } = {}) {
   const markdown = toMarkdown(state.tree, { includeMeta: true }).join("\n");
   const suggestedName = `${safeFileName(currentMapName())}.md`;
-  if ("showSaveFilePicker" in window) {
-    let handle = saveAs ? null : state.fileHandle;
+  let handle = null;
+  if (canUseFilePicker("showSaveFilePicker")) {
+    handle = saveAs ? null : state.fileHandle;
     if (handle && !(await ensureWritePermission(handle))) handle = null;
     if (!handle) {
+      const startedAt = performance.now();
       try {
         handle = await window.showSaveFilePicker({ suggestedName, types: MARKDOWN_FILE_TYPES });
       } catch (error) {
-        if (error.name === "AbortError") return false;
-        throw error;
+        if (isPickerUnavailableError(error, startedAt)) {
+          filePickerUnavailable = true;
+          handle = null;
+        } else if (error.name === "AbortError") {
+          return false;
+        } else {
+          throw error;
+        }
       }
     }
+  }
+
+  let message;
+  if (handle) {
     const writable = await handle.createWritable();
     await writable.write(markdown);
     await writable.close();
     state.fileHandle = handle;
     state.fileName = handle.name;
     rememberFileHandle(handle);
+    message = `${state.fileName} に保存しました。`;
   } else {
     // ファイルへ直接書けないブラウザでは、ダウンロードとして保存する
     const fileName = (!saveAs && state.fileName) || suggestedName;
     downloadText(markdown, fileName, "text/markdown;charset=utf-8");
     state.fileName = fileName;
+    state.fileHandle = null;
+    message = `${fileName} をダウンロードとして保存しました（このブラウザではファイルへ直接上書きできないため、ダウンロード先に保存されます）。`;
   }
   state.savedSignature = currentSignature();
   saveTree();
   hideUnsavedBanner();
-  els.statusText.textContent = `${state.fileName} に保存しました。`;
+  els.statusText.textContent = message;
   return true;
 }
 
@@ -2600,7 +2666,30 @@ function askUnsavedChoice(message) {
   if (!dialog || typeof dialog.showModal !== "function") {
     return Promise.resolve(window.confirm(`${message}\n保存しないで続けますか？`) ? "discard" : "cancel");
   }
+  return askChoice({
+    title: "保存していない変更があります",
+    message,
+    buttons: [
+      { value: "save", label: "保存して続ける", primary: true },
+      { value: "discard", label: "保存しないで続ける" },
+      { value: "cancel", label: "やめる" },
+    ],
+  });
+}
+
+// 小窓で選んでもらう。押したボタンの value を返す（Esc で閉じたら "cancel"）
+function askChoice({ title, message, buttons }) {
+  const dialog = els.unsavedDialog;
+  els.unsavedDialogTitle.textContent = title;
   els.unsavedDialogText.textContent = message;
+  els.unsavedDialogActions.textContent = "";
+  buttons.forEach((item) => {
+    const button = document.createElement("button");
+    button.value = item.value;
+    button.textContent = item.label;
+    if (item.primary) button.className = "primary-button";
+    els.unsavedDialogActions.appendChild(button);
+  });
   return new Promise((resolve) => {
     let settled = false;
     const finish = (value) => {
@@ -2727,11 +2816,22 @@ async function savePngFile() {
   const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
   if (!blob) throw new Error("PNGを作成できませんでした。");
 
-  if ("showSaveFilePicker" in window) {
-    const handle = await window.showSaveFilePicker({
-      suggestedName: fileName,
-      types: [{ description: "PNG", accept: { "image/png": [".png"] } }],
-    });
+  let handle = null;
+  if (canUseFilePicker("showSaveFilePicker")) {
+    const startedAt = performance.now();
+    try {
+      handle = await window.showSaveFilePicker({
+        suggestedName: fileName,
+        types: [{ description: "PNG", accept: { "image/png": [".png"] } }],
+      });
+    } catch (error) {
+      // 保存先の画面を出せない環境では、ダウンロードに切り替える（自分で閉じたときは中止）
+      if (!isPickerUnavailableError(error, startedAt)) throw error;
+      filePickerUnavailable = true;
+    }
+  }
+
+  if (handle) {
     const writable = await handle.createWritable();
     await writable.write(blob);
     await writable.close();
@@ -3253,12 +3353,8 @@ function wireControls() {
     newMap();
   });
 
-  document.getElementById("openMarkdownButton").addEventListener("click", async () => {
-    try {
-      await openMapFile();
-    } catch (error) {
-      els.statusText.textContent = `ファイルを開けませんでした: ${error.message}`;
-    }
+  document.getElementById("openMarkdownButton").addEventListener("click", () => {
+    openMapFile();
   });
 
   // ファイルへ直接アクセスできないブラウザ用（開く場所を選ぶ画面だけ使う）
@@ -3769,4 +3865,24 @@ function init() {
   });
 }
 
-init();
+// 起動の途中で止まったら、ボタンが黙って反応しない状態にせず、画面に知らせる。
+// （公開ページでは、更新直後に古いHTMLと新しいプログラムが混ざって読まれると起こる）
+function showStartupError(error) {
+  const box = document.createElement("div");
+  box.setAttribute("role", "alert");
+  box.style.cssText =
+    "position:fixed;left:50%;top:16px;z-index:2147483647;transform:translateX(-50%);max-width:min(640px,calc(100vw - 32px));" +
+    "padding:12px 16px;border-radius:10px;border:1px solid #f59e0b;background:#3a2a10;color:#fff;" +
+    "font:14px/1.6 'Segoe UI','Yu Gothic UI',sans-serif;box-shadow:0 12px 32px rgba(0,0,0,.35);";
+  box.textContent =
+    "起動できませんでした。古い表示が残っている可能性があります。Ctrl + Shift + R（キャッシュを使わずに読み込み直す）を押してください。" +
+    `（${error?.message || error}）`;
+  document.body.appendChild(box);
+}
+
+try {
+  init();
+} catch (error) {
+  console.error(error);
+  showStartupError(error);
+}

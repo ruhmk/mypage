@@ -4,7 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Knowledge Map Canvas</title>
-    <link rel="stylesheet" href="./styles.css" />
+    <!-- ?v= は版の印。更新したら app.js / styles.css と一緒に変え、古いファイルが混ざって読まれないようにする -->
+    <link rel="stylesheet" href="./styles.css?v=20261116-3" />
   </head>
   <body>
     <main class="app-shell">
@@ -207,7 +208,7 @@
       <form method="dialog">
         <h2 id="unsavedDialogTitle">保存していない変更があります</h2>
         <p id="unsavedDialogText"></p>
-        <div class="dialog-actions">
+        <div id="unsavedDialogActions" class="dialog-actions">
           <button value="save" class="primary-button">保存して続ける</button>
           <button value="discard">保存しないで続ける</button>
           <button value="cancel">やめる</button>
@@ -215,6 +216,6 @@
       </form>
     </dialog>
 
-    <script src="./app.js"></script>
+    <script src="./app.js?v=20261116-3"></script>
   </body>
 </html>
