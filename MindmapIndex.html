@@ -3,19 +3,35 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Knowledge Map Canvas</title>
+    <title>マインドマップ</title>
+    <!-- 2026-11-17 ドパ版（演出を足した試作）を、このツールの正にした -->
     <!-- ?v= は版の印。更新したら app.js / styles.css と一緒に変え、古いファイルが混ざって読まれないようにする -->
-    <link rel="stylesheet" href="./styles.css?v=20261116-3" />
+    <link rel="stylesheet" href="./styles.css?v=20261117-1" />
+    <script>
+      // 前に選んだ配色（暗い／明るい／藍）を、画面が出る前に戻す。置き場所は knowledge-map-canvas-theme-v1
+      try {
+        var savedTheme = localStorage.getItem("knowledge-map-canvas-theme-v1");
+        if (savedTheme === "dark" || savedTheme === "light" || savedTheme === "indigo") {
+          document.documentElement.dataset.theme = savedTheme;
+        }
+      } catch (error) {}
+      // 左右の欄を閉じていたら、画面が出る前に閉じた形にする。置き場所は knowledge-map-canvas-panels-v1
+      try {
+        var savedPanels = JSON.parse(localStorage.getItem("knowledge-map-canvas-panels-v1") || "{}");
+        if (savedPanels.left === false) document.documentElement.dataset.leftPanel = "closed";
+        if (savedPanels.right === false) document.documentElement.dataset.rightPanel = "closed";
+      } catch (error) {}
+    </script>
   </head>
   <body>
     <main class="app-shell">
-      <aside class="sidebar" aria-label="Mind map controls">
+      <aside id="sidebarPanel" class="sidebar" aria-label="Mind map controls">
         <header class="brand">
           <div>
             <p class="eyebrow">Local mind map</p>
-            <h1>Knowledge Map Canvas</h1>
+            <h1>マインドマップ</h1>
           </div>
-          <button class="icon-button" id="themeToggle" type="button" title="テーマ切替">◐</button>
+          <button class="icon-button" id="themeToggle" type="button" title="配色を切り替える（暗い → 明るい → 藍）">◐</button>
         </header>
 
         <section class="panel">
@@ -80,6 +96,22 @@
             <button id="optimizeLayoutButton" type="button" title="手動位置を初期化して自動整列">自動整列</button>
             <button id="fitButton" type="button" title="全体表示">全体表示</button>
           </div>
+          <div class="motion-row">
+            <span>動きの演出</span>
+            <button id="motionToggleButton" class="motion-toggle" type="button" aria-pressed="true">オン</button>
+          </div>
+          <div class="motion-row">
+            <span>ミニマップ</span>
+            <button id="minimapToggleButton" class="motion-toggle" type="button" aria-pressed="true">オン</button>
+          </div>
+          <div class="motion-row">
+            <span>配色</span>
+            <div class="theme-choices" role="group" aria-label="配色">
+              <button type="button" data-theme-choice="dark" aria-pressed="true">暗い</button>
+              <button type="button" data-theme-choice="light" aria-pressed="false">明るい</button>
+              <button type="button" data-theme-choice="indigo" aria-pressed="false" title="深い藍色に、落ち着いた金色">藍</button>
+            </div>
+          </div>
         </section>
 
         <section class="panel">
@@ -99,7 +131,9 @@
 
       <section class="workspace" aria-label="Mind map workspace">
         <div class="workspace-bar">
-          <div>
+          <!-- ドパ版: 左の欄（ファイル・階層・表示・出力）を開け閉めするボタン -->
+          <button id="leftPanelToggle" class="panel-toggle" type="button" aria-controls="sidebarPanel" aria-expanded="true" title="左の欄を閉じる">‹</button>
+          <div class="workspace-status">
             <p id="statusText">ノードをクリックして選択、文字はその場で編集できます。</p>
             <strong id="selectionLabel">未選択</strong>
           </div>
@@ -111,9 +145,15 @@
             <button id="zoomResetButton" type="button" title="100%">100%</button>
             <button id="zoomInButton" type="button" title="拡大">＋</button>
           </div>
+          <!-- ドパ版: 右の欄（ノード詳細）を開け閉めするボタン -->
+          <button id="rightPanelToggle" class="panel-toggle" type="button" aria-controls="inspectorPanel" aria-expanded="true" title="右の欄を閉じる">›</button>
         </div>
 
         <div id="canvasViewport" class="canvas-viewport">
+          <!-- ドパ版の背景: 点の模様（地図を動かすと、ゆっくり遅れてついて来る）と、端を少し暗くする影 -->
+          <div class="canvas-backdrop" aria-hidden="true">
+            <div id="canvasBackdropDots" class="canvas-backdrop-dots"></div>
+          </div>
           <div id="layer3dControls" class="layer-3d-controls" hidden>
             <button id="layerUpButton" type="button">上</button>
             <strong id="layerLevelLabel">アクティブ 0</strong>
@@ -129,22 +169,34 @@
             <button id="bannerDiscardButton" type="button" hidden>保存済みの状態に戻す</button>
             <button id="bannerCloseButton" type="button" class="banner-close" aria-label="閉じる">×</button>
           </div>
+          <!-- ドパ版: ミニマップ（全体を縮めた小さな地図。枠が今見ている範囲。押すとそこへ動く） -->
+          <div id="minimap" class="minimap" title="ミニマップ（押すと、その場所へ動きます。引っ張って動かすこともできます）" hidden>
+            <canvas id="minimapCanvas" class="minimap-canvas"></canvas>
+            <div id="minimapFrame" class="minimap-frame"></div>
+          </div>
           <div id="canvasWorld" class="canvas-world">
             <div id="canvasView" class="canvas-view">
               <div id="floorLayer" class="floor-layer" aria-hidden="true"></div>
               <svg id="edgeLayer" class="edge-layer" aria-hidden="true"></svg>
+              <!-- 消えていく線・カードを、消え終わるまで置いておく場所（ドパ版の動き） -->
+              <svg id="ghostEdgeLayer" class="edge-layer ghost-edge-layer" aria-hidden="true"></svg>
               <div id="edge3dLayer" class="edge-3d-layer" aria-hidden="true"></div>
               <div id="guideLayer" class="guide-layer" aria-hidden="true">
                 <span id="guideVertical" class="alignment-guide vertical"></span>
                 <span id="guideHorizontal" class="alignment-guide horizontal"></span>
+                <!-- ドパ版: ノードを動かしているとき、上下のカードと等間隔になったことを見せる印 -->
+                <div id="spacingGuides" class="spacing-guides"></div>
               </div>
+              <div id="ghostLayer" class="node-layer ghost-layer" aria-hidden="true"></div>
               <div id="nodeLayer" class="node-layer"></div>
+              <!-- カードより上に重ねる演出（足したときの星など）の置き場。render() では消さない -->
+              <div id="effectLayer" class="node-layer effect-layer" aria-hidden="true"></div>
             </div>
           </div>
         </div>
       </section>
 
-      <aside class="inspector" aria-label="ノードの詳細">
+      <aside id="inspectorPanel" class="inspector" aria-label="ノードの詳細">
         <header class="inspector-header">
           <p class="eyebrow">Inspector</p>
           <h2>ノード詳細</h2>
@@ -197,12 +249,18 @@
               <button id="focusNodeButton" type="button">フォーカス</button>
               <button id="jumpSourceButton" type="button">元へ</button>
             </div>
+            <div class="button-row">
+              <button id="evenChildrenButton" type="button" title="選んだノードの子を、カードのすき間が同じになるように並べ直す">子を等間隔にそろえる</button>
+            </div>
           </section>
         </div>
       </aside>
     </main>
 
     <div id="nodeContextMenu" class="context-menu" hidden></div>
+
+    <!-- ドパ版: 画面の上に重ねる演出（保存したときに札から飛び散る星など）の置き場。触っても反応しない -->
+    <div id="uiEffectLayer" class="ui-effect-layer" aria-hidden="true"></div>
 
     <dialog id="unsavedDialog" class="app-dialog" aria-labelledby="unsavedDialogTitle">
       <form method="dialog">
@@ -216,6 +274,6 @@
       </form>
     </dialog>
 
-    <script src="./app.js?v=20261116-3"></script>
+    <script src="./app.js?v=20261117-1"></script>
   </body>
 </html>
